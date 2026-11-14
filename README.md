@@ -1,7 +1,28 @@
-[README.md](https://github.com/user-attachments/files/34851393/README.md)
+[README.md](https://github.com/user-attachments/files/34851514/README.md)
 # TripVault
 
 TripVault records expenses paid in VND outside the app. Members deposit USDC into a time-locked trip fund, review the bills that involve them, and settle the net amounts after the trip. The shared-room prototype runs on Avalanche Fuji.
+
+## Open TripVault on a phone
+
+### Try the mobile demo over Wi-Fi
+
+1. Connect your Mac and phone to the same Wi-Fi. On the Mac, open the project folder in Terminal as described below. If TripVault is already running on port 8788 in that terminal, press **Ctrl + C** to stop it.
+2. Start TripVault so the phone can reach the Mac on your network.
+
+   ```sh
+   TRIPVAULT_HOST=0.0.0.0 bun run start
+   ```
+
+3. On the Mac, open **System Settings → Wi-Fi → Details → TCP/IP** and note the Mac’s IPv4 address. [Apple’s Wi-Fi settings guide](https://support.apple.com/guide/mac-help/mh11935/mac)
+4. On the phone, open Safari or Chrome at `http://<MAC-IP>:8788/?demo=1`. Replace `<MAC-IP>` with the address from step 3. For example, if the Mac’s address is `192.168.1.23`, open `http://192.168.1.23:8788/?demo=1`. Keep the Mac awake and Terminal open.
+5. Dismiss the guide and tap **Start a fresh sample**. Follow the demo walkthrough below using the menu at the bottom of the screen. This Wi-Fi path is for the simulation.
+
+### Share a mobile demo link with judges
+
+The repository includes a static demo at [`docs/index.html`](docs/index.html). To publish it with **GitHub Pages**, upload the `docs/` directory to the repository. Go to **Settings → Pages**, choose **Deploy from a branch**, select `main` and `/docs`, then click **Save**. When GitHub displays the published HTTPS link, test it on a phone and share it with the judges. This works on GitHub Free for a public repository. [GitHub Pages publishing guide](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site)
+
+Judges can open the published link in Safari or Chrome and tap **Start a fresh sample**. The Pages demo uses simulated balances saved in each browser. For shared rooms, wallet sign-in, and Fuji transactions on mobile, host the bundled Bun server at a public HTTPS address, set `TRIPVAULT_ORIGIN` to that exact address, and open it in a mobile wallet’s built-in browser. [What GitHub Pages hosts](https://docs.github.com/en/pages/getting-started-with-github-pages/what-is-github-pages)
 
 ## Run TripVault on a fresh computer
 
