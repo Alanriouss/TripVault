@@ -32,8 +32,6 @@ replace('</head>', '''<style>
 .trip-delete-checkbox input { width: 18px; height: 18px; accent-color: var(--accent); }
 .trip-delete-list { margin: 0; padding-inline-start: 20px; overflow-wrap: anywhere; }
 .field > small { color: var(--muted); font-size: 13px; font-weight: 400; line-height: 1.4; }
-.main > .top-up-reminders { margin-bottom: 16px; }
-.top-up-reminders strong { overflow-wrap: anywhere; }
 #bill-reminder-feedback:empty { display: none; }
 .btn.danger.cancel-approval { border-color: #e7a6b2; background: #fce2e9; }
 .btn.danger.cancel-approval:hover:not(:disabled) { background: #f9d3df; }
@@ -52,9 +50,25 @@ replace('</head>', '''<style>
 .bill-removal-actions.solo { margin: 0; padding: 0; border: 0; }
 .btn.trip-bell { position: relative; padding: 0; width: 44px; flex: 0 0 44px; color: var(--accent-dark); }
 .trip-bell-dot { position: absolute; top: 7px; inset-inline-end: 7px; width: 10px; height: 10px; border: 2px solid white; border-radius: 50%; background: var(--danger); }
+.trip-bell.attention svg { transform-origin: 50% 20%; animation: notification-ring 550ms ease-in-out 3; }
+.trip-bell.attention .trip-bell-dot { animation: notification-pulse 550ms ease-in-out 3; }
+@keyframes notification-ring {
+  0%, 100% { transform: rotate(0); }
+  25% { transform: rotate(16deg); }
+  70% { transform: rotate(-16deg); }
+}
+@keyframes notification-pulse {
+  50% { box-shadow: 0 0 0 4px var(--tint); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .trip-bell.attention svg, .trip-bell.attention .trip-bell-dot { animation: none; }
+}
 .trip-notification { width: 100%; display: grid; gap: 4px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); color: var(--ink); text-align: start; overflow-wrap: anywhere; }
-.trip-notification:hover, .trip-notification.unread { background: var(--tint); }
+.trip-notification.unread { background: var(--tint); }
 .trip-notification small { color: var(--muted); }
+.trip-notification .inline { margin-top: 4px; }
+.fund-summary { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 20px; }
+.fund-summary > strong { color: var(--accent-dark); font-size: 1.25rem; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 @media (max-width: 420px) {
   .trip-profile .avatar { display: none; }
   .trip-profile-name { max-width: 96px; }
@@ -295,9 +309,10 @@ replace('<p class="notice">No recipient wallet is needed: the payer is recorded 
         """${t.shared ? '<div id="bill-funding-status" aria-live="polite"></div><p id="bill-reminder-feedback" role="status"></p>' : '<p class="notice">USDC recipients are calculated automatically in Final split.</p>'}""")
 replace('form="bill-form">Save bill</button>`)}', 'form="bill-form">Save bill</button>`);\n    if (t.shared) updateBillFundingForm();\n  }')
 replace('    app.innerHTML = header();', '    app.innerHTML = header();\n    updateBillFundingForm();\n    updateRoomSignInButton();')
-replace("            ${content}\n          </main>", "            ${trip?.shared ? roomReminderPanel(trip) : ''}\n            ${content}\n          </main>")
-replace("            ${trip?.shared ? roomReminderPanel(trip) : ''}", """            ${trip?.shared ? roomTripToolbar(trip) + roomReminderPanel(trip) : ''}
-            ${trip?.shared && !rooms.token ? '<p class="notice warn">Your room sign-in expired. ' + btn('Sign in again', 'room-reauthenticate', { tone: 'secondary' }) + '</p>' : ''}""")
+replace("            ${content}\n          </main>", """            ${trip?.shared ? roomTripToolbar(trip) : ''}
+            ${trip?.shared && !rooms.token ? '<p class="notice warn">Your room sign-in expired. ' + btn('Sign in again', 'room-reauthenticate', { tone: 'secondary' }) + '</p>' : ''}
+            ${content}
+          </main>""")
 replace("          if (view === 'wallet' || view === 'split') refreshVault();", """          if (view === 'wallet' || view === 'split') refreshVault();
           if (view === 'overview' && trip.shared && roomEndTime(trip) <= Date.now()) refreshVault(true);
           if (trip.shared && ['overview', 'bills', 'split'].includes(view)) refreshRoomFunding();""")

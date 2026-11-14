@@ -172,7 +172,10 @@ export async function testRoomsUi({ launch, flush, start, end }) {
   assert.doesNotMatch(owner.sheet.innerHTML, /name="address"/);
   await guest.poll();
   guest.view('overview');
-  assert.match(guest.page.innerHTML, /Roster locked/);
+  assert.doesNotMatch(guest.page.innerHTML, /Roster locked/);
+  guest.click('room-notifications');
+  assert.match(guest.sheet.innerHTML, /Roster locked/);
+  guest.click('close-sheet');
   console.log('PASS: signed room joins, background member updates, automatic Fuji roster, and bill lock before deployment');
 
   assert.equal(guest.button('room-delete'), undefined);
@@ -233,6 +236,7 @@ export async function testRoomsUi({ launch, flush, start, end }) {
   console.log('PASS: one browser can create as Account 1, join as Account 2, and sign back in as Account 1 to see both');
 
   assert.ok(oneBrowser.button('room-end'));
+  assert.match(oneBrowser.page.innerHTML, /class="panel trip-progress"[\s\S]*?data-act="room-end"[^>]*>End trip early/);
   oneBrowser.click('room-end');
   assert.match(oneBrowser.sheet.innerHTML, /End trip now\?/);
   oneBrowser.click('room-end-confirm', { id: roomId });
@@ -289,6 +293,8 @@ async function testMemberDeposit({ launch, flush, start, end, cancelAtDeadline =
   const hash = '0x' + 'bc'.repeat(32);
   const depositHash = '0x' + 'bd'.repeat(32);
   const claimHash = '0x' + 'be'.repeat(32);
+  const endHash = '0x' + 'bf'.repeat(32);
+  let vaultEnd = timeEnd;
   let ownerDeposit = 5_000_000;
   let guestDeposit = 0;
   let chainTime = deadline - 1;
@@ -304,7 +310,7 @@ async function testMemberDeposit({ launch, flush, start, end, cancelAtDeadline =
     'function refundDeadline() view returns (uint256)', 'function balanceOf(address) view returns (uint256)',
     'function allowance(address,address) view returns (uint256)', 'function deposit(uint256)',
     'function depositDeadline() view returns (uint256)', 'function fundingFailed() view returns (bool)',
-    'function claim()', 'constructor(address[], uint256, uint256, uint256, uint256)',
+    'function claim()', 'function endTripEarly()', 'constructor(address[], uint256, uint256, uint256, uint256)',
   ]);
   const q = value => '0x' + value.toString(16);
   const readChain = async (method, params) => {
@@ -330,6 +336,12 @@ async function testMemberDeposit({ launch, flush, start, end, cancelAtDeadline =
         ownerDeposit = 0;
         return claimHash;
       }
+      if (params[0].data === iface.encodeFunctionData('endTripEarly')) {
+        assert.equal(params[0].from, owner.address.toLowerCase());
+        assert.ok(chainTime >= timeStart && chainTime < vaultEnd);
+        vaultEnd = chainTime;
+        return endHash;
+      }
       assert.equal(params[0].from, member.address.toLowerCase());
       if (serverNonceAvailable) assert.equal(params[0].nonce, '0x6');
       else assert.equal('nonce' in params[0], false);
@@ -340,20 +352,23 @@ async function testMemberDeposit({ launch, flush, start, end, cancelAtDeadline =
     if (method === 'eth_getTransactionReceipt') {
       if (params[0] === depositHash) return { status: '0x1', from: member.address, transactionHash: depositHash };
       if (params[0] === claimHash) return { status: '0x1', from: owner.address, transactionHash: claimHash };
+      if (params[0] === endHash) return { status: '0x1', from: owner.address, transactionHash: endHash, blockNumber: '0x20', transactionIndex: '0x1' };
       return { status: '0x1', from: owner.address, transactionHash: hash, contractAddress: vault, blockNumber: '0x20', transactionIndex: '0x0' };
     }
-    if (method === 'eth_getTransactionByHash') return { from: owner.address, hash, to: null };
+    if (method === 'eth_getTransactionByHash') return params[0] === endHash
+      ? { from: owner.address, hash: endHash, to: vault, input: iface.encodeFunctionData('endTripEarly') }
+      : { from: owner.address, hash, to: null };
     if (method === 'eth_getCode') return '0x' + runtime;
     if (method === 'eth_getBlockByNumber') return { timestamp: q(chainTime), number: '0x20' };
     if (method === 'eth_call') {
       const selector = params[0].data.slice(0, 10);
-      if (selector === iface.getFunction('refundDeadline').selector) return iface.encodeFunctionResult('refundDeadline', [timeEnd + 604800]);
+      if (selector === iface.getFunction('refundDeadline').selector) return iface.encodeFunctionResult('refundDeadline', [vaultEnd + 604800]);
       if (selector === iface.getFunction('depositDeadline').selector) return iface.encodeFunctionResult('depositDeadline', [deadline]);
       if (selector === iface.getFunction('fundingFailed').selector) return iface.encodeFunctionResult('fundingFailed', [cancelAtDeadline && chainTime >= deadline]);
       if (selector === iface.getFunction('balanceOf').selector) return iface.encodeFunctionResult('balanceOf', [walletUsdc]);
       if (selector === iface.getFunction('allowance').selector) return iface.encodeFunctionResult('allowance', [5_000_000]);
       return iface.encodeFunctionResult('snapshot', [
-        roster, [ownerDeposit, guestDeposit], [], [false, false], '0x' + '00'.repeat(32), timeStart, timeEnd, 5_000_000, false,
+        roster, [ownerDeposit, guestDeposit], [], [false, false], '0x' + '00'.repeat(32), timeStart, vaultEnd, 5_000_000, false,
       ]);
     }
     throw new Error('Unexpected chain method: ' + method);
@@ -395,6 +410,8 @@ async function testMemberDeposit({ launch, flush, start, end, cancelAtDeadline =
   assert.match(guest.button('fuji-deposit'), /disabled/);
   await browser.poll();
   assert.match(browser.page.innerHTML, /Invite your group/);
+  assert.match(browser.button('room-end'), /disabled/);
+  assert.match(browser.page.innerHTML, /once everyone has funded it and the trip starts/);
   assert.match(browser.page.innerHTML, /data-view="wallet" data-focus="fuji-deploy"[^>]*>Go to vault setup<\/button>/);
   browser.click('navigate', { view: 'wallet', focus: 'fuji-deploy' });
   assert.match(browser.page.innerHTML, /Wallet and trip fund/);
@@ -440,7 +457,15 @@ async function testMemberDeposit({ launch, flush, start, end, cancelAtDeadline =
   guest.view('overview');
   await flush();
   assert.match(guest.page.innerHTML, /aria-current="step">Add funds/);
+  assert.equal(guest.button('room-end'), undefined);
   assert.match(guest.page.innerHTML, /1 of 2 members have added at least 5\.00 USDC/);
+  assert.match(guest.page.innerHTML, /Trip fund balance[\s\S]*?<strong>5\.00 USDC<\/strong>/);
+  assert.doesNotMatch(guest.page.innerHTML, /Roster locked|class="top-up-reminders"/);
+  guest.click('room-notifications');
+  assert.match(guest.sheet.innerHTML, /Roster locked/);
+  guest.click('close-sheet');
+  browser.click('room-notifications');
+  browser.click('close-sheet');
   if (cancelAtDeadline) {
     chainTime = deadline;
     browser.now(depositDeadline);
@@ -501,6 +526,13 @@ async function testMemberDeposit({ launch, flush, start, end, cancelAtDeadline =
   guest.view('overview');
   await flush();
   assert.match(guest.page.innerHTML, /aria-current="step">Record bills/);
+  browser.view('overview');
+  await flush();
+  assert.ok(browser.button('room-end'));
+  assert.doesNotMatch(browser.button('room-end'), /disabled/);
+  browser.click('room-end');
+  assert.match(browser.sheet.innerHTML, /End trip now\?/);
+  browser.click('close-sheet');
   guest.view('wallet');
   await flush();
   assert.match(guest.page.innerHTML, /Withdrawals are locked/);
@@ -516,28 +548,36 @@ async function testMemberDeposit({ launch, flush, start, end, cancelAtDeadline =
   assert.match(draft.status.textContent, /Reminder sent in TripVault/);
   guest.click('trip-list');
   await guest.poll();
-  assert.match(guest.page.innerHTML, /Owner asked you to top up/);
-  assert.match(guest.page.innerHTML, /Requested 1\.00 USDC/);
-  const reminderId = guest.button('open-top-up-reminder').match(/data-id="([^"]+)"/)[1];
-  guest.click('open-top-up-reminder', { id: reminderId });
-  await flush();
-  assert.match(guest.page.innerHTML, /Top up 1\.00 USDC/);
+  assert.doesNotMatch(guest.page.innerHTML, /Requested 1\.00 USDC|Top-up reminders/);
+  assert.match(guest.page.innerHTML, /trip-bell attention/);
   assert.match(guest.page.innerHTML, /class="trip-bell-dot"/);
   guest.click('room-notifications');
+  assert.match(guest.sheet.innerHTML, /Owner/);
+  assert.match(guest.sheet.innerHTML, /Requested 1\.00 USDC/);
+  const reminderId = guest.sheet.innerHTML.match(/data-act="open-top-up-reminder"\s+data-id="([^"]+)"/)[1];
+  guest.click('open-top-up-reminder', { id: reminderId });
+  await flush();
+  guest.click('room-notifications');
+  assert.match(guest.sheet.innerHTML, /Top up 1\.00 USDC/);
   assert.match(guest.sheet.innerHTML, /Top-up reminder/);
   assert.doesNotMatch(guest.page.innerHTML, /class="trip-bell-dot"/);
-  guest.click('close-sheet');
   guestDeposit = 5_250_000;
   guest.click('pay-top-up-reminder', { id: reminderId, units: '1000000' });
   await flush();
   assert.equal(guestDeposit, 5_250_000);
-  assert.match(guest.page.innerHTML, /Top up 0\.75 USDC/);
+  guest.click('room-notifications');
+  assert.match(guest.sheet.innerHTML, /Top up 0\.75 USDC/);
   expectedDeposit = 750_000;
   serverNonceAvailable = false;
   guest.click('pay-top-up-reminder', { id: reminderId, units: '750000' });
   await flush();
   assert.equal(guestDeposit, 6_000_000);
-  assert.match(guest.page.innerHTML, /You’ve added enough for this bill/);
+  guest.click('room-notifications');
+  assert.match(guest.sheet.innerHTML, /You’ve added enough for this bill/);
+  guest.click('close-sheet');
+  guest.view('overview');
+  await flush();
+  assert.match(guest.page.innerHTML, /Trip fund balance[\s\S]*?<strong>11\.00 USDC<\/strong>/);
   await browser.poll();
   assert.equal(draft.submit.disabled, false);
   assert.equal(draft.fields.amount, '300000');
@@ -546,6 +586,9 @@ async function testMemberDeposit({ launch, flush, start, end, cancelAtDeadline =
   assert.equal(browser.sheet.open, false);
   assert.match(browser.page.innerHTML, /Dinner/);
   await guest.poll();
+  guest.click('room-notifications');
+  assert.match(guest.sheet.innerHTML, /Bill needs your approval[\s\S]*?Dinner/);
+  guest.click('close-sheet');
   browser.approveBill(1);
   await flush();
   assert.match(browser.sheet.innerHTML, /1\/2 approved/);
@@ -562,18 +605,29 @@ async function testMemberDeposit({ launch, flush, start, end, cancelAtDeadline =
   assert.match(browser.page.innerHTML, /Pending snack/);
   await guest.poll();
   assert.doesNotMatch(guest.page.innerHTML, /Top-up reminders/);
-  chainTime = timeEnd + 1;
-  serverTime = Date.parse(end);
-  browser.now(end);
-  guest.now(end);
-  await browser.poll();
+  chainTime = timeStart + 60;
+  serverTime = chainTime * 1000;
+  const earlyEnd = new Date(serverTime).toISOString();
+  browser.now(earlyEnd);
+  guest.now(earlyEnd);
+  browser.view('overview');
+  await flush();
+  browser.click('room-end');
+  const earlyEndRoomId = browser.sheet.innerHTML.match(/data-act="room-end-confirm"[^>]+data-id="([^"]+)"/)[1];
+  browser.click('room-end-confirm', { id: earlyEndRoomId });
+  await flush();
+  assert.equal(vaultEnd, chainTime);
+  assert.match(browser.page.innerHTML, /Trip ended early/);
   await guest.poll();
+  browser.view('bills');
+  await flush();
   assert.match(browser.page.innerHTML, /Dinner/);
   assert.match(browser.page.innerHTML, /Pending snack/);
   assert.match(browser.button('new-bill'), /disabled/);
   browser.view('overview');
   await flush();
   assert.match(browser.page.innerHTML, /aria-current="step">Final payments/);
+  assert.equal(browser.button('room-end'), undefined);
   assert.match(browser.page.innerHTML, /Finish bill reviews/);
   guest.click('bill-feedback', { id: '2' });
   assert.match(guest.sheet.innerHTML, /Reason or suggested change/);
@@ -591,10 +645,11 @@ async function testMemberDeposit({ launch, flush, start, end, cancelAtDeadline =
   assert.match(guest.sheet.innerHTML, /I paid separately/);
   assert.doesNotMatch(guest.page.innerHTML, /Your room sign-in expired/);
   await guest.poll();
-  assert.doesNotMatch(guest.page.innerHTML, /class="trip-bell-dot"/);
+  guest.click('room-notifications');
+  assert.doesNotMatch(guest.sheet.innerHTML, /I paid separately/);
+  guest.click('close-sheet');
   browser.view('split');
   await flush();
-  assert.doesNotMatch(browser.page.innerHTML, /class="trip-bell-dot"/);
   browser.click('fuji-refresh');
   assert.match(browser.page.innerHTML, /Updating status/);
   await flush();
@@ -605,7 +660,7 @@ async function testMemberDeposit({ launch, flush, start, end, cancelAtDeadline =
   assert.match(browser.sheet.innerHTML, /Bill change requested/);
   assert.match(browser.sheet.innerHTML, /I paid separately/);
   assert.doesNotMatch(browser.page.innerHTML, /class="trip-bell-dot"/);
-  const notificationId = browser.sheet.innerHTML.match(/data-act="open-room-notification" data-id="([^"]+)"/)[1];
+  const notificationId = browser.sheet.innerHTML.match(/data-act="open-room-notification"\s+data-id="([^"]+:feedback:[^"]+)"/)[1];
   browser.click('open-room-notification', { id: notificationId });
   assert.match(browser.sheet.innerHTML, /data-bill-review="2"/);
   assert.match(browser.sheet.innerHTML, /Suggested changes/);
@@ -636,7 +691,7 @@ async function testMemberDeposit({ launch, flush, start, end, cancelAtDeadline =
   await flush();
   assert.doesNotMatch(browser.page.innerHTML, /Finish open bill reviews/);
   assert.doesNotMatch(browser.page.innerHTML, /20\.000 ₫/);
-  chainTime = timeEnd + 604800;
+  chainTime = vaultEnd + 604800;
   guest.now(new Date(chainTime * 1000).toISOString());
   guest.view('overview');
   await flush();
@@ -645,5 +700,6 @@ async function testMemberDeposit({ launch, flush, start, end, cancelAtDeadline =
   console.log('PASS: Fuji nonce overrides stale wallet nonce for deployment and deposit; unavailable nonce leaves the choice to the wallet');
   console.log('PASS: a bill reminder reaches only its recipient, recalculates after a partial top-up, and lets the sender save once Fuji confirms');
   console.log('PASS: overview updates from setup to funding, bills and final payments as the room and Fuji state change');
+  console.log('PASS: funded organizer can end early from Overview; existing bills remain reviewable');
   console.log('PASS: manual status refresh gets remote feedback; only recipients get unread notifications with a direct link to the bill');
 }

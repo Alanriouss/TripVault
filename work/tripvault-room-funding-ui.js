@@ -12,7 +12,7 @@
   async function refreshRoomFunding() {
     const trip = state.trip;
     const token = rooms.token;
-    if (!trip?.shared || !trip.fuji?.address || trip.settled || !token || rooms.account !== walletSession.account) return;
+    if (!trip?.shared || !trip.fuji?.address || !token || rooms.account !== walletSession.account) return;
     const key = trip.id + ':' + trip.version + ':' + token;
     if (roomFundingRequest?.key === key) return roomFundingRequest.promise;
     const stillCurrent = () => state.trip?.id === trip.id && state.trip.version === trip.version && rooms.token === token;
@@ -26,8 +26,12 @@
       }
       if (!stillCurrent()) return;
       const previous = getDisplayedFunding(trip);
+      const previousNotifications = notificationIds(trip);
       roomFundingResult = { id: trip.id, token, data };
-      if (JSON.stringify(data) !== JSON.stringify(previous)) render();
+      if (JSON.stringify(data) !== JSON.stringify(previous)) {
+        render();
+        updateRoomNotifications(trip, previousNotifications);
+      }
       return !data.failed;
     })();
     roomFundingRequest = { key, promise };
@@ -79,7 +83,7 @@
     return btn('Top up ' + money(units), 'room-funding-top-up', { disabled: unavailable });
   }
 
-  function roomFundingMessage(trip, status, showWalletLink = true) {
+  function roomFundingMessage(trip, status) {
     if (status.ready) return '';
     const own = status.shortfalls?.find(item => item.id === state.actor);
     return `<div class="notice stack">
@@ -87,7 +91,7 @@
       ${status.shortfalls?.map(({ id, units }) => row(userText(trip.members.find(member => member.id === id).name),
         money(units), id === state.actor ? 'Your top-up' : 'Needs to top up')).join('') || ''}
       ${own ? fundingTopUpButton(own.units) : ''}
-      ${status.wallet && showWalletLink ? btn('Go to Wallet', 'navigate', { tone: 'secondary', data: 'data-view="wallet"' }) : ''}
+      ${status.wallet ? btn('Go to Wallet', 'navigate', { tone: 'secondary', data: 'data-view="wallet"' }) : ''}
       ${status.refresh ? btn('Check funding', 'room-funding-refresh', { tone: 'secondary' }) : ''}
     </div>`;
   }
@@ -95,9 +99,28 @@
   function roomFundingPanel(trip) {
     const status = roomBillFunding(trip);
     if (status.ready || trip.settled || (roomBillsClosed(trip) && !roomFundingCancelled(trip))) return '';
-    const overview = state.view === 'overview';
-    if (overview && !status.shortfalls?.length) return '';
-    return roomFundingMessage(trip, status, !overview);
+    return roomFundingMessage(trip, status);
+  }
+
+  function roomFundBalance(trip) {
+    const funding = getDisplayedFunding(trip);
+    const balances = funding?.failed ? null : funding?.balances ?? currentVault()?.balances;
+    let value = 'Fund not set up';
+    if (trip.fuji?.address) {
+      value = funding?.failed ? 'Could not verify balance' : 'Checking balance…';
+      if (balances) {
+        const total = balances.reduce((sum, units) => sum + BigInt(units), 0n);
+        const locale = siteLanguage === 'vi' ? 'vi-VN' : 'en-US';
+        const whole = new Intl.NumberFormat(locale).format(total / 1_000_000n);
+        const decimal = new Intl.NumberFormat(locale).formatToParts(0.5).find(part => part.type === 'decimal').value;
+        const fraction = (total % 1_000_000n).toString().padStart(6, '0').replace(/0+$/, '').padEnd(2, '0');
+        value = whole + decimal + fraction + ' USDC';
+      }
+    }
+    return `<section class="panel fund-summary" aria-labelledby="fund-summary-title">
+      <div><h2 id="fund-summary-title">Trip fund balance</h2><p class="subtitle">Total held on Avalanche Fuji</p></div>
+      <strong>${safe(value)}</strong>
+    </section>`;
   }
 
   function readBillDraft(form) {
@@ -172,43 +195,6 @@
     return roomFundingShortfalls(trip, funding, reminder.draft).find(item => item.id === state.actor)?.units ?? 0;
   }
 
-  function roomReminderPanel(trip) {
-    const reminders = rooms.reminders.filter(reminder => !trip || reminder.roomId === trip.id);
-    if (!reminders.length || trip?.settled) return '';
-    const displayed = trip && getDisplayedFunding(trip);
-    return `<section class="panel stack top-up-reminders"><h2>Top-up reminders</h2>
-      ${reminders.map(reminder => {
-        const title = userText(reminder.draft.label);
-        const sender = userText(reminder.sender);
-        const units = trip ? reminderBalance(trip, reminder) : null;
-        let body;
-        let action = '';
-        const id = `data-id="${safe(reminder.id)}"`;
-        if (!trip) {
-          body = `Requested ${money(reminder.units)} · ${userText(reminder.tripName)}`;
-          action = btn('Open trip', 'open-top-up-reminder', { tone: 'secondary', data: id });
-        } else if (displayed?.closed) {
-          body = 'The trip fund is closed.';
-        } else if (units === null) {
-          body = `Requested ${money(reminder.units)}. Check the current amount before adding funds.`;
-          action = btn('Check amount', 'room-funding-refresh', { tone: 'secondary' });
-        } else if (units === 0) {
-          body = 'You’ve added enough for this bill.';
-        } else {
-          body = `${money(units)} still needed`;
-          action = walletSession.chain !== FUJI.id
-            ? btn('Switch to Fuji', 'fuji-switch', { disabled: walletSession.busy })
-            : btn('Top up ' + money(units), 'pay-top-up-reminder', {
-              data: id + ` data-units="${units}"`,
-              disabled: payingReminder || walletSession.busy || trip.fuji?.lastTx?.phase === 'pending',
-            });
-        }
-        return `<div class="row trip-list-row"><div><strong>${title}</strong><span class="row-sub">${sender} asked you to top up</span>
-          <span class="row-sub">${body}</span></div>${action}</div>`;
-      }).join('')}
-    </section>`;
-  }
-
   function openTopUpReminder(id) {
     const reminder = rooms.reminders.find(item => item.id === id);
     const trip = reminder && rooms.list.get(reminder.roomId);
@@ -216,6 +202,8 @@
     selectTrip(trip);
     state.view = 'wallet';
     render();
+    openRoomNotifications(state.trip);
+    refreshRoomFunding();
   }
 
   async function payTopUpReminder(id, units) {
@@ -234,11 +222,13 @@
       if (!balance || balance !== Number(units)) {
         return notice('The amount changed. Check the latest reminder.');
       }
+      if (sheet.open && sheet.querySelector('[data-room-notifications]')) sheet.close();
       await fujiDeposit(balance);
       await refreshRoomFunding();
     } finally {
       payingReminder = false;
       render();
+      refreshNotificationSheet(state.trip);
     }
   }
 

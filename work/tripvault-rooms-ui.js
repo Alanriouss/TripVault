@@ -114,7 +114,7 @@
       const { rooms: active, reminders = [] } = await roomApi('/rooms', undefined, token);
       if (token !== rooms.token || rooms.account !== walletSession.account) return false;
       const viewedRoom = state.trip?.id;
-      const previousNotifications = new Set(readTripNotifications(state.trip).map(item => item.id));
+      const previousNotifications = notificationIds(state.trip);
       const remindersChanged = JSON.stringify(rooms.reminders) !== JSON.stringify(reminders);
       rooms.reminders = reminders;
       const current = new Set(active.map(room => room.id));
@@ -454,7 +454,7 @@
   }
 
   function roomFundingCancelled(trip) {
-    return Boolean(trip?.depositDeadline && (currentVault()?.cancelled
+    return Boolean(trip?.depositDeadline && ((state.trip?.id === trip.id && currentVault()?.cancelled)
       || getDisplayedFunding(trip)?.cancelled || (!trip.fuji?.address && roomDeadlinePassed(trip))));
   }
 
@@ -473,10 +473,14 @@
     return rooms.canDelete && isRoomOrganizer(trip);
   }
 
-  function canEndRoom(trip) {
+  function showEarlyEndControl(trip) {
     return rooms.canEnd && isRoomOrganizer(trip) && !trip.settled && roomEndTime(trip) > Date.now()
-      && (!trip.fuji?.address || trip.fuji.contractVersion >= 2)
-      && (!trip.depositDeadline || (trip.fuji?.address && Date.parse(trip.startTime) <= Date.now() && !roomFundingCancelled(trip)));
+      && !roomFundingCancelled(trip) && (!trip.fuji?.address || trip.fuji.contractVersion >= 2);
+  }
+
+  function canEndRoom(trip) {
+    return showEarlyEndControl(trip)
+      && (!trip.depositDeadline || (trip.fuji?.address && Date.parse(trip.startTime) <= Date.now()));
   }
 
   function showEndRoom(trip) {
@@ -608,11 +612,7 @@
   }
 
   function roomInviteCard(trip) {
-    if (!trip.locked && roomDeadlinePassed(trip)) return '';
-    if (trip.locked) {
-      return '<section class="panel"><h2>Roster locked</h2><p class="subtitle">The member list is fixed for the Fuji vault.</p></section>';
-    }
-    if (!trip.invite || !trip.code) return '';
+    if (trip.locked || roomDeadlinePassed(trip) || !trip.invite || !trip.code) return '';
     return `<section class="panel stack">
       <h2>Invite members</h2>
       <p class="subtitle">Share the link or have members choose Join a room and enter this code.</p>
@@ -654,12 +654,13 @@
     const deadline = Math.min(start, end);
     return `<div class="stack">
       <section class="hero">
-        <span class="chip">${roomFundingCancelled(trip) ? 'Trip cancelled' : trip.settled ? 'Settled on Fuji' : end <= Date.now() ? 'Trip ended' : trip.locked ? 'Roster locked' : 'Room open'}</span>
+        <span class="chip">${roomFundingCancelled(trip) ? 'Trip cancelled' : trip.settled ? 'Settled on Fuji' : end <= Date.now() ? 'Trip ended'
+          : trip.locked ? (Date.now() < start ? 'Getting ready' : 'Trip in progress') : 'Room open'}</span>
         <h1>${userText(trip.name)}</h1>${trip.location ? '<div>' + userText(trip.location) + '</div>' : ''}
       </section>
+      ${roomFundBalance(trip)}
       ${roomProgressPanel(trip)}
       ${roomInviteCard(trip)}
-      ${roomFundingPanel(trip)}
       ${roomMembers(trip)}
       <section class="panel"><h2>Trip settings</h2>
         ${row('Minimum each person adds', money(trip.minimumUnits))}
@@ -673,13 +674,8 @@
           'The organizer can share the final amounts for approval after this time.')}
         ${isRoomOrganizer(trip) ? `<div class="inline trip-settings-actions">
           ${canRenameInRoom(trip) ? btn('Rename trip', 'room-rename', { tone: 'secondary' }) : ''}
-          ${canEndRoom(trip) ? btn('End trip now', 'room-end', {
-            tone: 'secondary', disabled: walletSession.busy || trip.fuji?.lastTx?.phase === 'pending',
-          }) : ''}
           ${canDeleteRoom(trip) ? deleteRoomButton(trip) : ''}
         </div>` : ''}
-        ${isRoomOrganizer(trip) && trip.fuji?.address && trip.fuji.contractVersion < 2 && roomEndTime(trip) > Date.now()
-          ? '<p class="notice">This vault uses its original end time. Early ending is available for newly deployed vaults.</p>' : ''}
       </section>
     </div>`;
   }
@@ -717,7 +713,6 @@
         </div>
         ${btn('Try a local demo', 'local-demo', { tone: 'ghost' })}
       </section>
-      ${roomReminderPanel()}
       ${trips.length ? '<section class="panel">' + tripSelectionControls() + trips.map(tripListRow).join('') + '</section>' : ''}
       ${fujiPanel()}
       </div>`;

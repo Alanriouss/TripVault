@@ -6,7 +6,7 @@
     const organizer = isRoomOrganizer(trip);
     const end = vault ? vault.end * 1000 : roomEndTime(trip);
     const now = vault ? vault.timestamp * 1000 : Date.now();
-    const ended = funding?.ended ?? (now >= end);
+    const ended = Boolean(trip.endedAt) || (funding?.ended ?? (now >= end));
     const pendingBills = trip.bills.filter(bill => !['approved', 'rejected'].includes(bill.status)).length;
 
     if (roomFundingCancelled(trip)) {
@@ -102,6 +102,15 @@
   function roomProgressPanel(trip) {
     const { step, title, message, view, shortcut, focus } = tripProgress(trip);
     const target = shortcut || { wallet: 'Open Wallet', bills: 'Open Bills', split: 'Open Final split' }[view];
+    const nextAction = target ? btn(target, 'navigate', {
+      data: `data-view="${view}"${focus ? ` data-focus="${focus}"` : ''}`,
+    }) : '';
+    const showEnd = showEarlyEndControl(trip);
+    const canEnd = showEnd && canEndRoom(trip);
+    const endAction = showEnd ? btn('End trip early', 'room-end', {
+      tone: 'danger', disabled: !canEnd || walletSession.busy || trip.fuji?.lastTx?.phase === 'pending',
+      data: canEnd ? '' : 'aria-describedby="trip-early-end-help"',
+    }) : '';
     return `<section class="panel trip-progress" aria-labelledby="trip-progress-title">
       <h2 id="trip-progress-title">Trip progress</h2>
       <ol class="trip-progress-steps" aria-label="Trip steps">
@@ -109,7 +118,8 @@
       </ol>
       <div class="trip-progress-next">
         <div><h3>${title}</h3><p class="subtitle">${message}</p></div>
-        ${target ? btn(target, 'navigate', { data: `data-view="${view}"${focus ? ` data-focus="${focus}"` : ''}` }) : ''}
+        ${nextAction || endAction ? `<div class="inline">${nextAction}${endAction}</div>` : ''}
       </div>
+      ${showEnd && !canEnd ? '<p class="subtitle" id="trip-early-end-help">You can end the trip early once everyone has funded it and the trip starts.</p>' : ''}
     </section>`;
   }

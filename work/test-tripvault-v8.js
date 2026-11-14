@@ -10,7 +10,7 @@ const start = new Date((Math.floor(Date.now() / 3600000) + 2) * 3600000).toISOSt
 const end = new Date(Date.parse(start) + 3600000).toISOString();
 const flush = () => new Promise(resolve => setImmediate(resolve));
 
-async function launch(options = {}) {
+async function launch(options = {}, script = source) {
   const storage = options.storage || new Map();
   const page = { innerHTML: '' };
   let draftForm;
@@ -31,7 +31,7 @@ async function launch(options = {}) {
   let now = Date.parse(start) - 60000;
   let rate = options.rate === undefined ? 25000 : options.rate;
   let requests = 0;
-  runInNewContext(source, {
+  runInNewContext(script, {
     AbortController, TextEncoder, URL, URLSearchParams,
     clearTimeout(id) { timers.delete(id); },
     setTimeout(callback, delay) { timers.set(++timerId, { callback, delay }); return timerId; },
@@ -392,8 +392,8 @@ if (source.includes('function enableRooms()')) {
   await testRoomsUi({ launch, flush, start, end });
 }
 
-if (source.includes('function startJudgeSample()')) {
-  const judge = await launch({ url: 'http://127.0.0.1:8788/?demo=1', rate: null, language: 'en' });
+async function testJudgeDemo(url, script) {
+  const judge = await launch({ url, rate: null, language: 'en' }, script);
   judge.click('close-sheet');
   assert.match(judge.page.innerHTML, /TripVault demo/);
   assert.equal(judge.requests(), 0);
@@ -417,5 +417,11 @@ if (source.includes('function startJudgeSample()')) {
   const reset = JSON.parse(judge.storage.get('tripvault-judge-demo-v1'));
   assert.equal(reset.trips.length, 1);
   assert.equal(reset.trips[0].settled, false);
-  console.log('PASS: judge simulation opens and settles with no wallet or network requests');
+}
+
+if (source.includes('function startJudgeSample()')) {
+  await testJudgeDemo('http://127.0.0.1:8788/?demo=1', source);
+  const staticDemo = readFileSync('docs/index.html', 'utf8').match(/<script>([\s\S]*?)<\/script>/)[1];
+  await testJudgeDemo('https://example.github.io/TripVault/', staticDemo);
+  console.log('PASS: both the local and GitHub Pages demo settle with no wallet or network requests');
 }
