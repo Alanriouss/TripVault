@@ -1,37 +1,97 @@
+[README.md](https://github.com/user-attachments/files/34851393/README.md)
 # TripVault
 
 TripVault records expenses paid in VND outside the app. Members deposit USDC into a time-locked trip fund, review the bills that involve them, and settle the net amounts after the trip. The shared-room prototype runs on Avalanche Fuji.
 
-## Run locally
+## Run TripVault on a fresh computer
 
-1. Install [Bun](https://bun.com/docs/installation) and reopen your terminal. This release was tested with Bun 1.4.2.
-2. Download or clone this repository. In a terminal opened at its root, run:
+The bundled app needs Bun and a web browser. You can run the demo without installing project dependencies, creating an account, connecting a wallet, or setting API keys. This release was tested on macOS with Bun 1.4.2.
 
-   ```sh
-   bun run start
-   ```
+### 1. Download and extract the project
 
-3. Leave the terminal running and open [TripVault](http://127.0.0.1:8788/). The runtime bundle and HTML assets are included, so this step needs no package installation, API keys, or environment file.
+On the GitHub repository page, choose **Code → Download ZIP**. Double-click the ZIP in Finder on macOS, or right-click it and choose **Extract All** on Windows. Open the extracted folder. You should see `README.md`, `package.json`, and the `outputs/` and `work/` folders at the same level.
 
-If port 8788 is occupied, stop the other service or set `TRIPVAULT_PORT` to an unused port and open the URL printed in the terminal. Use the exact host and port shown there for wallet sign-in. Shared room data is stored locally in `work/tripvault-rooms.sqlite3`.
+### 2. Install and verify Bun
 
-## Review the demo without a wallet
+If `bun --version` already prints a version number, go to step 3. Otherwise, run the installer for your operating system. [Official Bun installation guide](https://bun.com/docs/installation)
 
-Open [local simulation](http://127.0.0.1:8788/?demo=1), dismiss the guide, and click **Start a fresh sample**. The sample opens with An and Bình, 5 simulated USDC each, and the trip end time already passed for a quick settlement walkthrough.
+**macOS or Linux.** On macOS, press **⌘ + Space**, search for **Terminal**, and press **Return**. On Linux, open your terminal app. Paste this command and press **Return**:
 
-1. Go to **Bills → Add bill** and record **Lunch**, **100000 VND**, paid by **An**, shared by both.
-2. Click the profile avatar to switch between An and Bình. Open the bill and click **Approve bill** as each person.
-3. Switch back to An. Open **Final split**, choose **Prepare final split**, then click **Approve split** as each person.
-4. Switch back to An and choose **Settle group**. At the fixed demo rate of 25,000 VND per USD, Bình owes An **2 USDC**. The simulated balances after settlement are **7 USDC** for An and **3 USDC** for Bình.
+```sh
+curl -fsSL https://bun.com/install | bash
+```
 
-The local simulation uses its own browser storage and a fixed exchange rate. **Start a fresh sample** resets that sample in the current browser.
+**Windows.** Open **PowerShell** from the Start menu. Paste this command and press **Enter**:
+
+```powershell
+powershell -c "irm bun.sh/install.ps1|iex"
+```
+
+Close and reopen the terminal, then run:
+
+```sh
+bun --version
+```
+
+Continue once you see a version number. If the command is still missing, follow the PATH instructions printed by the installer. [Bun PATH setup](https://bun.com/docs/installation#add-bun-to-your-path)
+
+### 3. Open the project folder in your terminal
+
+- **macOS.** Type `cd` followed by one space. Drag the extracted folder that contains `package.json` from Finder into Terminal. Press **Return**.
+- **Windows.** Open the folder containing `package.json` in File Explorer. Click the address bar, type `powershell`, and press **Enter**. PowerShell opens in that folder.
+- **Linux.** Open a terminal in the extracted folder that contains `package.json`.
+
+Run `ls` on macOS or Linux, or `dir` on Windows. Confirm that `package.json` and `README.md` are both listed.
+
+### 4. Start the app
+
+```sh
+bun run start
+```
+
+When the terminal prints `TripVault Rooms: http://127.0.0.1:8788`, keep it open and go to [the local demo](http://127.0.0.1:8788/?demo=1) in your browser. To stop the server when finished, press **Ctrl + C** in the terminal. The address works on the computer running the command.
+
+## First demo walkthrough
+
+1. In [the local demo](http://127.0.0.1:8788/?demo=1), dismiss the guide if it appears. Select **English** from the language menu in the header so the labels match this guide. Click **Start a fresh sample**. An and Bình each start with **5 simulated USDC**. The sample trip has already ended so you can try settlement immediately.
+2. Go to **Bills → Add bill**. Enter **Lunch**, enter **100000** in the VND amount field, select **An** as the payer, keep **An** and **Bình** selected, then click **Save bill**.
+3. Open **Lunch**, click **Approve bill** as An, and close the bill. Click An’s avatar in the top-right corner, choose **Bình**, then open **Lunch** and click **Approve bill** again.
+4. Close the bill and switch back to **An** using the avatar. Go to **Final split → Prepare final split → Approve split**. Switch to **Bình** and click **Approve split** as him as well.
+5. Switch back to **An** and click **Settle group**. The demo rate is **25,000 VND per USD**, so Bình owes An **2 USDC**. To verify, open **Wallet → Demo vault** and check **Your deposited balance** before clicking **Claim refund**. An should have **7 USDC** and Bình should have **3 USDC** after you switch to his profile.
+
+**Start a fresh sample** resets the sample in the current browser.
+
+## Troubleshooting
+
+| What you see | What to do |
+| --- | --- |
+| `bun: command not found` or `bun is not recognized` | Install Bun in step 2 and reopen the terminal. |
+| Bun cannot find the `start` script | Repeat step 3 and confirm that the folder lists `package.json`. |
+| The browser shows **Unable to connect** or **Connection refused** | Run `bun run start` and keep the terminal open. Use the address displayed there. |
+| Bun says port 8788 is in use | Use port 8789 with the command below for your operating system, then open [the demo on port 8789](http://127.0.0.1:8789/?demo=1). |
+| The page asks you to connect a wallet | Add `?demo=1` at the end of the address and click **Start a fresh sample**. |
+
+On macOS or Linux:
+
+```sh
+TRIPVAULT_PORT=8789 bun run start
+```
+
+On Windows PowerShell:
+
+```powershell
+$env:TRIPVAULT_PORT = "8789"
+bun run start
+```
 
 ## Test the shared-room flow on Avalanche Fuji
 
 1. Open [shared-room mode](http://127.0.0.1:8788/) in a browser with an Ethereum-compatible wallet. Use two browser profiles with different accounts if both members are testing on the same computer. Each account needs Fuji AVAX for network fees and Fuji test USDC to deposit.
 2. Connect the organizer’s wallet and choose **Create a room**. Pick a deposit deadline, a later start time, and an end time after that. Leave time to join, create the fund, and deposit before the deadline.
 3. On the other browser profile, choose **Join a room** with the second wallet and enter the code. After everyone has joined, use **Wallet → Deploy Fuji vault** as the organizer. Confirm the roster and wallet transaction. Each member then deposits their share.
-4. After the start, record and review a bill. After the end, each member reviews and approves the final amount. The organizer makes the group payments, and each member can claim their remaining balance in **Wallet**.
+4. After the start, record and review a bill. Once the trip has ended and bill reviews are complete, the organizer opens **Final split** and chooses **Calculate final amounts → Review payment amounts → Share amounts for approval**. Each other member chooses **Approve my amount** and tops up if prompted. The organizer chooses **Make group payments**, and each member can send their remaining balance to their wallet.
+
+For wallet sign-in, use the exact host and port printed in the terminal. Shared-room data is stored locally in `work/tripvault-rooms.sqlite3`.
 
 ## Source and checks
 
