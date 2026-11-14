@@ -95,9 +95,11 @@ const renamed = await send(scheduledPath, { token: a, body: { type: 'room.rename
 assert.equal(renamed.name, 'New trip name');
 billingTime = newDeadline;
 await send(scheduledPath, { token: a, body: { type: 'room.rename', version: renamed.version, name: 'Late name' }, status: 409 });
-await send(scheduledPath, { token: a, body: { type: 'room.rename-member', version: renamed.version, name: 'Late name' }, status: 409 });
+const lateRename = await send(scheduledPath, { token: a, body: { type: 'room.rename-member', version: renamed.version, name: 'Late name' } });
+assert.equal(lateRename.members[0].name, 'Late name');
+assert.equal(lateRename.name, renamed.name);
 billingTime = undefined;
-await send(scheduledPath, { token: a, body: { type: 'room.delete', version: renamed.version } });
+await send(scheduledPath, { token: a, body: { type: 'room.delete', version: lateRename.version } });
 const initial = await createLegacyRoom(settings, a);
 assert.match(initial.code, /^\d{6}$/);
 assert.match(initial.invite, /^[A-Za-z0-9_-]{32}$/);
@@ -194,12 +196,19 @@ assert.equal(taxi.reviewBy, billingTime + daily);
 await directAction(c, room.version, 'bill.approve', { id: taxi.id, approve: true }, 403);
 room = await directAction(b, room.version, 'bill.feedback', { id: taxi.id, comment: 'Use the actual fare' });
 assert.equal(room.bills.at(-1).status, 'disputed');
+assert.deepEqual(room.bills.at(-1).feedbackLog, []);
+const [notification] = (await send(path, { token: a })).bills.at(-1).feedbackLog;
+assert.equal(notification.comment, 'Use the actual fare');
+assert.deepEqual((await send(path, { token: c })).bills.at(-1).feedbackLog, []);
+room = await directAction(b, room.version, 'bill.feedback', { id: taxi.id, comment: notification.comment });
+assert.deepEqual((await send(path, { token: a })).bills.at(-1).feedbackLog, [notification]);
 billingTime += daily;
 room = await send(path, { token: b });
 assert.equal(room.bills.at(-1).status, 'disputed');
 await directAction(b, room.version, 'bill.edit', { ...smallBill, id: taxi.id, amount: 20000 }, 403);
 room = await directAction(a, room.version, 'bill.edit', { ...smallBill, id: taxi.id, amount: 20000 });
 assert.equal(room.bills.at(-1).history[0].feedback[0].comment, 'Use the actual fare');
+assert.deepEqual(room.bills.at(-1).feedbackLog, [notification]);
 assert.equal(room.bills.at(-1).reviewBy, billingTime + daily);
 billingTime += daily - 1;
 room = await send(path, { token: b });
@@ -230,6 +239,17 @@ const settlement = proof('44', vault, iface.encodeFunctionData('settle', ['0x' +
 room = await send(path + '/chain-proof', { token: a, body: { kind: 'fuji-settle', hash: settlement } });
 assert.equal(room.settled, true);
 assert.equal(room.fuji.settlementTx, settlement);
+const settledRoom = room;
+const guestBills = (await send(path, { token: b })).bills;
+room = await directAction(b, room.version, 'room.rename-member', {
+  name: 'B after settlement', memberId: room.owner,
+});
+assert.deepEqual(room.members, settledRoom.members.map(member =>
+  member.address === guest.address.toLowerCase() ? { ...member, name: 'B after settlement' } : member));
+assert.equal(room.revision, settledRoom.revision);
+assert.deepEqual(room.fuji, settledRoom.fuji);
+assert.deepEqual(room.bills, guestBills);
+assert.deepEqual(room.reviewQuote, settledRoom.reviewQuote);
 await directAction(b, room.version, 'bill.add', bill, 409);
 assert.equal((await send('/rooms', { token: b })).rooms[0].id, room.id);
 console.log('PASS: signed wallets create and join by code/link, deduplicated and synchronized members, concurrent joins, role permissions, shared bills, roster lock, Fuji proof and readback');

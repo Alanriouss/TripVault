@@ -113,8 +113,7 @@
     try {
       const { rooms: active, reminders = [] } = await roomApi('/rooms', undefined, token);
       if (token !== rooms.token || rooms.account !== walletSession.account) return false;
-      const viewedRoom = state.trip?.id;
-      const previousNotifications = notificationIds(state.trip);
+      const previousNotifications = notificationIds();
       const remindersChanged = JSON.stringify(rooms.reminders) !== JSON.stringify(reminders);
       rooms.reminders = reminders;
       const current = new Set(active.map(room => room.id));
@@ -128,7 +127,7 @@
         render();
         if (rooms.reminders.some(reminder => reminder.roomId === state.trip?.id)) refreshRoomFunding();
       }
-      if (state.trip?.id === viewedRoom) updateRoomNotifications(state.trip, previousNotifications);
+      updateRoomNotifications(previousNotifications);
       return true;
     } catch (error) {
       if (token === rooms.token && error.status === 401) {
@@ -197,6 +196,10 @@
         }
       }
       window.addEventListener('focus', syncRooms);
+      window.addEventListener('pageshow', syncRooms);
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') syncRooms();
+      });
       render();
     } catch {
       // The standalone HTML still supports the local demo.
@@ -417,28 +420,35 @@
     return Date.parse(trip.endedAt || trip.endTime);
   }
 
-  function canRenameInRoom(trip) {
-    return Boolean(trip?.shared && !trip.settled && walletSession.account && rooms.account === walletSession.account
-      && trip.members.some(item => item.id === state.actor && item.address === walletSession.account)
-      && Date.now() < Math.min(Date.parse(trip.depositDeadline || trip.startTime), roomEndTime(trip)));
+  function canEditRoomDisplayName(trip) {
+    return Boolean(trip?.shared && rooms.account && rooms.account === walletSession.account
+      && trip.members.some(item => item.id === state.actor && item.address === rooms.account));
+  }
+
+  function canRenameTrip(trip) {
+    return isRoomOrganizer(trip) && !trip.settled
+      && Date.now() < Math.min(Date.parse(trip.depositDeadline || trip.startTime), roomEndTime(trip));
   }
 
   function showRoomRename(trip, kind) {
     const renameTrip = kind === 'room-rename';
-    if (!canRenameInRoom(trip) || (renameTrip && state.actor !== trip.owner)) return;
+    if (renameTrip ? !canRenameTrip(trip) : !canEditRoomDisplayName(trip)) return;
     const current = renameTrip ? trip.name : member(state.actor)?.name;
     const label = renameTrip ? 'Trip name' : 'Your display name';
     sheetOpen(renameTrip ? 'Rename trip' : 'Edit your display name', { user: trip.name }, `<form method="dialog" id="room-rename-form" class="stack">
       <input type="hidden" name="kind" value="${kind}">
       <label class="field">${label}<input name="name" maxlength="${renameTrip ? 70 : 40}" value="${safe(current)}" required autofocus></label>
       <p id="sheet-error" class="form-error" role="status"></p>
+      ${billSignInButton()}
     </form>`, '<button class="btn full" type="submit" form="room-rename-form">Save name</button>');
   }
 
   function submitRoomRename(data, fail) {
     const trip = state.trip;
-    if (!canRenameInRoom(trip)) return fail('The deposit deadline has passed.');
-    const type = data.get('kind') === 'room-rename' ? 'room.rename' : 'room.rename-member';
+    const renameTrip = data.get('kind') === 'room-rename';
+    if (renameTrip && !canRenameTrip(trip)) return fail('The trip name can only be changed before the deposit deadline.');
+    if (!renameTrip && !canEditRoomDisplayName(trip)) return fail('Reconnect the same wallet to continue.');
+    const type = renameTrip ? 'room.rename' : 'room.rename-member';
     changeRoom(trip, type, { name: String(data.get('name') || '') }, updated => {
       if (updated && sheet.open) sheet.close();
       if (updated) notice('Name updated.');
@@ -631,7 +641,7 @@
       ${profile ? `<div class="trip-profile">
         ${avatar(profile)}
         <span class="trip-profile-name" translate="no" title="${safe(profile.name)}">${safe(profile.name)}</span>
-        ${canRenameInRoom(trip) ? btn('Edit my name', 'room-rename-member', { tone: 'soft rename-member' }) : ''}
+        ${canEditRoomDisplayName(trip) ? btn('Edit my name', 'room-rename-member', { tone: 'soft rename-member' }) : ''}
       </div>` : ''}
     </div>`;
   }
@@ -673,7 +683,7 @@
         ${row(trip.endedAt ? 'Trip ended early' : 'Trip end', safe(formatTripTime(end)),
           'The organizer can share the final amounts for approval after this time.')}
         ${isRoomOrganizer(trip) ? `<div class="inline trip-settings-actions">
-          ${canRenameInRoom(trip) ? btn('Rename trip', 'room-rename', { tone: 'secondary' }) : ''}
+          ${canRenameTrip(trip) ? btn('Rename trip', 'room-rename', { tone: 'secondary' }) : ''}
           ${canDeleteRoom(trip) ? deleteRoomButton(trip) : ''}
         </div>` : ''}
       </section>

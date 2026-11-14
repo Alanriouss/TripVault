@@ -290,8 +290,8 @@ replace("    if (act === 'room-copy') return copyRoomInvite(trip);", """    if (
     if (act === 'send-top-up-reminder') return sendBillTopUpReminder(element);
     if (act === 'open-top-up-reminder') return openTopUpReminder(id);
     if (act === 'pay-top-up-reminder') return payTopUpReminder(id, element.dataset.units);
-    if (act === 'room-notifications') return openRoomNotifications(trip);
-    if (act === 'open-room-notification') return openRoomNotification(trip, id);
+    if (act === 'room-notifications') return openRoomNotifications();
+    if (act === 'open-room-notification') return openRoomNotification(id);
     if (act === 'room-funding-top-up') return topUpRoomFunding(element);""")
 replace("disabled:!!t.settled})}</div><section class=\"panel\"><div class=\"panel-head\"><h2>Trip expenses",
         "disabled:t.shared ? !roomBillFunding(t).ready : !!t.settled})}</div>${t.shared ? roomFundingPanel(t) : ''}<section class=\"panel\"><div class=\"panel-head\"><h2>Trip expenses")
@@ -396,7 +396,7 @@ source = source.replace("'Deposit test USDC'", "'Deposit USDC'")
 translation = (root / 'work/tripvault-ui-language.js').read_text()
 replace('  function readStorage(key) {', translation + '\n  function readStorage(key) {')
 replace("              ${btn('Guide', 'guide', { tone: 'ghost' })}",
-        "              ${btn('Guide', 'guide', { tone: 'ghost' })}\n              ${siteLanguageSelect()}\n              ${roomBell(trip)}")
+        "              ${btn('Guide', 'guide', { tone: 'ghost' })}\n              ${siteLanguageSelect()}\n              ${roomBell()}")
 replace("""<span class="chip violet header-demo">${trip?.shared ? 'Room' : 'Demo'}</span>""",
         """${trip?.shared ? '' : '<span class="chip violet header-demo">Demo</span>'}""")
 replace("const tripsButton = trip?.shared ? '' : trip ? btn('Trips', 'trip-list', { tone: 'ghost' }) : newTrip;",

@@ -4,13 +4,39 @@
   let notificationAttention = false;
   let notificationAttentionTimer;
 
+  function billFeedbackNotifications(trip, bill, member, involved) {
+    const entries = new Map();
+    const add = (id, label, feedback) => entries.set(id, {
+      id: 'feedback:' + bill.id + ':' + id, billId: bill.id, title: label,
+      heading: 'Bill change requested', message: feedback.comment, userMessage: true,
+      receivedAt: feedback.receivedAt,
+      sender: trip.members.find(person => person.id === feedback.author)?.name,
+    });
+    for (const feedback of bill.feedbackLog || []) {
+      add(feedback.id, feedback.label, feedback);
+    }
+    if (involved) {
+      const versions = [...(bill.history || []), bill];
+      for (const version of versions) {
+        for (const feedback of version.feedback || []) {
+          if (feedback.id || feedback.author === member.id) continue;
+          let fingerprint = 0;
+          for (const char of feedback.comment) fingerprint = Math.imul(fingerprint, 31) + char.codePointAt(0) | 0;
+          add([feedback.author, version.reviewBy, fingerprint].join(':'), version.label, feedback);
+        }
+      }
+    }
+    return [...entries.values()].reverse();
+  }
+
   function tripNotificationEntries(trip) {
     const member = trip.members.find(item => item.address === rooms.account);
     if (!member) return [];
 
     const bills = trip.bills.slice().reverse().flatMap(bill => {
       const involved = [bill.createdBy || bill.payer, bill.payer, ...bill.participants].includes(member.id);
-      if (!involved) return [];
+      const feedback = billFeedbackNotifications(trip, bill, member, involved);
+      if (!involved) return feedback;
       const related = { billId: bill.id, title: bill.label };
       const review = [];
       if (bill.status === 'pending' && bill.participants.includes(member.id)
@@ -26,16 +52,6 @@
         review.push({ ...related, id: 'removed:' + bill.id, heading: 'Bill removed',
           message: 'Everyone involved agreed to handle this bill separately. It is excluded from the final amounts.' });
       }
-      if (!['disputed', 'cancellation'].includes(bill.status)) return review;
-      const feedback = (bill.feedback || []).filter(item => item.author !== member.id).map(item => {
-        let fingerprint = 0;
-        for (const char of item.comment) fingerprint = Math.imul(fingerprint, 31) + char.codePointAt(0) | 0;
-        return {
-          id: ['feedback', bill.id, item.author, bill.reviewBy, fingerprint].join(':'),
-          ...related, heading: 'Bill change requested', message: item.comment, userMessage: true,
-          sender: trip.members.find(member => member.id === item.author)?.name,
-        };
-      });
       return [...feedback, ...review];
     });
 
@@ -78,13 +94,15 @@
     }));
   }
 
-  function readTripNotifications(trip) {
-    if (!rooms.account || (trip && !trip.shared)) return [];
-    return (trip ? [trip] : [...rooms.list.values()]).flatMap(tripNotificationEntries);
+  function readRoomNotifications(seen) {
+    if (!rooms.account) return [];
+    const items = [...rooms.list.values()].flatMap(tripNotificationEntries);
+    return items.sort((a, b) => Number(Boolean(seen?.has(a.id))) - Number(Boolean(seen?.has(b.id)))
+      || (b.receivedAt || 0) - (a.receivedAt || 0));
   }
 
-  function notificationIds(trip) {
-    return new Set(readTripNotifications(trip).map(item => item.id));
+  function notificationIds() {
+    return new Set(readRoomNotifications().map(item => item.id));
   }
 
   function seenRoomNotifications() {
@@ -105,10 +123,10 @@
     return readNotifications;
   }
 
-  function roomBell(trip) {
-    if (!rooms.account || (trip && !trip.shared)) return '';
+  function roomBell() {
+    if (!rooms.account) return '';
     const seen = seenRoomNotifications();
-    const unread = readTripNotifications(trip).some(item => !seen.has(item.id));
+    const unread = readRoomNotifications().some(item => !seen.has(item.id));
     return `<button type="button" class="btn secondary trip-bell${unread && notificationAttention ? ' attention' : ''}" data-act="room-notifications"
       aria-label="${unread ? 'Notifications · Unread' : 'Notifications'}" aria-haspopup="dialog">
       <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.8"
@@ -137,11 +155,12 @@
 
   function roomNotificationsBody(trip, items, seen) {
     return items.length ? items.map(item => {
-      const [message, action] = item.reminder ? topUpNotificationDetails(trip, item.reminder) : [
+      const current = trip?.id === item.roomId;
+      const [message, action] = item.reminder ? topUpNotificationDetails(current ? trip : null, item.reminder) : [
         item.message, btn(item.billId ? 'Open bill' : 'Open trip', 'open-room-notification',
           { tone: 'secondary', data: `data-id="${safe(item.id)}"` }),
       ];
-      const context = [!trip && item.roomName, item.sender, item.title].filter(Boolean).map(userText).join(' · ');
+      const context = [item.roomName, item.sender, item.title].filter(Boolean).map(userText).join(' · ');
       return `<article class="trip-notification${seen.has(item.id) ? '' : ' unread'}">
         <strong>${item.heading}</strong>
         ${context ? '<span>' + context + '</span>' : ''}
@@ -151,16 +170,18 @@
     }).join('') : '<p class="notice">You have no trip notifications.</p>';
   }
 
-  function openRoomNotifications(trip) {
-    if (!rooms.account || (trip && !trip.shared)) return;
-    const items = readTripNotifications(trip);
-    const markup = roomNotificationsBody(trip, items, seenRoomNotifications());
-    sheetOpen('Notifications', trip ? { user: trip.name } : 'Your trips',
-      '<div class="stack" data-room-notifications>' + markup + '</div>');
+  function openRoomNotifications() {
+    if (!rooms.account) return;
+    const seen = seenRoomNotifications();
+    const items = readRoomNotifications(seen);
+    const markup = roomNotificationsBody(state.trip, items, seen);
+    sheetOpen('Notifications', 'Your trips',
+      '<div class="stack" data-room-notifications>' + markup + '</div>' + billSignInButton());
     const panel = sheet.querySelector('[data-room-notifications]');
-    if (panel) panel.notificationMarkup = roomNotificationsBody(trip, items, markTripNotificationsRead(items));
+    if (panel) panel.notificationMarkup = roomNotificationsBody(state.trip, items, markTripNotificationsRead(items));
     else markTripNotificationsRead(items);
     render();
+    syncRooms();
   }
 
   function markTripNotificationsRead(items) {
@@ -173,24 +194,24 @@
     return seen;
   }
 
-  function refreshNotificationSheet(trip, items = readTripNotifications(trip)) {
+  function refreshNotificationSheet(items = readRoomNotifications(seenRoomNotifications())) {
     const panel = sheet.open && sheet.querySelector('[data-room-notifications]');
     if (!panel) return false;
-    const markup = roomNotificationsBody(trip, items, seenRoomNotifications());
+    const markup = roomNotificationsBody(state.trip, items, seenRoomNotifications());
     if (panel.notificationMarkup !== markup) {
       panel.innerHTML = markup;
       localizeUI(panel);
-      panel.notificationMarkup = roomNotificationsBody(trip, items, markTripNotificationsRead(items));
+      panel.notificationMarkup = roomNotificationsBody(state.trip, items, markTripNotificationsRead(items));
       render();
     }
     return true;
   }
 
-  function updateRoomNotifications(trip, previous) {
-    const items = readTripNotifications(trip);
-    if (refreshNotificationSheet(trip, items)) return;
-    if (!items.length) return;
+  function updateRoomNotifications(previous) {
+    if (!rooms.account) return;
     const seen = seenRoomNotifications();
+    const items = readRoomNotifications(seen);
+    if (refreshNotificationSheet(items)) return;
     if (!items.some(item => !previous.has(item.id) && !seen.has(item.id))) return;
     notificationAttention = true;
     clearTimeout(notificationAttentionTimer);
@@ -202,9 +223,9 @@
     notice('New trip notification');
   }
 
-  function openRoomNotification(trip, id) {
-    const item = readTripNotifications(trip).find(notification => notification.id === id);
-    if (!item) return openRoomNotifications(trip);
+  function openRoomNotification(id) {
+    const item = readRoomNotifications().find(notification => notification.id === id);
+    if (!item) return openRoomNotifications();
     const targetTrip = rooms.list.get(item.roomId);
     if (!targetTrip) return;
     selectTrip(targetTrip);

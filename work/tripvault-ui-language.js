@@ -58,6 +58,8 @@
     ['Your display name', 'Tên hiển thị của bạn'],
     ['Save name', 'Lưu tên'],
     ['Name updated.', 'Đã đổi tên.'],
+    ['The trip name can only be changed before the deposit deadline.', 'Bạn chỉ có thể đổi tên chuyến đi trước hạn nạp tiền.'],
+    ['Sign in again with the same wallet, then retry.', 'Đăng nhập lại bằng đúng ví rồi thử lại.'],
     ['· You', '· Bạn'],
     ['Members', 'Thành viên'],
     ['Member', 'Thành viên'],

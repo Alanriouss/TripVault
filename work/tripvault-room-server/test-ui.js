@@ -515,7 +515,18 @@ async function testMemberDeposit({ launch, flush, start, end, cancelAtDeadline =
   assert.equal(guest.button('fuji-deposit'), undefined);
   assert.equal(guest.button('fuji-withdraw'), undefined);
   guest.view('people');
-  assert.equal(guest.button('room-rename-member'), undefined);
+  assert.ok(guest.button('room-rename-member'));
+  guest.click('room-rename-member');
+  guest.submit('room-rename-form', { kind: 'room-rename-member', name: 'Xu after deadline' });
+  await flush();
+  assert.match(guest.page.innerHTML, /Xu after deadline · You/);
+  await browser.poll();
+  browser.view('people');
+  assert.match(browser.page.innerHTML, /Xu after deadline/);
+  guest.click('room-rename-member');
+  guest.submit('room-rename-form', { kind: 'room-rename-member', name: 'Xu' });
+  await flush();
+  await browser.poll();
   chainTime = timeStart;
   guest.now(start);
   browser.now(start);
@@ -629,6 +640,7 @@ async function testMemberDeposit({ launch, flush, start, end, cancelAtDeadline =
   assert.match(browser.page.innerHTML, /aria-current="step">Final payments/);
   assert.equal(browser.button('room-end'), undefined);
   assert.match(browser.page.innerHTML, /Finish bill reviews/);
+  assert.ok(browser.button('room-rename-member'));
   guest.click('bill-feedback', { id: '2' });
   assert.match(guest.sheet.innerHTML, /Reason or suggested change/);
   assert.match(guest.sheet.innerHTML, /<form method="dialog" id="bill-feedback-form"/);
@@ -670,15 +682,34 @@ async function testMemberDeposit({ launch, flush, start, end, cancelAtDeadline =
   guest.click('bill-feedback', { id: '2' });
   guest.submit('bill-feedback-form', { id: '2', comment: 'Please remove my share' });
   await flush();
+  browser.click('trip-list');
+  browser.click('room-create');
+  browser.submit('room-form', {
+    name: 'A different room', location: '', displayName: 'Owner',
+    minimum: '5', mode: 'organizer',
+    depositDeadline: new Date(serverTime + 60_000).toISOString(),
+    startTime: new Date(serverTime + 120_000).toISOString(),
+    endTime: new Date(serverTime + 180_000).toISOString(),
+  });
+  await flush();
+  assert.match(browser.page.innerHTML, /<h1>A different room<\/h1>/);
   await browser.poll();
   assert.match(browser.toast.textContent, /New trip notification/);
   assert.match(browser.page.innerHTML, /class="trip-bell-dot"/);
+  browser.click('room-notifications');
+  assert.match(browser.sheet.innerHTML, /Please remove my share/);
+  const newNotificationId = browser.sheet.innerHTML.match(/data-act="open-room-notification"\s+data-id="([^"]+:feedback:[^"]+)"/)[1];
+  browser.click('open-room-notification', { id: newNotificationId });
+  assert.match(browser.sheet.innerHTML, /Please remove my share/);
   browser.click('bill-edit', { id: '2' });
   assert.match(browser.sheet.innerHTML, /Edit bill/);
   assert.match(browser.sheet.innerHTML, /name="editing" value="2"/);
   browser.submit('bill-form', { editing: '2', label: 'Snack', amount: '20000', payer: 'm1', participant: ['m0', 'm1'] });
   await flush();
   assert.match(browser.page.innerHTML, /Snack/);
+  browser.click('room-notifications');
+  assert.match(browser.sheet.innerHTML, /Please remove my share/);
+  browser.click('close-sheet');
   browser.click('bill-cancel-yes', { id: '2' });
   await flush();
   assert.match(browser.sheet.innerHTML, /1 of 2 agreed/);

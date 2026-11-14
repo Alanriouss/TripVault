@@ -371,6 +371,11 @@ export function createRoomApi({ database, origin, rpc = fujiRpc, fetchFundingRat
     const trip = JSON.parse(record.snapshot);
     const self = trip.members.find(member => member.address === address);
     assert(self, 404, 'Room unavailable.');
+    for (const bill of trip.bills) {
+      if (bill.feedbackLog) {
+        bill.feedbackLog = bill.feedbackLog.filter(item => item.recipients.includes(self.id));
+      }
+    }
     return self.id === trip.owner ? { ...trip, code: record.code, invite: record.invite } : trip;
   }
 
@@ -524,17 +529,20 @@ export function createRoomApi({ database, origin, rpc = fujiRpc, fetchFundingRat
       trip.locked = true;
       return persist(record, trip, address);
     }
-    assert(!trip.settled, 409, 'The room has already settled on Fuji.');
+    assert(!trip.settled || data.type === 'room.rename-member', 409, 'The room has already settled on Fuji.');
     assert(data.version === trip.version, 409, 'The room changed. Refresh and try again.');
     switch (data.type) {
-      case 'room.rename':
-      case 'room.rename-member': {
-        assert(data.type !== 'room.rename' || organizer, 403, 'Only the organizer can rename the trip.');
+      case 'room.rename': {
+        assert(organizer, 403, 'Only the organizer can rename the trip.');
         assert(now() < Math.min(Date.parse(trip.depositDeadline || trip.startTime), tripEnd(trip)),
-          409, 'Names can only be changed before the deposit deadline.');
-        const name = text(data.name, data.type === 'room.rename' ? 70 : 40, 'name');
-        if (data.type === 'room.rename') trip.name = name;
-        else self.name = name;
+          409, 'The trip name can only be changed before the deposit deadline.');
+        trip.name = text(data.name, 70, 'name');
+        break;
+      }
+      case 'room.rename-member': {
+        const name = text(data.name, 40, 'name');
+        if (self.name === name) return presentation(record, address);
+        self.name = name;
         break;
       }
       case 'room.end': {
@@ -565,8 +573,9 @@ export function createRoomApi({ database, origin, rpc = fujiRpc, fetchFundingRat
         if (!funding.rate) throw new RoomError(503, 'The USD/VND rate is unavailable. Try again to check funding.', funding);
         const bill = { ...draft, id: previous?.id ?? trip.nextBillId, createdBy: self.id,
           approvals: [], status: 'pending', reviewBy: now() + DAY,
+          ...(previous?.feedbackLog ? { feedbackLog: previous.feedbackLog } : {}),
           history: previous ? [...(previous.history || []), {
-            ...billDetails(trip, previous), feedback: previous.feedback || [],
+            ...billDetails(trip, previous), reviewBy: previous.reviewBy, feedback: previous.feedback || [],
           }].slice(-25) : [] };
         const otherBills = editing ? trip.bills.filter(item => item.id !== bill.id) : trip.bills;
         const shortfalls = roomFundingShortfalls({ ...trip, bills: otherBills }, funding, bill);
@@ -611,7 +620,17 @@ export function createRoomApi({ database, origin, rpc = fujiRpc, fetchFundingRat
           assert(bill.status === 'pending' || bill.status === 'disputed', 409, 'This bill is closed for review.');
           if (data.type === 'bill.feedback') {
             const comment = text(data.comment, 500, 'reason or suggested change');
-            bill.feedback = [...(bill.feedback || []).filter(item => item.author !== self.id), { author: self.id, comment }];
+            const active = bill.feedback || [];
+            if (active.some(item => item.author === self.id && item.comment === comment)) {
+              return presentation(record, address);
+            }
+            const feedback = { id: randomUUID(), author: self.id, comment };
+            const recipients = [...new Set([bill.createdBy || bill.payer, bill.payer, ...bill.participants])]
+              .filter(member => member !== self.id);
+            bill.feedback = [...active.filter(item => item.author !== self.id), feedback];
+            bill.feedbackLog = [...(bill.feedbackLog || []), {
+              ...feedback, label: bill.label, recipients, receivedAt: now(),
+            }].slice(-25);
             bill.approvals = bill.approvals.filter(id => id !== self.id);
           } else {
             assert(data.approve === true, 400, 'Choose to approve the current bill.');

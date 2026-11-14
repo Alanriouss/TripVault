@@ -6384,6 +6384,11 @@ function createRoomApi({ database, origin, rpc = fujiRpc, fetchFundingRate = mar
     const trip = JSON.parse(record.snapshot);
     const self = trip.members.find((member) => member.address === address);
     assert2(self, 404, "Room unavailable.");
+    for (const bill of trip.bills) {
+      if (bill.feedbackLog) {
+        bill.feedbackLog = bill.feedbackLog.filter((item) => item.recipients.includes(self.id));
+      }
+    }
     return self.id === trip.owner ? { ...trip, code: record.code, invite: record.invite } : trip;
   }
   function readMemberRoom(id, address) {
@@ -6539,18 +6544,20 @@ function createRoomApi({ database, origin, rpc = fujiRpc, fetchFundingRate = mar
       trip.locked = true;
       return persist(record, trip, address);
     }
-    assert2(!trip.settled, 409, "The room has already settled on Fuji.");
+    assert2(!trip.settled || data.type === "room.rename-member", 409, "The room has already settled on Fuji.");
     assert2(data.version === trip.version, 409, "The room changed. Refresh and try again.");
     switch (data.type) {
-      case "room.rename":
+      case "room.rename": {
+        assert2(organizer, 403, "Only the organizer can rename the trip.");
+        assert2(now() < Math.min(Date.parse(trip.depositDeadline || trip.startTime), tripEnd(trip)), 409, "The trip name can only be changed before the deposit deadline.");
+        trip.name = text(data.name, 70, "name");
+        break;
+      }
       case "room.rename-member": {
-        assert2(data.type !== "room.rename" || organizer, 403, "Only the organizer can rename the trip.");
-        assert2(now() < Math.min(Date.parse(trip.depositDeadline || trip.startTime), tripEnd(trip)), 409, "Names can only be changed before the deposit deadline.");
-        const name = text(data.name, data.type === "room.rename" ? 70 : 40, "name");
-        if (data.type === "room.rename")
-          trip.name = name;
-        else
-          self.name = name;
+        const name = text(data.name, 40, "name");
+        if (self.name === name)
+          return presentation(record, address);
+        self.name = name;
         break;
       }
       case "room.end": {
@@ -6588,8 +6595,10 @@ function createRoomApi({ database, origin, rpc = fujiRpc, fetchFundingRate = mar
           approvals: [],
           status: "pending",
           reviewBy: now() + DAY,
+          ...previous?.feedbackLog ? { feedbackLog: previous.feedbackLog } : {},
           history: previous ? [...previous.history || [], {
             ...billDetails(trip, previous),
+            reviewBy: previous.reviewBy,
             feedback: previous.feedback || []
           }].slice(-25) : []
         };
@@ -6638,7 +6647,19 @@ function createRoomApi({ database, origin, rpc = fujiRpc, fetchFundingRate = mar
           assert2(bill.status === "pending" || bill.status === "disputed", 409, "This bill is closed for review.");
           if (data.type === "bill.feedback") {
             const comment = text(data.comment, 500, "reason or suggested change");
-            bill.feedback = [...(bill.feedback || []).filter((item) => item.author !== self.id), { author: self.id, comment }];
+            const active = bill.feedback || [];
+            if (active.some((item) => item.author === self.id && item.comment === comment)) {
+              return presentation(record, address);
+            }
+            const feedback = { id: randomUUID(), author: self.id, comment };
+            const recipients = [...new Set([bill.createdBy || bill.payer, bill.payer, ...bill.participants])].filter((member) => member !== self.id);
+            bill.feedback = [...active.filter((item) => item.author !== self.id), feedback];
+            bill.feedbackLog = [...bill.feedbackLog || [], {
+              ...feedback,
+              label: bill.label,
+              recipients,
+              receivedAt: now()
+            }].slice(-25);
             bill.approvals = bill.approvals.filter((id) => id !== self.id);
           } else {
             assert2(data.approve === true, 400, "Choose to approve the current bill.");

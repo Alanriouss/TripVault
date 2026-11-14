@@ -26,11 +26,11 @@
       }
       if (!stillCurrent()) return;
       const previous = getDisplayedFunding(trip);
-      const previousNotifications = notificationIds(trip);
+      const previousNotifications = notificationIds();
       roomFundingResult = { id: trip.id, token, data };
       if (JSON.stringify(data) !== JSON.stringify(previous)) {
         render();
-        updateRoomNotifications(trip, previousNotifications);
+        updateRoomNotifications(previousNotifications);
       }
       return !data.failed;
     })();
@@ -202,7 +202,7 @@
     selectTrip(trip);
     state.view = 'wallet';
     render();
-    openRoomNotifications(state.trip);
+    openRoomNotifications();
     refreshRoomFunding();
   }
 
@@ -228,7 +228,7 @@
     } finally {
       payingReminder = false;
       render();
-      refreshNotificationSheet(state.trip);
+      refreshNotificationSheet();
     }
   }
 
