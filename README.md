@@ -1,9 +1,50 @@
-[README.md](https://github.com/user-attachments/files/34851514/README.md)
+[README.md](https://github.com/user-attachments/files/34852275/README.md)
 # TripVault
 
 TripVault records expenses paid in VND outside the app. Members deposit USDC into a time-locked trip fund, review the bills that involve them, and settle the net amounts after the trip. The shared-room prototype runs on Avalanche Fuji.
 
-## Open TripVault on a phone
+## Start here for judging
+
+| What you want to test | How to open it |
+| --- | --- |
+| **Laptop with a real wallet** | Follow [the laptop setup](#run-tripvault-on-a-fresh-computer), then open [http://127.0.0.1:8788/](http://127.0.0.1:8788/) in a browser with a wallet extension. Your laptop runs its own copy. |
+| **Phone with a real wallet** | Open a TripVault HTTPS link inside your wallet app’s browser. Follow [the phone wallet steps](#test-a-real-wallet-on-a-phone) to use the team’s temporary link or create one from your own laptop. |
+| **Quick demo with simulated balances** | Open [http://127.0.0.1:8788/?demo=1](http://127.0.0.1:8788/?demo=1) after starting the app. Follow [the sample walkthrough](#first-demo-walkthrough). |
+
+### Test a real wallet on a phone
+
+**During a live demo**, open the [team’s temporary TripVault link](https://always-upon-ultra-pan.trycloudflare.com/) on either a laptop or a phone. On a laptop, use a browser with your wallet extension. On a phone, copy the link into your wallet’s built-in browser. The link depends on the team’s demo server and tunnel staying online. If it is unavailable, use the steps below to run your own session. [Cloudflare Quick Tunnels](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/)
+
+**Run your own phone test.** The team’s MacBook can be off. Your laptop runs TripVault and keeps the HTTPS link available for your phone.
+
+1. Download the repository and install Bun using [the laptop setup](#run-tripvault-on-a-fresh-computer). Install [`cloudflared` for your operating system](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/downloads/). If TripVault is already running locally, press **Ctrl + C** in its terminal before restarting it in step 3.
+2. In one terminal, run the following command. Leave this terminal open and copy the `https://…trycloudflare.com` link it prints.
+
+   ```sh
+   cloudflared tunnel --protocol http2 --url http://127.0.0.1:8788
+   ```
+
+3. Open a second terminal in the folder containing `package.json`. Replace `https://YOUR-TUNNEL.trycloudflare.com` with the exact link from step 2 so the wallet can verify the sign-in address. Leave both terminals open.
+
+   **macOS or Linux**
+
+   ```sh
+   TRIPVAULT_ORIGIN="https://YOUR-TUNNEL.trycloudflare.com" bun run start
+   ```
+
+   **Windows PowerShell**
+
+   ```powershell
+   $env:TRIPVAULT_ORIGIN = "https://YOUR-TUNNEL.trycloudflare.com"
+   bun run start
+   ```
+
+4. On your phone, copy the HTTPS link into the wallet’s built-in browser. In **MetaMask Mobile**, tap **Explore**, then open the browser and paste the link. In TripVault, tap **Connect Wallet**, switch to **Avalanche Fuji** if prompted, and choose **Create a room**. Sign the login message when asked. A room with a **six-digit invite code** confirms that wallet sign-in worked. Creating the room only requires a signature and uses no gas. [MetaMask Mobile browser guide](https://support.metamask.io/configure/wallet/how-to-use-the-metamask-mobile-browser/)
+5. To test across devices, open the **same HTTPS link** in your laptop browser with a different wallet account, click **Join a room**, and enter the six-digit code. Continue with [the shared-room flow](#test-the-shared-room-flow-on-avalanche-fuji) if you want to test deposits and settlement using Fuji test tokens.
+
+If you restart the tunnel, Cloudflare gives you a new link. Update `TRIPVAULT_ORIGIN` and restart TripVault before signing in again. [Cloudflare Quick Tunnels](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/)
+
+## Mobile simulation
 
 ### Try the mobile demo over Wi-Fi
 
