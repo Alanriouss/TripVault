@@ -77,9 +77,13 @@ async function launch(options = {}, script = source) {
   const click = (act, data = {}) => events.click({ target: { closest: () => ({
     dataset: { act, ...data }, closest: selector => sheet.querySelector(selector),
   }) } });
-  const submit = (id, fields) => {
-    const error = { textContent: '' };
-    events.submit({ preventDefault() {}, target: { id, fields, querySelector: () => error } });
+  const submit = (id, fields, error = { textContent: '' }) => {
+    const form = {
+      id: 'id' in fields ? { value: fields.id } : id,
+      getAttribute: name => name === 'id' ? id : null,
+      fields, querySelector: () => error,
+    };
+    events.submit({ preventDefault() {}, target: form });
     return error.textContent;
   };
   const workspace = () => JSON.parse(storage.get(v8Key));

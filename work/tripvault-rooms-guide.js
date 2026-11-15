@@ -72,6 +72,7 @@
   let guideStep = 0;
   let guideOpen = false;
   let pendingGuideInvite = '';
+  const joinedRoomGuides = new Set();
 
   function showGuide() {
     const preferred = guideLanguage || readStorage(GUIDE_LANGUAGE_KEY) || readStorage(SITE_LANGUAGE_KEY);
@@ -159,4 +160,14 @@
     } catch {
       // The guide remains available even if the browser cannot remember this visit.
     }
+  }
+
+  function showJoinedRoomGuide(trip) {
+    const key = GUIDE_KEY + ':room:' + rooms.account + ':' + trip.id;
+    if (joinedRoomGuides.has(key) || readStorage(key) === true) return;
+    joinedRoomGuides.add(key);
+    try {
+      localStorage.setItem(key, 'true');
+    } catch {}
+    openGuide();
   }

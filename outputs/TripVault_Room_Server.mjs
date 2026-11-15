@@ -6127,6 +6127,23 @@ function billStatus(bill) {
     return "disputed";
   return bill.participants.every((id) => bill.approvals.includes(id)) ? "approved" : "pending";
 }
+function billReviewers(bill) {
+  return [...new Set([bill.createdBy || bill.payer, bill.payer, ...bill.participants])];
+}
+function logBillNotification(bill, kind, actor, recipients, receivedAt, comment, id = randomUUID()) {
+  const targets = [...new Set(recipients)].filter((member) => member !== actor);
+  if (!targets.length)
+    return;
+  bill.notificationLog = [...bill.notificationLog || [], {
+    id,
+    kind,
+    actor,
+    recipients: targets,
+    receivedAt,
+    label: bill.label,
+    comment
+  }].slice(-50);
+}
 function billDetails(trip, data) {
   const label = text(data.label, 70, "bill name");
   const { amount, payer, participants } = data;
@@ -6320,7 +6337,7 @@ function createRoomApi({ database, origin, rpc = fujiRpc, fetchFundingRate = mar
   const getRooms = db.query(`SELECT rooms.* FROM rooms
     JOIN room_members ON rooms.id = room_members.room_id
     WHERE room_members.address = ? ORDER BY rooms.created DESC`);
-  const getReminders = db.query(`SELECT reminder.id, reminder.room_id, reminder.sender, reminder.draft,
+  const getReminders = db.query(`SELECT reminder.id, reminder.room_id, reminder.sender, reminder.draft, reminder.updated,
       recipient.value AS recipient, rooms.snapshot
     FROM top_up_reminders AS reminder
     JOIN rooms ON rooms.id = reminder.room_id
@@ -6387,6 +6404,9 @@ function createRoomApi({ database, origin, rpc = fujiRpc, fetchFundingRate = mar
     for (const bill of trip.bills) {
       if (bill.feedbackLog) {
         bill.feedbackLog = bill.feedbackLog.filter((item) => item.recipients.includes(self.id));
+      }
+      if (bill.notificationLog) {
+        bill.notificationLog = bill.notificationLog.filter((item) => item.recipients.includes(self.id));
       }
     }
     return self.id === trip.owner ? { ...trip, code: record.code, invite: record.invite } : trip;
@@ -6471,7 +6491,8 @@ function createRoomApi({ database, origin, rpc = fujiRpc, fetchFundingRate = mar
         tripName: trip.name,
         draft: JSON.parse(row.draft),
         sender: trip.members.find((member) => member.address === row.sender)?.name,
-        units: JSON.parse(row.recipient).units
+        units: JSON.parse(row.recipient).units,
+        receivedAt: row.updated
       };
     });
   }
@@ -6542,6 +6563,7 @@ function createRoomApi({ database, origin, rpc = fujiRpc, fetchFundingRate = mar
         return presentation(record, address);
       assert2(!trip.depositDeadline || Date.parse(trip.depositDeadline) > Date.now(), 409, "The deposit deadline has passed.");
       trip.locked = true;
+      trip.rosterLockedAt = now();
       return persist(record, trip, address);
     }
     assert2(!trip.settled || data.type === "room.rename-member", 409, "The room has already settled on Fuji.");
@@ -6567,6 +6589,8 @@ function createRoomApi({ database, origin, rpc = fujiRpc, fetchFundingRate = mar
         if (tripEnd(trip) <= now())
           return presentation(record, address);
         trip.endedAt = new Date(Math.floor(now() / 1000) * 1000).toISOString();
+        if (!trip.locked)
+          trip.rosterLockedAt = now();
         trip.locked = true;
         closeTripBills(trip);
         break;
@@ -6588,14 +6612,17 @@ function createRoomApi({ database, origin, rpc = fujiRpc, fetchFundingRate = mar
         assert2(funding.started !== false, 409, "Bills open at the scheduled trip start.");
         if (!funding.rate)
           throw new RoomError(503, "The USD/VND rate is unavailable. Try again to check funding.", funding);
+        const reviewStartedAt = now();
         const bill = {
           ...draft,
           id: previous?.id ?? trip.nextBillId,
           createdBy: self.id,
           approvals: [],
           status: "pending",
-          reviewBy: now() + DAY,
+          reviewStartedAt,
+          reviewBy: reviewStartedAt + DAY,
           ...previous?.feedbackLog ? { feedbackLog: previous.feedbackLog } : {},
+          ...previous?.notificationLog ? { notificationLog: previous.notificationLog } : {},
           history: previous ? [...previous.history || [], {
             ...billDetails(trip, previous),
             reviewBy: previous.reviewBy,
@@ -6618,6 +6645,21 @@ function createRoomApi({ database, origin, rpc = fujiRpc, fetchFundingRate = mar
         invalidateSplit(trip);
         break;
       }
+      case "bill.feedback-vote": {
+        const bill = trip.bills.find((item) => item.id === data.id);
+        assert2(bill && bill.status === "disputed" && !trip.reviewQuote, 409, "This suggestion is closed for review.");
+        assert2(billReviewers(bill).includes(self.id), 403, "Only people involved in the bill can respond to suggestions.");
+        assert2(typeof data.agree === "boolean", 400, "Choose whether you agree with the suggestion.");
+        const suggestion = bill.feedback?.find((item) => item.author === data.author && (item.id || "") === data.suggestion);
+        assert2(suggestion, 409, "This suggestion changed. Open the bill again.");
+        assert2(suggestion.author !== self.id, 403, "Someone else must respond to your suggestion.");
+        const responses = suggestion.responses || [];
+        if (responses.find((item) => item.member === self.id)?.agree === data.agree)
+          return presentation(record, address);
+        suggestion.responses = [...responses.filter((item) => item.member !== self.id), { member: self.id, agree: data.agree }];
+        logBillNotification(bill, data.agree ? "suggestion-agreed" : "suggestion-disagreed", self.id, [suggestion.author, bill.createdBy || bill.payer], now(), suggestion.comment);
+        break;
+      }
       case "bill.approve":
       case "bill.feedback":
       case "bill.cancel": {
@@ -6625,22 +6667,37 @@ function createRoomApi({ database, origin, rpc = fujiRpc, fetchFundingRate = mar
         assert2(bill && bill.status !== "rejected" && !trip.reviewQuote, 409, "This bill is closed for review.");
         assert2(bill.status !== "pending" || bill.reviewBy > now(), 409, "The bill review time has ended. Refresh the trip.");
         if (data.type === "bill.cancel") {
-          const voters = [...new Set([bill.createdBy || bill.payer, bill.payer, ...bill.participants])];
+          const voters = billReviewers(bill);
           assert2(voters.includes(self.id), 403, "Only the bill creator, payer and listed people can agree to remove it.");
           assert2(typeof data.agree === "boolean", 400, "Choose whether to agree to remove this bill.");
           const existing = bill.cancellation;
           assert2(data.agree || existing, 409, "There is no request to remove this bill.");
           if (!data.agree) {
+            logBillNotification(bill, "cancellation-declined", self.id, [existing.requestedBy || existing.votes[0], ...voters].filter(Boolean), now(), existing.reason);
             delete bill.cancellation;
             bill.status = existing.previous;
             if (bill.status === "pending")
               bill.reviewBy = now() + DAY;
           } else {
-            const cancellation = existing || { previous: bill.status, votes: [] };
-            if (!cancellation.votes.includes(self.id))
-              cancellation.votes.push(self.id);
+            assert2(!existing || data.reason === undefined, 409, "A cancellation request already exists. Read the reason before voting.");
+            const cancellation = existing || {
+              id: randomUUID(),
+              previous: bill.status,
+              votes: [],
+              requestedBy: self.id,
+              reason: text(data.reason, 500, "reason for cancellation"),
+              requestedAt: now()
+            };
+            if (cancellation.votes.includes(self.id))
+              return presentation(record, address);
+            cancellation.votes.push(self.id);
             bill.cancellation = cancellation;
             bill.status = voters.every((id) => cancellation.votes.includes(id)) ? "rejected" : "cancellation";
+            if (!existing && bill.status === "cancellation") {
+              logBillNotification(bill, "cancellation-requested", self.id, trip.members.map((member) => member.id), cancellation.requestedAt, cancellation.reason, cancellation.id);
+            }
+            if (bill.status === "rejected")
+              cancellation.resolvedAt = now();
           }
         } else {
           assert2(bill.participants.includes(self.id), 403, "Only people listed on the bill can review it.");
@@ -6648,17 +6705,20 @@ function createRoomApi({ database, origin, rpc = fujiRpc, fetchFundingRate = mar
           if (data.type === "bill.feedback") {
             const comment = text(data.comment, 500, "reason or suggested change");
             const active = bill.feedback || [];
-            if (active.some((item) => item.author === self.id && item.comment === comment)) {
+            const requestId = data.requestId;
+            assert2(requestId === undefined || typeof requestId === "string" && /^[a-f0-9-]{36}$/i.test(requestId), 400, "The suggestion could not be sent. Open the form again.");
+            const alreadySaved = (bill.feedbackLog || []).some((item) => item.author === self.id && (requestId ? item.requestId === requestId : item.comment === comment && active.some((entry) => entry.id === item.id)));
+            if (alreadySaved) {
               return presentation(record, address);
             }
-            const feedback = { id: randomUUID(), author: self.id, comment };
-            const recipients = [...new Set([bill.createdBy || bill.payer, bill.payer, ...bill.participants])].filter((member) => member !== self.id);
+            const feedback = { id: randomUUID(), author: self.id, comment, receivedAt: now() };
+            const recipients = billReviewers(bill).filter((member) => member !== self.id);
             bill.feedback = [...active.filter((item) => item.author !== self.id), feedback];
             bill.feedbackLog = [...bill.feedbackLog || [], {
               ...feedback,
+              requestId,
               label: bill.label,
-              recipients,
-              receivedAt: now()
+              recipients
             }].slice(-25);
             bill.approvals = bill.approvals.filter((id) => id !== self.id);
           } else {
@@ -6743,7 +6803,7 @@ function createRoomApi({ database, origin, rpc = fujiRpc, fetchFundingRate = mar
       assert2(!trip.fuji?.address || trip.fuji.address === proof.address, 409, "This room already has a different vault.");
       if (trip.fuji?.address === proof.address)
         return presentation(record, address);
-      trip.fuji = { address: proof.address, contractVersion: proof.version };
+      trip.fuji = { address: proof.address, contractVersion: proof.version, linkedAt: now() };
     } else if (proof.kind === "fuji-end") {
       if (trip.endedAt === proof.endedAt)
         return presentation(record, address);
@@ -6754,12 +6814,14 @@ function createRoomApi({ database, origin, rpc = fujiRpc, fetchFundingRate = mar
         return presentation(record, address);
       trip.settled = true;
       trip.fuji.settlementTx = proof.hash;
+      trip.fuji.settledAt = now();
     } else {
       const last = trip.fuji.publishedPosition;
       if (trip.settled || last && (last.block > proof.block || last.block === proof.block && last.index >= proof.index)) {
         return presentation(record, address);
       }
       trip.fuji.publishedRevision = proof.revision;
+      trip.fuji.publishedAt = now();
       trip.fuji.publishedPosition = { block: proof.block, index: proof.index };
     }
     return persist(record, trip, address);
@@ -6786,7 +6848,7 @@ function createRoomApi({ database, origin, rpc = fujiRpc, fetchFundingRate = mar
       const path = new URL(request.url).pathname;
       const method = request.method;
       if (method === "GET" && path === "/api/health")
-        return json({ app: "tripvault-rooms", rooms: true, chainId: CHAIN, deleteTrip: true, endTrip: true, bulkDelete: true, billFunding: true, topUpReminders: true, depositDeadline: true, billReview: true });
+        return json({ app: "tripvault-rooms", rooms: true, chainId: CHAIN, deleteTrip: true, endTrip: true, bulkDelete: true, billFunding: true, topUpReminders: true, depositDeadline: true, billReview: true, billCancellationReason: true, notificationTimestamps: true, suggestionResponses: true });
       if (method === "POST") {
         const from = request.headers.get("origin");
         assert2(!from || from === origin, 403, "Open TripVault at its configured web address.");

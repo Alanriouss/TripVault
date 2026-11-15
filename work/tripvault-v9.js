@@ -122,7 +122,13 @@
     return provider.request(params ? { method, params } : { method });
   }
 
+  function walletAccessDenied(error) {
+    return Number(error?.code) === 4100
+      || /(?:account|method).*not been authorized/i.test(error?.shortMessage || error?.message || '');
+  }
+
   function walletError(error) {
+    if (walletAccessDenied(error)) return 'Allow TripVault to use this account in your wallet, then try again.';
     if (error?.code === 4001 || error?.code === 'ACTION_REJECTED') return 'Request declined in your wallet.';
     if (error?.code === -32002) return 'A wallet request is already open. Check your wallet extension.';
     const message = error?.shortMessage || error?.message || error?.data?.originalError?.message || 'Wallet request failed.';
@@ -794,7 +800,7 @@
     </div>`;
   }
 
-  function fujiSettlementSummary(trip, vault) {
+  function fujiSettlementSummary(trip, vault, compact = false) {
     const settlement = trip.fuji?.settlementTx;
     const explorerLink = isHash(settlement)
       ? ` <a href="${FUJI.explorer}/tx/${settlement}" target="_blank" rel="noopener noreferrer">View settlement on Fuji</a>` : '';
@@ -814,7 +820,8 @@
       return row(label, money(allocation ?? remaining), distribution + summary);
     }).join('');
     return `<p class="notice green">Group payments are complete. Each person can move their remaining test USDC to their wallet.${explorerLink}</p>
-      <div><h3>What each person gets back</h3>${rows}</div>`;
+      ${compact ? finalSplitDetails('payouts', 'What each person gets back', rows)
+        : '<div><h3>What each person gets back</h3>' + rows + '</div>'}`;
   }
 
   function fujiWithdrawalDeadline(vault) {
@@ -873,7 +880,79 @@
     }
   }
 
-  function fujiPanel(section = 'wallet') {
+  function finalSplitDetails(key, title, content) {
+    return `<details class="split-details" data-split-detail="${key}">
+      <summary>${title}</summary><div class="split-detail-body">${content}</div>
+    </details>`;
+  }
+
+  function finalSplitReview(trip, plan) {
+    const review = { message: '', action: '', secondary: '' };
+    if (trip.settled || roomFundingCancelled(trip) || (!trip.fuji?.address && trip.depositDeadline)) return review;
+    const vault = currentVault();
+    if (vault && (vault.settled || vault.cancelled || vault.timestamp >= vault.refundDeadline)) return review;
+
+    if (!roomBillsClosed(trip)) {
+      review.message = `<p class="subtitle">Group payments can start after the trip ends.</p>
+        <p class="split-date">${safe(formatTripTime(roomEndTime(trip)))}</p>`;
+    } else if (hasPendingBills(trip)) {
+      review.message = '<p class="notice warn">Finish open bill reviews before making final payments.</p>';
+      review.action = btn('Review open bills', 'navigate', { data: 'data-view="bills"' });
+    } else if (!trip.reviewQuote) {
+      review.message = '<p class="subtitle">The organizer prepares the split and locks the rate for approval.</p>';
+      if (canPrepare(trip)) {
+        const fetching = preparingTrip === trip;
+        review.action = btn(fetching ? 'Checking exchange rate…' : 'Calculate final amounts', 'prepare-split', { disabled: fetching });
+      }
+      if (canUseFallback(fallbackReview)) {
+        review.message = `<div class="notice warn">
+          <p>Market rate unavailable. You can retry or prepare the split with this reference.</p>
+          <p>${safe(fxLabel(fallbackReview.quote))}</p>
+        </div>`;
+        review.secondary = btn('Use fallback rate', 'use-fallback', { tone: 'secondary' });
+      }
+    } else {
+      if (plan.invalid) review.message = '<p class="notice warn">The current transfers cannot be represented in USDC. Reopen the split and check the rate before settling.</p>';
+      else if (vault && !vault.net.length && state.actor !== trip.owner) {
+        review.message = '<p class="subtitle">Waiting for the organizer to share the final amounts.</p>';
+      }
+      if (state.actor === trip.owner) review.secondary = btn('Start a new review', 'reopen-split', { tone: 'ghost' });
+    }
+    return review;
+  }
+
+  function roomFinalSplit(trip) {
+    const vault = currentVault();
+    const quote = trip.reviewQuote;
+    const rate = quote || fx;
+    const plan = settlementPlan(trip, rate);
+    const settled = trip.settled || vault?.settled;
+    const published = vault && matchesFujiDraft(trip, vault);
+    const transfers = plan.transfers.map(transfer => row(
+      userText(member(transfer.from).name) + ' → ' + userText(member(transfer.to).name),
+      money(transfer.units), vnd(transfer.vnd) + ' equivalent',
+    )).join('');
+    const people = stats(trip).map(person => row(userText(person.name), vnd(person.net),
+      'Paid ' + vnd(person.paid) + ' · Owes ' + vnd(person.owed),
+    )).join('');
+    const rateStatus = quote ? (quote.historical ? 'Historical rate' : 'Locked for approval') : 'Estimate';
+    return `<div class="section-head">
+      <div><h1>Final split</h1><p>${userText(trip.name)}</p></div>
+      ${settled || published ? `<span class="chip violet">${settled ? 'Settled' : 'In review'}</span>` : ''}
+    </div>
+    <div class="stack room-final-split" data-split-trip="${safe(trip.id)}">
+      ${fujiPanel('split', finalSplitReview(trip, plan))}
+      <section class="panel stack split-breakdown">
+        ${!settled ? `<div class="panel-head"><h2>Who pays whom</h2>${transfers && !published ? '<span class="chip">Estimate</span>' : ''}</div>
+          ${plan.invalid ? '<p class="subtitle">Payment amounts are unavailable.</p>'
+            : transfers ? '<div>' + transfers + '</div>' : '<p class="subtitle">No transfers needed yet.</p>'}` : ''}
+        ${finalSplitDetails('expenses', 'Expense breakdown', people)}
+        ${finalSplitDetails('rate', 'Exchange rate', `<p class="subtitle"><strong>${rateStatus}</strong></p><p class="subtitle">${safe(fxLabel(rate))}</p>`)}
+      </section>
+    </div>`;
+  }
+
+  function fujiPanel(section = 'wallet', review = null) {
     if (demoMode) return '';
     const trip = state.trip;
     const { account, chain, name, busy } = walletSession;
@@ -887,10 +966,14 @@
     let controls = '';
     let utilities = '';
     let content = '';
+    let walletDetails = '';
+    let paymentDetails = '';
+    let secondaryActions = '';
+    let personalAmount = '';
     if (!account) {
       controls = btn('Connect Wallet', 'fuji-connect', { disabled: busy });
     } else {
-      content = row(userText(name), onFuji ? 'Avalanche Fuji' : 'Wrong network', safe(account));
+      walletDetails = row(userText(name), onFuji ? 'Avalanche Fuji' : 'Wrong network', safe(account));
       if (!onFuji) controls = btn('Switch to Fuji', 'fuji-switch', { disabled: busy });
       if (onFuji && address) {
         const refreshing = refreshingTripStatus?.id === trip?.id && refreshingTripStatus?.account === account;
@@ -926,7 +1009,7 @@
     }
 
     if (isAddress(address)) {
-      content += row('Trip fund address',
+      walletDetails += row('Trip fund address',
         `<a href="${FUJI.explorer}/address/${safe(address)}" target="_blank" rel="noopener noreferrer">View on Fuji</a>`,
         safe(address),
       );
@@ -945,7 +1028,7 @@
       const hasPlan = vault.net.length > 0;
       const stalePlan = hasPlan && !matchesFujiDraft(trip, vault);
       const shortage = fujiShortfall(vault, index);
-      content += row('Your balance in the trip fund', money(vault.balances[index]));
+      walletDetails += row('Your balance in the trip fund', money(vault.balances[index]));
 
       if (section === 'wallet') {
         if (vault.usdc <= BigInt(Number.MAX_SAFE_INTEGER)) {
@@ -963,12 +1046,12 @@
           controls += btn('Withdraw my deposit', 'fuji-withdraw', { tone: 'secondary', disabled });
         }
       } else if (vault.settled) {
-        content += fujiSettlementSummary(trip, vault);
+        content += fujiSettlementSummary(trip, vault, Boolean(review));
       } else if (!expired && !vault.cancelled && now < vault.end) {
-        content += '<p class="notice">The organizer can share the final amounts for approval when the trip ends.</p>';
+        if (!review) content += '<p class="notice">The organizer can share the final amounts for approval when the trip ends.</p>';
       } else if (!expired && !vault.cancelled) {
         if (hasPlan) {
-          content += vault.members.map((member, position) => {
+          paymentDetails = vault.members.map((member, position) => {
             const amount = vault.net[position];
             const due = fujiShortfall(vault, position);
             const status = vault.approvals[position] ? 'Approved' : 'Waiting for approval';
@@ -980,8 +1063,20 @@
         if (stalePlan) {
           content += '<p class="notice warn">The amounts have changed. The organizer needs to share the updated amounts for approval.</p>';
         } else if (hasPlan) {
-          content += '<p class="notice">Check your amount, approve it, and top up if needed. Once everyone is ready, the organizer can make the group payments.</p>';
-        } else {
+          if (review) {
+            const count = vault.approvals.filter(Boolean).length;
+            content += `<p class="subtitle">${count} of ${vault.members.length} approved.</p>`;
+            if (vault.approvals[index] && shortage === 0) {
+              const ready = count === vault.members.length
+                && vault.members.every((_, position) => fujiShortfall(vault, position) === 0);
+              if (!ready) content += '<p class="subtitle">Waiting for other members to approve or top up.</p>';
+              else if (index !== 0) content += '<p class="subtitle">The organizer can make the group payments now.</p>';
+            }
+            personalAmount = `<div class="split-amount"><span>Your amount</span><strong>${fujiPaymentAmount(vault.net[index])}</strong></div>`;
+          } else {
+            content += '<p class="notice">Check your amount, approve it, and top up if needed. Once everyone is ready, the organizer can make the group payments.</p>';
+          }
+        } else if (!review) {
           content += '<p class="notice">The trip has ended. The organizer can calculate who pays whom below and share the amounts for approval.</p>';
         }
         if (index === 0 && (!hasPlan || stalePlan) && fujiDraft(trip)) {
@@ -990,18 +1085,17 @@
         if (hasPlan) {
           const hash = 'data-hash="' + safe(vault.hash) + '"';
           const approved = vault.approvals[index];
-          if (approved) utilities += btn('Undo my approval', 'fuji-revoke', { data: hash, tone: 'danger cancel-approval', disabled });
-          else controls += btn('Approve my amount', 'fuji-approve', { data: hash, disabled: disabled || stalePlan });
+          if (approved) secondaryActions += btn('Undo my approval', 'fuji-revoke', { data: hash, tone: 'danger cancel-approval', disabled });
+          else if (!review || !stalePlan) controls += btn('Approve my amount', 'fuji-approve', { data: hash, disabled: disabled || stalePlan });
           if (shortage > 0 && !stalePlan) {
             controls += btn('Top up ' + money(shortage), 'fuji-top-up', {
               data: hash + ' data-units="' + shortage + '"', disabled,
             });
           }
           if (index === 0) {
-            controls += btn('Make group payments', 'fuji-settle', {
-              data: hash, disabled: disabled || stalePlan || !vault.approvals.every(Boolean)
-                || vault.members.some((_, position) => fujiShortfall(vault, position) > 0),
-            });
+            const ready = !stalePlan && vault.approvals.every(Boolean)
+              && vault.members.every((_, position) => fujiShortfall(vault, position) === 0);
+            if (!review || ready) controls += btn('Make group payments', 'fuji-settle', { data: hash, disabled: disabled || !ready });
           }
         }
       }
@@ -1014,12 +1108,30 @@
         controls += btn('Send ' + money(vault.balances[index]) + ' to my wallet', 'fuji-claim', { disabled });
       }
     }
-    if (account) utilities += btn('Disconnect wallet', 'fuji-disconnect', { tone: 'ghost', disabled: busy });
+    const disconnect = account ? btn('Disconnect wallet', 'fuji-disconnect', { tone: 'ghost', disabled: busy }) : '';
+    if (review) {
+      const visible = walletSession.status?.tripId === trip.id ? walletSession.status : trip.fuji?.lastTx;
+      const transaction = fujiTransactionCard(trip);
+      const confirmed = visible?.phase === 'confirmed';
+      const details = '<p class="subtitle">This trip uses test USDC on Avalanche Fuji.</p>'
+        + walletDetails + (confirmed ? transaction : '') + (disconnect ? '<div class="inline">' + disconnect + '</div>' : '');
+      const actions = review.action + controls;
+      return `<section class="panel stack split-payment" aria-labelledby="split-payment-title">
+        <h2 id="split-payment-title">Group payments</h2>
+        ${personalAmount}${review.message}${content}
+        ${actions ? '<div class="inline split-actions">' + actions + '</div>' : ''}
+        ${confirmed ? '' : transaction}
+        ${paymentDetails ? finalSplitDetails('approvals', 'Member approvals', paymentDetails) : ''}
+        ${secondaryActions || utilities || review.secondary ? '<div class="inline split-utilities">' + secondaryActions + utilities + review.secondary + '</div>' : ''}
+        ${finalSplitDetails('wallet', 'Wallet and transaction details', details)}
+      </section>`;
+    }
+    utilities = secondaryActions + utilities + disconnect;
     return `<section class="panel stack">
       <div><h2>${section === 'split' ? 'Group payments' : 'Wallet and trip fund'}</h2>
         <p class="subtitle">${trip?.shared ? 'This trip uses test USDC on Avalanche Fuji.' : 'Transactions use test USDC on Avalanche Fuji. Local demo balances are separate.'}</p>
       </div>
-      ${content}
+      ${walletDetails}${paymentDetails}${content}
       ${controls ? '<div class="inline wallet-actions">' + controls + '</div>' : ''}
       ${fujiTransactionCard(trip)}
       ${utilities ? '<div class="inline wallet-utilities">' + utilities + '</div>' : ''}
@@ -1061,6 +1173,7 @@
   const ROOM_TX_KEY = 'tripvault-room-transactions';
   const rooms = {
     online: false, canDelete: false, canBulkDelete: false, canEnd: false, canSendTopUpReminders: false,
+    canSaveCancellationReason: false, canRespondToSuggestions: false,
     account: '', token: '', list: new Map(), reminders: [], removed: new Set(), intent: null,
     busy: false, refreshing: false, timer: null, lastVaultPoll: 0, lastFundingPoll: 0, transactions: {},
   };
@@ -1079,17 +1192,26 @@
     return [...state.trips, ...rooms.list.values()];
   }
 
-  async function roomApi(path, body, token = rooms.token) {
+  async function roomApi(path, body, token = rooms.token, timeoutMs = 0) {
     const headers = { Accept: 'application/json' };
     if (token) headers.Authorization = 'Bearer ' + token;
     if (body !== undefined) headers['Content-Type'] = 'application/json';
-    const response = await fetch('/api' + path, {
-      method: body === undefined ? 'GET' : 'POST', headers, cache: 'no-store',
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
-    const data = await response.json();
-    if (!response.ok) throw Object.assign(new Error(data.error || 'Room request failed.'), { status: response.status });
-    return data;
+    const controller = timeoutMs ? new AbortController() : null;
+    const timeout = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+    try {
+      const response = await fetch('/api' + path, {
+        method: body === undefined ? 'GET' : 'POST', headers, cache: 'no-store', signal: controller?.signal,
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+      const data = await response.json();
+      if (!response.ok) throw Object.assign(new Error(data.error || 'Room request failed.'), { status: response.status });
+      return data;
+    } catch (error) {
+      if (controller?.signal.aborted) throw new Error('The server took too long to respond. Try again.');
+      throw error;
+    } finally {
+      if (timeout !== null) clearTimeout(timeout);
+    }
   }
 
   function roomTxKey(id, address) {
@@ -1170,7 +1292,7 @@
 
   async function loadRooms(token, known) {
     try {
-      const { rooms: active, reminders = [] } = await roomApi('/rooms', undefined, token);
+      const { rooms: active, reminders = [] } = await roomApi('/rooms', undefined, token, 8000);
       if (token !== rooms.token || rooms.account !== walletSession.account) return false;
       const previousNotifications = notificationIds();
       const remindersChanged = JSON.stringify(rooms.reminders) !== JSON.stringify(reminders);
@@ -1243,6 +1365,8 @@
       rooms.canBulkDelete = status.bulkDelete === true;
       rooms.canEnd = status.endTrip === true;
       rooms.canSendTopUpReminders = status.topUpReminders === true;
+      rooms.canSaveCancellationReason = status.billCancellationReason === true;
+      rooms.canRespondToSuggestions = status.suggestionResponses === true;
       rooms.transactions = roomStorage(ROOM_TX_KEY) || {};
       roomWalletChanged();
       const invite = new URLSearchParams(window.location.search).get('join');
@@ -1351,9 +1475,33 @@
     sheetOpen(title, 'Avalanche Fuji',
       `<form class="stack" id="room-form">${wallet}${fields}
         <p id="sheet-error" class="form-error" role="status"></p>
+        <div data-wallet-access-recovery hidden>${btn('Allow wallet access', 'room-wallet-access', { tone: 'secondary' })}</div>
       </form>`,
       '<button class="btn full" type="submit" form="room-form">' + title + '</button>',
     );
+  }
+
+  async function restoreRoomWalletAccess() {
+    const context = walletContext();
+    if (!context.provider || rooms.busy || walletSession.busy) return;
+    const form = sheet.querySelector('#room-form');
+    const message = form?.querySelector('#sheet-error');
+    rooms.busy = true;
+    try {
+      const accounts = await request(context.provider, 'eth_requestAccounts');
+      if (walletSession.provider !== context.provider) return;
+      if (accounts?.[0]?.toLowerCase() !== context.account) {
+        await syncWallet(context.provider);
+        return;
+      }
+      if (message) message.textContent = ui('Wallet access restored. Try again and approve the sign-in signature.');
+      const recovery = form?.querySelector('[data-wallet-access-recovery]');
+      if (recovery) recovery.hidden = true;
+    } catch (error) {
+      if (message) message.textContent = ui(walletError(error));
+    } finally {
+      rooms.busy = false;
+    }
   }
 
   async function submitRoomForm(data, fail) {
@@ -1400,11 +1548,14 @@
           url.searchParams.delete('join');
           window.history.replaceState(null, '', url);
         }
+        if (intent.kind === 'join' && state.trip?.shared) showJoinedRoomGuide(state.trip);
       }
       notice(intent.kind === 'create' ? 'Room created. Share the link or six-digit code.'
         : intent.kind === 'join' ? 'You joined the room.' : 'Signed in to TripVault rooms.');
     } catch (error) {
       if (error.status === 401 && rooms.token) clearRoomSession();
+      const recovery = sheet.querySelector('[data-wallet-access-recovery]');
+      if (recovery && walletAccessDenied(error)) recovery.hidden = false;
       fail(walletError(error));
     } finally {
       rooms.busy = false;
@@ -1420,14 +1571,15 @@
     const token = rooms.token;
     rooms.busy = true;
     const savingBill = type === 'bill.add' || type === 'bill.edit';
-    const reviewAction = ['bill.approve', 'bill.feedback'].includes(type);
+    const reviewAction = ['bill.approve', 'bill.feedback', 'bill.feedback-vote'].includes(type);
+    const timeout = type === 'bill.feedback' ? 15000 : 0;
     const payload = version => ({ type, version, ...fields });
     const path = '/rooms/' + trip.id + '/actions';
     if (savingBill) updateBillFundingForm();
     try {
       let room;
       try {
-        room = await roomApi(path, payload(trip.version), token);
+        room = await roomApi(path, payload(trip.version), token, timeout);
       } catch (error) {
         if (!reviewAction || error.status !== 409 || !await syncRooms()) throw error;
         const latest = rooms.list.get(trip.id);
@@ -1435,7 +1587,7 @@
         const latestBill = latest?.bills.find(bill => bill.id === fields.id);
         if (token !== rooms.token || trip.id !== state.trip?.id || !latest || latest.version <= trip.version
           || !sameBillReview(originalBill, latestBill) || latest.reviewQuote || latest.settled) throw error;
-        room = await roomApi(path, payload(latest.version), token);
+        room = await roomApi(path, payload(latest.version), token, timeout);
       }
       if (token !== rooms.token || rooms.account !== walletSession.account) return null;
       keepRoom(room);
@@ -2380,7 +2532,7 @@ function roomFundingShortfalls(trip, funding, draft) {
     notice(message);
   }
 
-  function roomBillDetail(id) {
+  function roomBillDetail(id, confirmation = '') {
     const trip = state.trip;
     const bill = trip.bills.find(item => item.id === id);
     if (!bill) return;
@@ -2393,6 +2545,24 @@ function roomFundingShortfalls(trip, funding, draft) {
     const votes = bill.cancellation?.votes || [];
     const idData = `data-id="${id}"`;
     const comments = feedback => feedback?.map(item => row(userText(member(item.author)?.name || 'Member'), '', userText(item.comment))).join('') || '';
+    const suggestions = (bill.feedback || []).map(item => {
+      const responses = item.responses || [];
+      const myResponse = responses.find(response => response.member === state.actor);
+      const canRespond = rooms.canRespondToSuggestions && editable && bill.status === 'disputed'
+        && item.author !== state.actor && voters.includes(state.actor);
+      const responseActions = canRespond ? [true, false].map(agree => btn(agree ? 'Agree' : 'Disagree', 'bill-feedback-vote', {
+        tone: agree ? '' : 'danger',
+        disabled: myResponse?.agree === agree,
+        data: idData + ` data-author="${safe(item.author)}" data-suggestion="${safe(item.id)}" data-agree="${agree}"`,
+      })).join('') : '';
+      return `<div class="bill-suggestion">
+        <strong>${userText(member(item.author)?.name || 'Member')}</strong>
+        <p class="bill-cancellation-reason">${userText(item.comment)}</p>
+        ${responses.map(response => `<p class="subtitle">${userText(member(response.member)?.name || 'Member')} <span aria-hidden="true">·</span>
+          <span>${response.agree ? 'Agreed' : 'Disagreed'}</span></p>`).join('')}
+        ${responseActions ? '<div class="inline">' + responseActions + '</div>' : ''}
+      </div>`;
+    }).join('');
     const history = bill.history?.map(item =>
       `<div>${row(userText(item.label), vnd(item.amount), 'Paid by ' + userText(member(item.payer)?.name))}${comments(item.feedback)}</div>`).join('');
     const reviewRows = bill.participants.map(id => row(userText(member(id).name), vnd(shares(bill).find(item => item.id === id).amount),
@@ -2403,7 +2573,7 @@ function roomFundingShortfalls(trip, funding, draft) {
       : '';
     const editButton = editable && creator === state.actor ? btn('Edit bill', 'bill-edit', { tone: 'secondary', data: idData }) : '';
     const cancelButtons = reviewable && voters.includes(state.actor)
-      ? (!votes.includes(state.actor) ? btn(bill.cancellation ? 'Agree to remove' : 'Request removal', 'bill-cancel-yes',
+      ? (!votes.includes(state.actor) ? btn(bill.cancellation ? 'Agree to cancel' : 'Disagree and request cancellation', 'bill-cancel-yes',
         { tone: 'danger', data: idData }) : '') +
         (bill.cancellation ? btn('Keep bill', 'bill-cancel-no', { tone: 'secondary', data: idData }) : '')
       : '';
@@ -2411,9 +2581,19 @@ function roomFundingShortfalls(trip, funding, draft) {
       ${row('Amount paid', vnd(bill.amount), 'Paid by ' + userText(member(bill.payer).name))}
       <section class="panel"><h3>People sharing this bill</h3>${reviewRows}</section>
       ${bill.status === 'pending' && bill.reviewBy ? `<p class="notice">Automatically approves at ${safe(formatTripTime(bill.reviewBy))} if nobody requests changes or asks to remove it.</p>` : ''}
-      ${bill.feedback?.length ? `<section class="panel"><h3>Suggested changes</h3>${comments(bill.feedback)}</section>` : ''}
+      ${bill.status === 'approved' ? '<p class="subtitle">This bill has been approved. Suggestions are available while a bill is still being reviewed.</p>' : ''}
+      ${suggestions ? `<section class="panel"><h3>Suggested changes</h3>${suggestions}</section>` : ''}
+      ${confirmation ? `<p class="notice green" role="status">${safe(confirmation)}</p>` : ''}
       ${history ? `<details class="panel"><summary>Previous versions</summary>${history}</details>` : ''}
-      ${bill.status === 'cancellation' ? `<p class="notice">${votes.length} of ${voters.length} agreed to remove this bill.</p>` : ''}
+      ${bill.cancellation?.reason ? `<section class="notice warn bill-cancellation-note">
+        <h3>Reason for cancellation</h3>
+        <p>${userText(member(bill.cancellation.requestedBy)?.name || 'Member')}</p>
+        <p class="bill-cancellation-reason">${userText(bill.cancellation.reason)}</p>
+      </section>` : ''}
+      ${bill.status === 'cancellation' ? `<div class="notice">
+        <p>${votes.length} of ${voters.length} agreed to remove this bill.</p>
+        <p>The bill creator, payer and everyone sharing the bill must agree to cancel it.</p>
+      </div>` : ''}
       ${bill.status === 'rejected' ? '<p class="notice">Everyone involved agreed to handle this bill separately. It is excluded from the final amounts.</p>' : ''}
       <p id="bill-review-error" class="form-error" role="status"></p>
       ${reviewButtons || editButton ? `<div class="bill-actions">${reviewButtons}${editButton}</div>` : ''}
@@ -2430,38 +2610,103 @@ function roomFundingShortfalls(trip, funding, draft) {
     if (action === 'bill-feedback') {
       return sheetOpen('Suggest changes', { user: bill.label }, `<form method="dialog" id="bill-feedback-form" class="stack">
         <input type="hidden" name="id" value="${id}">
-        <label class="field">Reason or suggested change<textarea name="comment" rows="4" required maxlength="500"></textarea></label>
+        <label class="field">Reason or suggested change<textarea name="comment" rows="4" required maxlength="500" autofocus></textarea></label>
+        <p id="sheet-error" class="form-error" role="status"></p>
+        ${billSignInButton()}
+        <button class="btn full" type="submit">Send suggestion</button>
+      </form>`);
+    }
+    if (action === 'bill-cancel-yes' && !bill.cancellation) {
+      return sheetOpen('Request bill cancellation', { user: bill.label }, `<form method="dialog" id="bill-cancellation-form" class="stack">
+        <input type="hidden" name="id" value="${id}">
+        <label class="field">Reason for cancellation<textarea name="reason" rows="4" required maxlength="500" autofocus></textarea></label>
+        <p class="subtitle">Everyone in this trip can read your reason. The bill creator, payer and everyone sharing the bill must agree to cancel it.</p>
         <p id="sheet-error" class="form-error" role="status"></p>
         ${billSignInButton()}</form>`,
-      '<button class="btn full" type="submit" form="bill-feedback-form">Send suggestion</button>');
+      '<button class="btn full danger" type="submit" form="bill-cancellation-form">Send cancellation request</button>');
     }
     changeRoom(trip, 'bill.cancel', { id, agree: action === 'bill-cancel-yes' }, updated => {
       if (updated) roomBillDetail(id);
-    });
+    }, showBillReviewError);
   }
 
-  function submitBillFeedback(data, fail) {
+  function submitBillCancellation(data, fail) {
+    const trip = state.trip;
+    if (!trip?.shared) return;
+    if (!rooms.canSaveCancellationReason) return fail('The server needs an update to save the cancellation reason.');
+    const id = Number(data.get('id'));
+    const reason = String(data.get('reason') || '').trim();
+    if (!reason) return fail('Enter a reason for cancellation.');
+    changeRoom(trip, 'bill.cancel', { id, agree: true, reason }, updated => {
+      if (updated) roomBillDetail(id);
+    }, fail);
+  }
+
+  function respondToBillFeedback(id, { author, suggestion, agree }) {
+    const trip = state.trip;
+    if (!trip?.shared || !rooms.canRespondToSuggestions) return;
+    changeRoom(trip, 'bill.feedback-vote', { id, author, suggestion, agree: agree === 'true' }, updated => {
+      if (updated && sheet.open) roomBillDetail(id, 'Your response was saved.');
+    }, showBillReviewError);
+  }
+
+  async function submitBillFeedback(data, fail) {
     const id = Number(data.get('id'));
     if (!state.trip?.shared) return;
-    changeRoom(state.trip, 'bill.feedback', { id, comment: String(data.get('comment') || '') }, updated => {
-      if (updated) {
-        roomBillDetail(id);
-        notice('Your suggestion was saved.');
+    if (rooms.busy) return fail('Another room action is in progress. Try again.');
+    const comment = String(data.get('comment') || '').trim();
+    if (!comment) return fail('Enter a reason or suggested change.');
+    const button = sheet.querySelector('#bill-feedback-form button[type="submit"]');
+    const form = button?.form;
+    if (form && form.feedbackComment !== comment) {
+      form.feedbackComment = comment;
+      form.feedbackRequestId = globalThis.crypto?.randomUUID?.();
+    }
+    if (button) {
+      button.disabled = true;
+      button.textContent = ui('Sending suggestion…');
+    }
+    fail('');
+    try {
+      await changeRoom(state.trip, 'bill.feedback', { id, comment, requestId: form?.feedbackRequestId }, updated => {
+        const bill = updated?.bills.find(item => item.id === id);
+        if (!bill || !sheet.open) return;
+        const creator = bill.createdBy || bill.payer;
+        const message = creator !== state.actor
+          ? 'Suggestion sent. The bill creator can see it in Notifications.'
+          : 'Your suggestion was saved.';
+        roomBillDetail(id, message);
+        notice(message);
+      }, fail);
+    } finally {
+      if (button) {
+        button.disabled = false;
+        button.textContent = ui('Send suggestion');
       }
-    }, fail);
+    }
   }
 
   let notificationReadKey;
   let readNotifications;
   let migratedNotificationRooms;
+  let notificationDismissedKey;
+  let dismissedNotifications;
   let notificationAttention = false;
   let notificationAttentionTimer;
+
+  const BILL_EVENT_HEADINGS = {
+    'suggestion-agreed': 'Someone agreed with the suggestion',
+    'suggestion-disagreed': 'Someone disagreed with the suggestion',
+    'cancellation-requested': 'Bill removal requested',
+    'cancellation-declined': 'Bill cancellation declined',
+  };
 
   function billFeedbackNotifications(trip, bill, member, involved) {
     const entries = new Map();
     const add = (id, label, feedback) => entries.set(id, {
       id: 'feedback:' + bill.id + ':' + id, billId: bill.id, title: label,
       heading: 'Bill change requested', message: feedback.comment, userMessage: true,
+      changeRequest: true,
       receivedAt: feedback.receivedAt,
       sender: trip.members.find(person => person.id === feedback.author)?.name,
     });
@@ -2472,7 +2717,11 @@ function roomFundingShortfalls(trip, funding, draft) {
       const versions = [...(bill.history || []), bill];
       for (const version of versions) {
         for (const feedback of version.feedback || []) {
-          if (feedback.id || feedback.author === member.id) continue;
+          if (feedback.author === member.id || entries.has(feedback.id)) continue;
+          if (feedback.id) {
+            add(feedback.id, version.label, feedback);
+            continue;
+          }
           let fingerprint = 0;
           for (const char of feedback.comment) fingerprint = Math.imul(fingerprint, 31) + char.codePointAt(0) | 0;
           add([feedback.author, version.reviewBy, fingerprint].join(':'), version.label, feedback);
@@ -2489,20 +2738,33 @@ function roomFundingShortfalls(trip, funding, draft) {
     const bills = trip.bills.slice().reverse().flatMap(bill => {
       const involved = [bill.createdBy || bill.payer, bill.payer, ...bill.participants].includes(member.id);
       const feedback = billFeedbackNotifications(trip, bill, member, involved);
-      if (!involved) return feedback;
       const related = { billId: bill.id, title: bill.label };
-      const review = [];
-      if (bill.status === 'pending' && bill.participants.includes(member.id)
+      const review = (bill.notificationLog || []).map(event => ({
+        ...related, title: event.label,
+        id: (event.kind === 'cancellation-requested' ? 'removal' : 'bill-event') + ':' + bill.id + ':' + event.id,
+        heading: BILL_EVENT_HEADINGS[event.kind], receivedAt: event.receivedAt,
+        message: event.comment, userMessage: Boolean(event.comment),
+        sender: trip.members.find(person => person.id === event.actor)?.name,
+      }));
+      if (involved && bill.status === 'pending' && bill.participants.includes(member.id)
         && !bill.approvals.includes(member.id) && (bill.createdBy || bill.payer) !== member.id) {
         review.push({ ...related, id: 'review:' + bill.id + ':' + bill.reviewBy,
-          heading: 'Bill needs your approval', sender: trip.members.find(person => person.id === (bill.createdBy || bill.payer))?.name });
+          heading: 'Bill needs your approval',
+          receivedAt: bill.reviewStartedAt || (bill.reviewBy ? bill.reviewBy - 86_400_000 : undefined),
+          sender: trip.members.find(person => person.id === (bill.createdBy || bill.payer))?.name });
       }
-      if (bill.status === 'cancellation' && !bill.cancellation.votes.includes(member.id)) {
-        review.push({ ...related, id: 'removal:' + bill.id + ':' + bill.reviewBy,
-          heading: 'Bill removal requested', sender: trip.members.find(person => person.id === bill.cancellation.votes[0])?.name });
+      const cancellation = bill.cancellation;
+      if (bill.status === 'cancellation' && cancellation && (involved || cancellation.reason)
+        && !cancellation.votes.includes(member.id)
+        && !review.some(item => item.id === 'removal:' + bill.id + ':' + cancellation.id)) {
+        review.push({ ...related, id: 'removal:' + bill.id + ':' + (cancellation.id || bill.reviewBy),
+          heading: 'Bill removal requested', message: cancellation.reason, userMessage: Boolean(cancellation.reason),
+          receivedAt: cancellation.requestedAt,
+          sender: trip.members.find(person => person.id === (cancellation.requestedBy || cancellation.votes[0]))?.name });
       }
-      if (bill.status === 'rejected') {
+      if (bill.status === 'rejected' && (involved || cancellation?.reason)) {
         review.push({ ...related, id: 'removed:' + bill.id, heading: 'Bill removed',
+          receivedAt: cancellation?.resolvedAt,
           message: 'Everyone involved agreed to handle this bill separately. It is excluded from the final amounts.' });
       }
       return [...feedback, ...review];
@@ -2510,28 +2772,34 @@ function roomFundingShortfalls(trip, funding, draft) {
 
     const reminders = rooms.reminders.filter(reminder => reminder.roomId === trip.id).map(reminder => ({
       id: 'top-up:' + reminder.id, reminder, heading: 'Top-up reminder', title: reminder.draft.label,
-      sender: reminder.sender,
+      sender: reminder.sender, receivedAt: reminder.receivedAt,
     }));
 
     const notices = [];
     if (roomFundingCancelled(trip)) {
       notices.push({ id: 'cancelled', heading: 'Trip cancelled', view: 'wallet',
+        receivedAt: Date.parse(trip.depositDeadline),
         message: trip.fuji?.address ? 'Someone was below the minimum at the deadline. Open Wallet to take back your deposit.'
           : 'The deposit deadline passed without a linked trip fund.' });
     } else if (trip.settled) {
       notices.push({ id: 'settled', heading: 'Group payments complete', view: 'wallet',
+        receivedAt: trip.fuji?.settledAt,
         message: 'Open Wallet to send any remaining balance to your wallet.' });
     } else if (trip.billsClosedAt) {
-      notices.push({ id: 'ended', heading: trip.endedAt ? 'Trip ended early' : 'Trip ended', view: 'bills',
-        message: 'The trip has ended. Review any bills that are still open.' });
+      notices.push({ id: 'ended', heading: trip.endedAt ? 'Trip ended early' : 'Trip ended', view: trip.endedAt ? 'split' : 'bills',
+        receivedAt: Date.parse(trip.billsClosedAt),
+        message: trip.endedAt ? 'Open Final split to review the trip expenses.' : 'The trip has ended. Review any bills that are still open.' });
       if (trip.owner !== member.id && trip.fuji?.publishedRevision) {
-        notices.push({ id: 'split:' + trip.fuji.publishedRevision, heading: 'Final amounts are ready to review', view: 'split' });
+        notices.push({ id: 'split:' + trip.fuji.publishedRevision, heading: 'Final amounts are ready to review',
+          receivedAt: trip.fuji.publishedAt, view: 'split' });
       }
     } else if (trip.locked) {
       notices.push({ id: 'roster-locked', heading: 'Roster locked', view: 'people',
+        receivedAt: trip.rosterLockedAt,
         message: 'The vault uses the member list saved at setup. Invitations are closed.' });
       if (trip.owner === member.id && trip.fuji?.address && trip.fuji.contractVersion < 2 && roomEndTime(trip) > Date.now()) {
         notices.push({ id: 'original-end', heading: 'Trip end', view: 'wallet',
+          receivedAt: trip.fuji.linkedAt,
           message: 'This vault uses its original end time. Early ending is available for newly deployed vaults.' });
       }
       const funding = getDisplayedFunding(trip);
@@ -2547,16 +2815,44 @@ function roomFundingShortfalls(trip, funding, draft) {
     }));
   }
 
-  function readRoomNotifications(seen) {
+  function readRoomNotifications() {
     if (!rooms.account) return [];
-    const items = [...rooms.list.values()].flatMap(tripNotificationEntries);
-    return items.sort((a, b) => Number(Boolean(seen?.has(a.id))) - Number(Boolean(seen?.has(b.id)))
-      || (b.receivedAt || 0) - (a.receivedAt || 0));
+    const dismissed = dismissedRoomNotifications();
+    const items = [...rooms.list.values()].flatMap(tripNotificationEntries).filter(item => !dismissed.has(item.id));
+    return items.sort((a, b) => (b.receivedAt || 0) - (a.receivedAt || 0) || a.id.localeCompare(b.id));
   }
 
   function notificationIds() {
     return new Set(readRoomNotifications().map(item => item.id));
   }
+
+  function dismissedRoomNotifications() {
+    const key = 'tripvault-notifications-dismissed:' + rooms.account;
+    if (key !== notificationDismissedKey) {
+      notificationDismissedKey = key;
+      const saved = readStorage(key);
+      dismissedNotifications = new Set(Array.isArray(saved) ? saved : []);
+    }
+    return dismissedNotifications;
+  }
+
+  function clearRoomNotifications() {
+    if (!rooms.account || !sheet.open) return;
+    const items = readRoomNotifications();
+    if (!items.length) return;
+    const dismissed = dismissedRoomNotifications();
+    items.forEach(item => dismissed.add(item.id));
+    try {
+      localStorage.setItem(notificationDismissedKey, JSON.stringify([...dismissed]));
+    } catch {}
+    if (!refreshNotificationSheet()) openRoomNotifications();
+  }
+
+  window.addEventListener('storage', event => {
+    if (!rooms.account || event.key !== notificationDismissedKey) return;
+    notificationDismissedKey = undefined;
+    if (!refreshNotificationSheet()) render();
+  });
 
   function seenRoomNotifications() {
     const key = 'tripvault-notifications-read:' + rooms.account;
@@ -2606,17 +2902,32 @@ function roomFundingShortfalls(trip, funding, draft) {
     return [`${money(units)} still needed`, action];
   }
 
+  function notificationTime(timestamp) {
+    if (!Number.isFinite(timestamp) || timestamp <= 0) return '<small class="notification-time">Time unavailable</small>';
+    const date = new Date(timestamp);
+    const minutes = Math.max(0, Math.floor((Date.now() - timestamp) / 60_000));
+    const formatter = new Intl.RelativeTimeFormat(siteLanguage === 'vi' ? 'vi-VN' : 'en-US', { numeric: 'always' });
+    let elapsed = ui('Just now');
+    if (minutes >= 1440) elapsed = formatter.format(-Math.floor(minutes / 1440), 'day');
+    else if (minutes >= 60) elapsed = formatter.format(-Math.floor(minutes / 60), 'hour');
+    else if (minutes) elapsed = formatter.format(-minutes, 'minute');
+    return `<small class="notification-time"><time datetime="${date.toISOString()}">${safe(formatTripTime(timestamp))}</time>
+      <span aria-hidden="true"> · </span><span>${safe(elapsed)}</span></small>`;
+  }
+
   function roomNotificationsBody(trip, items, seen) {
-    return items.length ? items.map(item => {
+    return items.length ? '<div class="inline notification-tools">' +
+      btn('Clear notifications', 'clear-room-notifications', { tone: 'secondary' }) + '</div>' + items.map(item => {
       const current = trip?.id === item.roomId;
       const [message, action] = item.reminder ? topUpNotificationDetails(current ? trip : null, item.reminder) : [
-        item.message, btn(item.billId ? 'Open bill' : 'Open trip', 'open-room-notification',
+        item.message, btn(item.billId ? 'Open bill' : item.view === 'split' ? 'Open Final split' : 'Open trip', 'open-room-notification',
           { tone: 'secondary', data: `data-id="${safe(item.id)}"` }),
       ];
       const context = [item.roomName, item.sender, item.title].filter(Boolean).map(userText).join(' · ');
       return `<article class="trip-notification${seen.has(item.id) ? '' : ' unread'}">
         <strong>${item.heading}</strong>
         ${context ? '<span>' + context + '</span>' : ''}
+        ${notificationTime(item.receivedAt)}
         ${message ? '<small>' + (item.userMessage ? userText(message) : safe(message)) + '</small>' : ''}
         ${action ? '<div class="inline">' + action + '</div>' : ''}
       </article>`;
@@ -2626,7 +2937,7 @@ function roomFundingShortfalls(trip, funding, draft) {
   function openRoomNotifications() {
     if (!rooms.account) return;
     const seen = seenRoomNotifications();
-    const items = readRoomNotifications(seen);
+    const items = readRoomNotifications();
     const markup = roomNotificationsBody(state.trip, items, seen);
     sheetOpen('Notifications', 'Your trips',
       '<div class="stack" data-room-notifications>' + markup + '</div>' + billSignInButton());
@@ -2647,7 +2958,7 @@ function roomFundingShortfalls(trip, funding, draft) {
     return seen;
   }
 
-  function refreshNotificationSheet(items = readRoomNotifications(seenRoomNotifications())) {
+  function refreshNotificationSheet(items = readRoomNotifications()) {
     const panel = sheet.open && sheet.querySelector('[data-room-notifications]');
     if (!panel) return false;
     const markup = roomNotificationsBody(state.trip, items, seenRoomNotifications());
@@ -2663,9 +2974,11 @@ function roomFundingShortfalls(trip, funding, draft) {
   function updateRoomNotifications(previous) {
     if (!rooms.account) return;
     const seen = seenRoomNotifications();
-    const items = readRoomNotifications(seen);
+    const items = readRoomNotifications();
     if (refreshNotificationSheet(items)) return;
-    if (!items.some(item => !previous.has(item.id) && !seen.has(item.id))) return;
+    const incoming = items.filter(item => !previous.has(item.id) && !seen.has(item.id));
+    if (!incoming.length) return;
+    const message = incoming.some(item => item.changeRequest) ? 'New bill change request' : 'New trip notification';
     notificationAttention = true;
     clearTimeout(notificationAttentionTimer);
     notificationAttentionTimer = setTimeout(() => {
@@ -2673,7 +2986,12 @@ function roomFundingShortfalls(trip, funding, draft) {
       app.querySelector?.('.trip-bell')?.classList.remove('attention');
     }, 1800);
     render();
-    notice('New trip notification');
+    const sheetAlert = sheet.open && sheet.querySelector('[data-sheet-notification]');
+    if (sheetAlert) {
+      sheetAlert.querySelector('[role="status"]').textContent = ui(message);
+      sheetAlert.hidden = false;
+    }
+    notice(message);
   }
 
   function openRoomNotification(id) {
@@ -2686,6 +3004,7 @@ function roomFundingShortfalls(trip, funding, draft) {
     render();
     window.scrollTo(0, 0);
     if (['wallet', 'split'].includes(item.view)) refreshVault();
+    if (item.view === 'split') refreshRoomFunding();
     if (item.billId) roomBillDetail(item.billId);
   }
 
@@ -2900,6 +3219,12 @@ function roomFundingShortfalls(trip, funding, draft) {
     ['Reason or suggested change', 'Lý do hoặc nội dung đề xuất sửa'],
     ['Send suggestion', 'Gửi đề xuất'],
     ['Your suggestion was saved.', 'Đã lưu đề xuất của bạn.'],
+    ['Sending suggestion…', 'Đang gửi đề xuất…'],
+    ['Enter a reason or suggested change.', 'Hãy nhập lý do hoặc nội dung muốn sửa.'],
+    ['Another room action is in progress. Try again.', 'Phòng đang xử lý một thao tác khác. Hãy thử lại.'],
+    ['The server took too long to respond. Try again.', 'Máy chủ phản hồi quá lâu. Hãy thử lại.'],
+    ['This bill has been approved. Suggestions are available while a bill is still being reviewed.', 'Hóa đơn đã được duyệt. Bạn có thể đề xuất sửa khi hóa đơn còn trong bước duyệt.'],
+    ['Suggestion sent. The bill creator can see it in Notifications.', 'Đã gửi đề xuất. Người tạo hóa đơn có thể xem trong Thông báo.'],
     ['Previous versions', 'Các phiên bản trước'],
     ['Keep bill', 'Giữ hóa đơn'],
     ['Request removal', 'Đề nghị bỏ hóa đơn'],
@@ -2955,6 +3280,14 @@ function roomFundingShortfalls(trip, funding, draft) {
     ['Reopen split', 'Mở lại quyết toán'],
     ['What each person owes or gets back', 'Mỗi người cần trả hoặc được nhận bao nhiêu'],
     ['Who pays whom', 'Ai trả cho ai'],
+    ['Review open bills', 'Xem hóa đơn chờ duyệt'],
+    ['Expense breakdown', 'Chi tiết chi phí từng người'],
+    ['Wallet and transaction details', 'Chi tiết ví và giao dịch'],
+    ['Member approvals', 'Ai đã duyệt'],
+    ['Your amount', 'Số tiền của bạn'],
+    ['Waiting for other members to approve or top up.', 'Đang chờ thành viên khác duyệt hoặc nạp thêm.'],
+    ['The organizer can make the group payments now.', 'Trưởng nhóm có thể quyết toán ngay.'],
+    ['Payment amounts are unavailable.', 'Chưa tính được số tiền cần chuyển.'],
     ['No transfers needed yet.', 'Chưa có khoản nào cần chuyển.'],
     ['Group payments can start after the trip ends.', 'Có thể quyết toán sau khi chuyến đi kết thúc.'],
     ['These amounts are estimates until the split is published and settled on Fuji.', 'Đây là số tiền dự kiến. Số tiền chính thức sẽ được gửi để duyệt và thanh toán trên Fuji.'],
@@ -2982,11 +3315,42 @@ function roomFundingShortfalls(trip, funding, draft) {
     ['Trip status updated.', 'Đã cập nhật trạng thái chuyến đi.'],
     ['Could not fully refresh trip status. Try again.', 'Chưa cập nhật được đầy đủ trạng thái chuyến đi. Hãy thử lại.'],
     ['Notifications', 'Thông báo'],
+    ['Clear notifications', 'Dọn thông báo'],
+    ['Time unavailable', 'Chưa có giờ'],
+    ['Just now', 'Vừa xong'],
     ['Notifications · Unread', 'Thông báo · Chưa đọc'],
     ['New trip notification', 'Có thông báo mới trong chuyến đi'],
     ['Bill change requested', 'Có yêu cầu sửa hóa đơn'],
+    ['Agree', 'Đồng ý'],
+    ['Disagree', 'Không đồng ý'],
+    ['Agreed', 'Đã đồng ý'],
+    ['Disagreed', 'Không đồng ý'],
+    ['Your response was saved.', 'Đã lưu phản hồi của bạn.'],
+    ['Someone agreed with the suggestion', 'Có người đồng ý với đề xuất'],
+    ['Someone disagreed with the suggestion', 'Có người không đồng ý với đề xuất'],
+    ['Bill cancellation declined', 'Có người không đồng ý hủy hóa đơn'],
+    ['Open Final split to review the trip expenses.', 'Mở Quyết toán để kiểm tra chi phí chuyến đi.'],
+    ['This suggestion is closed for review.', 'Đề xuất này đã đóng phản hồi.'],
+    ['This suggestion changed. Open the bill again.', 'Đề xuất đã thay đổi. Hãy mở lại hóa đơn.'],
+    ['Only people involved in the bill can respond to suggestions.', 'Chỉ người liên quan đến hóa đơn mới có thể phản hồi đề xuất.'],
+    ['Choose whether you agree with the suggestion.', 'Hãy chọn đồng ý hoặc không đồng ý với đề xuất.'],
+    ['Someone else must respond to your suggestion.', 'Thành viên khác mới có thể phản hồi đề xuất của bạn.'],
+    ['The suggestion could not be sent. Open the form again.', 'Chưa gửi được đề xuất. Hãy mở lại biểu mẫu.'],
+    ['New bill change request', 'Có yêu cầu sửa hóa đơn mới'],
+    ['Open notifications', 'Mở thông báo'],
     ['Bill needs your approval', 'Hóa đơn đang chờ bạn duyệt'],
     ['Bill removal requested', 'Có yêu cầu bỏ hóa đơn'],
+    ['Disagree and request cancellation', 'Không đồng ý, yêu cầu hủy'],
+    ['Agree to cancel', 'Đồng ý hủy hóa đơn'],
+    ['Request bill cancellation', 'Yêu cầu hủy hóa đơn'],
+    ['Reason for cancellation', 'Lý do yêu cầu hủy'],
+    ['Send cancellation request', 'Gửi yêu cầu hủy'],
+    ['Enter a reason for cancellation.', 'Hãy nhập lý do yêu cầu hủy.'],
+    ['Enter a valid reason for cancellation.', 'Hãy nhập lý do yêu cầu hủy, tối đa 500 ký tự.'],
+    ['Everyone in this trip can read your reason. The bill creator, payer and everyone sharing the bill must agree to cancel it.', 'Mọi thành viên trong chuyến đều xem được lý do. Hóa đơn chỉ hủy khi người tạo, người trả tiền và tất cả người được chia bill cùng đồng ý.'],
+    ['The bill creator, payer and everyone sharing the bill must agree to cancel it.', 'Hóa đơn chỉ hủy khi người tạo, người trả tiền và tất cả người được chia bill cùng đồng ý.'],
+    ['A cancellation request already exists. Read the reason before voting.', 'Đã có yêu cầu hủy. Hãy đọc lý do trước khi chọn.'],
+    ['The server needs an update to save the cancellation reason.', 'Cần cập nhật máy chủ TripVault để lưu lý do yêu cầu hủy.'],
     ['Bill removed', 'Hóa đơn đã được bỏ'],
     ['Final amounts are ready to review', 'Đã có số tiền cuối cùng để duyệt'],
     ['Open bill', 'Mở hóa đơn'],
@@ -3062,6 +3426,9 @@ function roomFundingShortfalls(trip, funding, draft) {
     ['Declined', 'Đã từ chối'],
     ['Failed', 'Thất bại'],
     ['Request declined in your wallet.', 'Yêu cầu đã bị từ chối trong ví.'],
+    ['Allow wallet access', 'Cấp quyền truy cập ví'],
+    ['Allow TripVault to use this account in your wallet, then try again.', 'Hãy cấp cho TripVault quyền dùng tài khoản này trong ví, rồi thử lại.'],
+    ['Wallet access restored. Try again and approve the sign-in signature.', 'Đã cấp quyền truy cập ví. Hãy thử lại và xác nhận chữ ký đăng nhập.'],
     ['A wallet request is already open. Check your wallet extension.', 'Ví đang có yêu cầu chờ xác nhận. Hãy mở tiện ích ví để kiểm tra.'],
     ['Wallet request failed.', 'Ví không xử lý được yêu cầu.'],
     ['The transaction reverted on Fuji.', 'Giao dịch không thành công trên Fuji.'],
@@ -3149,9 +3516,9 @@ function roomFundingShortfalls(trip, funding, draft) {
   }
 
   function siteLanguageSelect() {
-    return '<select class="ui-language" data-site-language aria-label="' + ui('Language') + '">'
+    return '<span class="language-select"><select class="ui-language" data-site-language aria-label="' + ui('Language') + '">'
       + '<option value="en" lang="en"' + (siteLanguage === 'en' ? ' selected' : '') + '>English</option>'
-      + '<option value="vi" lang="vi"' + (siteLanguage === 'vi' ? ' selected' : '') + '>Tiếng Việt</option></select>';
+      + '<option value="vi" lang="vi"' + (siteLanguage === 'vi' ? ' selected' : '') + '>Tiếng Việt</option></select></span>';
   }
 
   document.addEventListener('change', event => {
@@ -3333,7 +3700,10 @@ function roomFundingShortfalls(trip, funding, draft) {
   function member(id){return state.trip?.members.find(m=>m.id===id)}
   function avatar(m){return `<span class="avatar tone-${state.trip.members.indexOf(m)%4}">${safe(m.name.slice(0,1).toUpperCase())}</span>`}
   function notice(s){toast.textContent=ui(s);toast.classList.add('show');setTimeout(()=>toast.classList.remove('show'),2600)}
-  function sheetOpen(title,subtitle,body,footer='',language=null){sheet.lang=language || siteLanguage;sheet.innerHTML=`<header class="sheet-head"><div><h2 id="sheet-title">${sheetText(title)}</h2><p>${sheetText(subtitle)}</p></div>${btn('×','close-sheet',{tone:'secondary'})}</header><div class="sheet-body">${body}</div>${footer?`<footer class="sheet-footer">${footer}</footer>`:''}`;if(!language)localizeUI(sheet);if(!sheet.open)sheet.showModal();sheet.scrollTop=0}
+  function sheetOpen(title,subtitle,body,footer='',language=null){sheet.lang=language || siteLanguage;sheet.innerHTML=`<header class="sheet-head"><div><h2 id="sheet-title">${sheetText(title)}</h2><p>${sheetText(subtitle)}</p></div>${btn('×','close-sheet',{tone:'secondary'})}</header><div class="sheet-body">
+  <div class="notice" data-sheet-notification hidden><p role="status"></p>${btn('Open notifications', 'room-notifications', { tone: 'secondary' })}</div>
+  ${body}
+</div>${footer?`<footer class="sheet-footer">${footer}</footer>`:''}`;if(!language)localizeUI(sheet);if(!sheet.open)sheet.showModal();sheet.scrollTop=0}
   function row(label,value,sub=''){return `<div class="row"><span class="row-label"><span><span class="row-name">${label}</span>${sub?`<span class="row-sub">${sub}</span>`:''}</span></span><strong>${value}</strong></div>`}
   function navHtml(cls){return `<nav class="${cls}" aria-label="Trip navigation">${nav.map(([id,label,sym])=>`<button type="button" class="nav-btn" data-act="navigate" data-view="${id}" ${state.view===id?'aria-current="page"':''}>${icon(sym)}${label}</button>`).join('')}</nav>`}
   function empty(){return `<div class="section-head"><div><h1>Your trips</h1><p>Organize expenses together. Pay in real life, settle net balances with USDC.</p></div></div><section class="panel stack" style="text-align:center;padding:34px 22px"><div style="font-size:44px">✦</div><h2>No trips yet</h2><p class="subtitle">Create your first trip to track who paid for what. Each member deposits USDC before the trip begins.</p><div class="inline" style="justify-content:center">${btn('Create a trip','new-trip',{symbol:'plus'})}${btn('Join a trip','join-trip',{tone:'secondary'})}</div></section><section class="panel"><h2>How TripVault works</h2>${row('1 · Deposit USDC','Minimum + time lock')}${row('2 · Pay merchants externally','VND / cash / bank')}${row('3 · Record and approve bills','VND')}${row('4 · Settle net debt','From deposits in USDC')}</section>`}
@@ -3563,6 +3933,7 @@ function roomFundingShortfalls(trip, funding, draft) {
   let guideStep = 0;
   let guideOpen = false;
   let pendingGuideInvite = '';
+  const joinedRoomGuides = new Set();
 
   function showGuide() {
     const preferred = guideLanguage || readStorage(GUIDE_LANGUAGE_KEY) || readStorage(SITE_LANGUAGE_KEY);
@@ -3650,6 +4021,16 @@ function roomFundingShortfalls(trip, funding, draft) {
     } catch {
       // The guide remains available even if the browser cannot remember this visit.
     }
+  }
+
+  function showJoinedRoomGuide(trip) {
+    const key = GUIDE_KEY + ':room:' + rooms.account + ':' + trip.id;
+    if (joinedRoomGuides.has(key) || readStorage(key) === true) return;
+    joinedRoomGuides.add(key);
+    try {
+      localStorage.setItem(key, 'true');
+    } catch {}
+    openGuide();
   }
 
   function header() {
@@ -3783,11 +4164,15 @@ function roomFundingShortfalls(trip, funding, draft) {
     if (state.trip.shared) {
       if (state.view === 'overview') return roomOverview();
       if (state.view === 'people') return roomMembers(state.trip);
+      if (state.view === 'split') return roomFinalSplit(state.trip);
       if (state.view === 'wallet') return fujiPanel();
     }
     return ({ overview, people, bills, split, wallet }[state.view] || overview)();
   }
   function render() {
+    const split = app.querySelector?.('[data-split-trip]');
+    const openDetails = new Set(state.view === 'split' && split?.dataset.splitTrip === state.trip?.id
+      ? [...split.querySelectorAll('details[data-split-detail][open]')].map(item => item.dataset.splitDetail) : []);
     if (document.documentElement) {
       document.documentElement.lang = siteLanguage;
       document.title = 'TripVault · ' + ui('Rooms');
@@ -3796,6 +4181,9 @@ function roomFundingShortfalls(trip, funding, draft) {
     }
     app.innerHTML = header();
     localizeUI(app);
+    for (const detail of app.querySelectorAll?.('details[data-split-detail]') || []) {
+      if (openDetails.has(detail.dataset.splitDetail)) detail.open = true;
+    }
     updateBillFundingForm();
     updateRoomSignInButton();
     clearTimeout(phaseTimer);
@@ -3896,11 +4284,14 @@ function roomFundingShortfalls(trip, funding, draft) {
     if (act === 'room-funding-refresh') return refreshRoomFunding();
     if (act === 'room-rename' || act === 'room-rename-member') return showRoomRename(trip, act);
     if (act === 'room-reauthenticate') return reauthenticateRoom();
+    if (act === 'room-wallet-access') return restoreRoomWalletAccess();
     if (['bill-edit', 'bill-feedback', 'bill-cancel-yes', 'bill-cancel-no'].includes(act)) return roomBillAction(act, Number(id));
+    if (act === 'bill-feedback-vote') return respondToBillFeedback(Number(id), element.dataset);
     if (act === 'send-top-up-reminder') return sendBillTopUpReminder(element);
     if (act === 'open-top-up-reminder') return openTopUpReminder(id);
     if (act === 'pay-top-up-reminder') return payTopUpReminder(id, element.dataset.units);
     if (act === 'room-notifications') return openRoomNotifications();
+    if (act === 'clear-room-notifications') return clearRoomNotifications();
     if (act === 'open-room-notification') return openRoomNotification(id);
     if (act === 'room-funding-top-up') return topUpRoomFunding(element);
     if (act === 'room-delete-select-mode') return toggleTripSelectionMode();
@@ -4123,20 +4514,23 @@ function roomFundingShortfalls(trip, funding, draft) {
 
   document.addEventListener('submit', event => {
     const form = event.target;
-    if (!['create-form', 'fund-form', 'bill-form', 'fuji-deploy-form', 'fuji-funds-form', 'fuji-link-form', 'room-form', 'bill-feedback-form', 'room-rename-form'].includes(form.id)) return;
+    // A form control named id can shadow the form's id property.
+    const formId = form.getAttribute('id');
+    if (!['create-form', 'fund-form', 'bill-form', 'fuji-deploy-form', 'fuji-funds-form', 'fuji-link-form', 'room-form', 'bill-feedback-form', 'bill-cancellation-form', 'room-rename-form'].includes(formId)) return;
     event.preventDefault();
     syncTrips();
     const data = new FormData(form);
     const fail = message => { form.querySelector('#sheet-error').textContent = ui(message); };
-    if (form.id === 'room-form') submitRoomForm(data, fail);
-    else if (form.id === 'bill-feedback-form') submitBillFeedback(data, fail);
-    else if (form.id === 'room-rename-form') submitRoomRename(data, fail);
-    else if (form.id === 'fuji-link-form') linkExistingVault(data, fail);
-    else if (form.id === 'fuji-deploy-form') deployFuji(data, fail);
-    else if (form.id === 'fuji-funds-form') fujiFunds(data, fail);
-    else if (form.id === 'create-form') createTrip(data, fail);
+    if (formId === 'room-form') submitRoomForm(data, fail);
+    else if (formId === 'bill-feedback-form') submitBillFeedback(data, fail);
+    else if (formId === 'bill-cancellation-form') submitBillCancellation(data, fail);
+    else if (formId === 'room-rename-form') submitRoomRename(data, fail);
+    else if (formId === 'fuji-link-form') linkExistingVault(data, fail);
+    else if (formId === 'fuji-deploy-form') deployFuji(data, fail);
+    else if (formId === 'fuji-funds-form') fujiFunds(data, fail);
+    else if (formId === 'create-form') createTrip(data, fail);
     else if (!state.trip) fail('Open a trip first.');
-    else if (form.id === 'fund-form') {
+    else if (formId === 'fund-form') {
       if (!state.trip.shared) updateFunds(state.trip, data.get('kind'), parseUnits(data.get('amount')), fail);
     }
     else recordBill(state.trip, data, fail);

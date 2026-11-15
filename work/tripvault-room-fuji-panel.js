@@ -1,4 +1,4 @@
-  function fujiSettlementSummary(trip, vault) {
+  function fujiSettlementSummary(trip, vault, compact = false) {
     const settlement = trip.fuji?.settlementTx;
     const explorerLink = isHash(settlement)
       ? ` <a href="${FUJI.explorer}/tx/${settlement}" target="_blank" rel="noopener noreferrer">View settlement on Fuji</a>` : '';
@@ -18,7 +18,8 @@
       return row(label, money(allocation ?? remaining), distribution + summary);
     }).join('');
     return `<p class="notice green">Group payments are complete. Each person can move their remaining test USDC to their wallet.${explorerLink}</p>
-      <div><h3>What each person gets back</h3>${rows}</div>`;
+      ${compact ? finalSplitDetails('payouts', 'What each person gets back', rows)
+        : '<div><h3>What each person gets back</h3>' + rows + '</div>'}`;
   }
 
   function fujiWithdrawalDeadline(vault) {
@@ -77,7 +78,79 @@
     }
   }
 
-  function fujiPanel(section = 'wallet') {
+  function finalSplitDetails(key, title, content) {
+    return `<details class="split-details" data-split-detail="${key}">
+      <summary>${title}</summary><div class="split-detail-body">${content}</div>
+    </details>`;
+  }
+
+  function finalSplitReview(trip, plan) {
+    const review = { message: '', action: '', secondary: '' };
+    if (trip.settled || roomFundingCancelled(trip) || (!trip.fuji?.address && trip.depositDeadline)) return review;
+    const vault = currentVault();
+    if (vault && (vault.settled || vault.cancelled || vault.timestamp >= vault.refundDeadline)) return review;
+
+    if (!roomBillsClosed(trip)) {
+      review.message = `<p class="subtitle">Group payments can start after the trip ends.</p>
+        <p class="split-date">${safe(formatTripTime(roomEndTime(trip)))}</p>`;
+    } else if (hasPendingBills(trip)) {
+      review.message = '<p class="notice warn">Finish open bill reviews before making final payments.</p>';
+      review.action = btn('Review open bills', 'navigate', { data: 'data-view="bills"' });
+    } else if (!trip.reviewQuote) {
+      review.message = '<p class="subtitle">The organizer prepares the split and locks the rate for approval.</p>';
+      if (canPrepare(trip)) {
+        const fetching = preparingTrip === trip;
+        review.action = btn(fetching ? 'Checking exchange rate…' : 'Calculate final amounts', 'prepare-split', { disabled: fetching });
+      }
+      if (canUseFallback(fallbackReview)) {
+        review.message = `<div class="notice warn">
+          <p>Market rate unavailable. You can retry or prepare the split with this reference.</p>
+          <p>${safe(fxLabel(fallbackReview.quote))}</p>
+        </div>`;
+        review.secondary = btn('Use fallback rate', 'use-fallback', { tone: 'secondary' });
+      }
+    } else {
+      if (plan.invalid) review.message = '<p class="notice warn">The current transfers cannot be represented in USDC. Reopen the split and check the rate before settling.</p>';
+      else if (vault && !vault.net.length && state.actor !== trip.owner) {
+        review.message = '<p class="subtitle">Waiting for the organizer to share the final amounts.</p>';
+      }
+      if (state.actor === trip.owner) review.secondary = btn('Start a new review', 'reopen-split', { tone: 'ghost' });
+    }
+    return review;
+  }
+
+  function roomFinalSplit(trip) {
+    const vault = currentVault();
+    const quote = trip.reviewQuote;
+    const rate = quote || fx;
+    const plan = settlementPlan(trip, rate);
+    const settled = trip.settled || vault?.settled;
+    const published = vault && matchesFujiDraft(trip, vault);
+    const transfers = plan.transfers.map(transfer => row(
+      userText(member(transfer.from).name) + ' → ' + userText(member(transfer.to).name),
+      money(transfer.units), vnd(transfer.vnd) + ' equivalent',
+    )).join('');
+    const people = stats(trip).map(person => row(userText(person.name), vnd(person.net),
+      'Paid ' + vnd(person.paid) + ' · Owes ' + vnd(person.owed),
+    )).join('');
+    const rateStatus = quote ? (quote.historical ? 'Historical rate' : 'Locked for approval') : 'Estimate';
+    return `<div class="section-head">
+      <div><h1>Final split</h1><p>${userText(trip.name)}</p></div>
+      ${settled || published ? `<span class="chip violet">${settled ? 'Settled' : 'In review'}</span>` : ''}
+    </div>
+    <div class="stack room-final-split" data-split-trip="${safe(trip.id)}">
+      ${fujiPanel('split', finalSplitReview(trip, plan))}
+      <section class="panel stack split-breakdown">
+        ${!settled ? `<div class="panel-head"><h2>Who pays whom</h2>${transfers && !published ? '<span class="chip">Estimate</span>' : ''}</div>
+          ${plan.invalid ? '<p class="subtitle">Payment amounts are unavailable.</p>'
+            : transfers ? '<div>' + transfers + '</div>' : '<p class="subtitle">No transfers needed yet.</p>'}` : ''}
+        ${finalSplitDetails('expenses', 'Expense breakdown', people)}
+        ${finalSplitDetails('rate', 'Exchange rate', `<p class="subtitle"><strong>${rateStatus}</strong></p><p class="subtitle">${safe(fxLabel(rate))}</p>`)}
+      </section>
+    </div>`;
+  }
+
+  function fujiPanel(section = 'wallet', review = null) {
     const trip = state.trip;
     const { account, chain, name, busy } = walletSession;
     const onFuji = chain === FUJI.id;
@@ -90,10 +163,14 @@
     let controls = '';
     let utilities = '';
     let content = '';
+    let walletDetails = '';
+    let paymentDetails = '';
+    let secondaryActions = '';
+    let personalAmount = '';
     if (!account) {
       controls = btn('Connect Wallet', 'fuji-connect', { disabled: busy });
     } else {
-      content = row(userText(name), onFuji ? 'Avalanche Fuji' : 'Wrong network', safe(account));
+      walletDetails = row(userText(name), onFuji ? 'Avalanche Fuji' : 'Wrong network', safe(account));
       if (!onFuji) controls = btn('Switch to Fuji', 'fuji-switch', { disabled: busy });
       if (onFuji && address) {
         const refreshing = refreshingTripStatus?.id === trip?.id && refreshingTripStatus?.account === account;
@@ -129,7 +206,7 @@
     }
 
     if (isAddress(address)) {
-      content += row('Trip fund address',
+      walletDetails += row('Trip fund address',
         `<a href="${FUJI.explorer}/address/${safe(address)}" target="_blank" rel="noopener noreferrer">View on Fuji</a>`,
         safe(address),
       );
@@ -148,7 +225,7 @@
       const hasPlan = vault.net.length > 0;
       const stalePlan = hasPlan && !matchesFujiDraft(trip, vault);
       const shortage = fujiShortfall(vault, index);
-      content += row('Your balance in the trip fund', money(vault.balances[index]));
+      walletDetails += row('Your balance in the trip fund', money(vault.balances[index]));
 
       if (section === 'wallet') {
         if (vault.usdc <= BigInt(Number.MAX_SAFE_INTEGER)) {
@@ -166,12 +243,12 @@
           controls += btn('Withdraw my deposit', 'fuji-withdraw', { tone: 'secondary', disabled });
         }
       } else if (vault.settled) {
-        content += fujiSettlementSummary(trip, vault);
+        content += fujiSettlementSummary(trip, vault, Boolean(review));
       } else if (!expired && !vault.cancelled && now < vault.end) {
-        content += '<p class="notice">The organizer can share the final amounts for approval when the trip ends.</p>';
+        if (!review) content += '<p class="notice">The organizer can share the final amounts for approval when the trip ends.</p>';
       } else if (!expired && !vault.cancelled) {
         if (hasPlan) {
-          content += vault.members.map((member, position) => {
+          paymentDetails = vault.members.map((member, position) => {
             const amount = vault.net[position];
             const due = fujiShortfall(vault, position);
             const status = vault.approvals[position] ? 'Approved' : 'Waiting for approval';
@@ -183,8 +260,20 @@
         if (stalePlan) {
           content += '<p class="notice warn">The amounts have changed. The organizer needs to share the updated amounts for approval.</p>';
         } else if (hasPlan) {
-          content += '<p class="notice">Check your amount, approve it, and top up if needed. Once everyone is ready, the organizer can make the group payments.</p>';
-        } else {
+          if (review) {
+            const count = vault.approvals.filter(Boolean).length;
+            content += `<p class="subtitle">${count} of ${vault.members.length} approved.</p>`;
+            if (vault.approvals[index] && shortage === 0) {
+              const ready = count === vault.members.length
+                && vault.members.every((_, position) => fujiShortfall(vault, position) === 0);
+              if (!ready) content += '<p class="subtitle">Waiting for other members to approve or top up.</p>';
+              else if (index !== 0) content += '<p class="subtitle">The organizer can make the group payments now.</p>';
+            }
+            personalAmount = `<div class="split-amount"><span>Your amount</span><strong>${fujiPaymentAmount(vault.net[index])}</strong></div>`;
+          } else {
+            content += '<p class="notice">Check your amount, approve it, and top up if needed. Once everyone is ready, the organizer can make the group payments.</p>';
+          }
+        } else if (!review) {
           content += '<p class="notice">The trip has ended. The organizer can calculate who pays whom below and share the amounts for approval.</p>';
         }
         if (index === 0 && (!hasPlan || stalePlan) && fujiDraft(trip)) {
@@ -193,18 +282,17 @@
         if (hasPlan) {
           const hash = 'data-hash="' + safe(vault.hash) + '"';
           const approved = vault.approvals[index];
-          if (approved) utilities += btn('Undo my approval', 'fuji-revoke', { data: hash, tone: 'danger cancel-approval', disabled });
-          else controls += btn('Approve my amount', 'fuji-approve', { data: hash, disabled: disabled || stalePlan });
+          if (approved) secondaryActions += btn('Undo my approval', 'fuji-revoke', { data: hash, tone: 'danger cancel-approval', disabled });
+          else if (!review || !stalePlan) controls += btn('Approve my amount', 'fuji-approve', { data: hash, disabled: disabled || stalePlan });
           if (shortage > 0 && !stalePlan) {
             controls += btn('Top up ' + money(shortage), 'fuji-top-up', {
               data: hash + ' data-units="' + shortage + '"', disabled,
             });
           }
           if (index === 0) {
-            controls += btn('Make group payments', 'fuji-settle', {
-              data: hash, disabled: disabled || stalePlan || !vault.approvals.every(Boolean)
-                || vault.members.some((_, position) => fujiShortfall(vault, position) > 0),
-            });
+            const ready = !stalePlan && vault.approvals.every(Boolean)
+              && vault.members.every((_, position) => fujiShortfall(vault, position) === 0);
+            if (!review || ready) controls += btn('Make group payments', 'fuji-settle', { data: hash, disabled: disabled || !ready });
           }
         }
       }
@@ -217,12 +305,30 @@
         controls += btn('Send ' + money(vault.balances[index]) + ' to my wallet', 'fuji-claim', { disabled });
       }
     }
-    if (account) utilities += btn('Disconnect wallet', 'fuji-disconnect', { tone: 'ghost', disabled: busy });
+    const disconnect = account ? btn('Disconnect wallet', 'fuji-disconnect', { tone: 'ghost', disabled: busy }) : '';
+    if (review) {
+      const visible = walletSession.status?.tripId === trip.id ? walletSession.status : trip.fuji?.lastTx;
+      const transaction = fujiTransactionCard(trip);
+      const confirmed = visible?.phase === 'confirmed';
+      const details = '<p class="subtitle">This trip uses test USDC on Avalanche Fuji.</p>'
+        + walletDetails + (confirmed ? transaction : '') + (disconnect ? '<div class="inline">' + disconnect + '</div>' : '');
+      const actions = review.action + controls;
+      return `<section class="panel stack split-payment" aria-labelledby="split-payment-title">
+        <h2 id="split-payment-title">Group payments</h2>
+        ${personalAmount}${review.message}${content}
+        ${actions ? '<div class="inline split-actions">' + actions + '</div>' : ''}
+        ${confirmed ? '' : transaction}
+        ${paymentDetails ? finalSplitDetails('approvals', 'Member approvals', paymentDetails) : ''}
+        ${secondaryActions || utilities || review.secondary ? '<div class="inline split-utilities">' + secondaryActions + utilities + review.secondary + '</div>' : ''}
+        ${finalSplitDetails('wallet', 'Wallet and transaction details', details)}
+      </section>`;
+    }
+    utilities = secondaryActions + utilities + disconnect;
     return `<section class="panel stack">
       <div><h2>${section === 'split' ? 'Group payments' : 'Wallet and trip fund'}</h2>
         <p class="subtitle">${trip?.shared ? 'This trip uses test USDC on Avalanche Fuji.' : 'Transactions use test USDC on Avalanche Fuji. Local demo balances are separate.'}</p>
       </div>
-      ${content}
+      ${walletDetails}${paymentDetails}${content}
       ${controls ? '<div class="inline wallet-actions">' + controls + '</div>' : ''}
       ${fujiTransactionCard(trip)}
       ${utilities ? '<div class="inline wallet-utilities">' + utilities + '</div>' : ''}

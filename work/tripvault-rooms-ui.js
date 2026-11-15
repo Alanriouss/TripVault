@@ -2,6 +2,7 @@
   const ROOM_TX_KEY = 'tripvault-room-transactions';
   const rooms = {
     online: false, canDelete: false, canBulkDelete: false, canEnd: false, canSendTopUpReminders: false,
+    canSaveCancellationReason: false, canRespondToSuggestions: false,
     account: '', token: '', list: new Map(), reminders: [], removed: new Set(), intent: null,
     busy: false, refreshing: false, timer: null, lastVaultPoll: 0, lastFundingPoll: 0, transactions: {},
   };
@@ -20,17 +21,26 @@
     return [...state.trips, ...rooms.list.values()];
   }
 
-  async function roomApi(path, body, token = rooms.token) {
+  async function roomApi(path, body, token = rooms.token, timeoutMs = 0) {
     const headers = { Accept: 'application/json' };
     if (token) headers.Authorization = 'Bearer ' + token;
     if (body !== undefined) headers['Content-Type'] = 'application/json';
-    const response = await fetch('/api' + path, {
-      method: body === undefined ? 'GET' : 'POST', headers, cache: 'no-store',
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
-    const data = await response.json();
-    if (!response.ok) throw Object.assign(new Error(data.error || 'Room request failed.'), { status: response.status });
-    return data;
+    const controller = timeoutMs ? new AbortController() : null;
+    const timeout = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+    try {
+      const response = await fetch('/api' + path, {
+        method: body === undefined ? 'GET' : 'POST', headers, cache: 'no-store', signal: controller?.signal,
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+      const data = await response.json();
+      if (!response.ok) throw Object.assign(new Error(data.error || 'Room request failed.'), { status: response.status });
+      return data;
+    } catch (error) {
+      if (controller?.signal.aborted) throw new Error('The server took too long to respond. Try again.');
+      throw error;
+    } finally {
+      if (timeout !== null) clearTimeout(timeout);
+    }
   }
 
   function roomTxKey(id, address) {
@@ -111,7 +121,7 @@
 
   async function loadRooms(token, known) {
     try {
-      const { rooms: active, reminders = [] } = await roomApi('/rooms', undefined, token);
+      const { rooms: active, reminders = [] } = await roomApi('/rooms', undefined, token, 8000);
       if (token !== rooms.token || rooms.account !== walletSession.account) return false;
       const previousNotifications = notificationIds();
       const remindersChanged = JSON.stringify(rooms.reminders) !== JSON.stringify(reminders);
@@ -184,6 +194,8 @@
       rooms.canBulkDelete = status.bulkDelete === true;
       rooms.canEnd = status.endTrip === true;
       rooms.canSendTopUpReminders = status.topUpReminders === true;
+      rooms.canSaveCancellationReason = status.billCancellationReason === true;
+      rooms.canRespondToSuggestions = status.suggestionResponses === true;
       rooms.transactions = roomStorage(ROOM_TX_KEY) || {};
       roomWalletChanged();
       const invite = new URLSearchParams(window.location.search).get('join');
@@ -292,9 +304,33 @@
     sheetOpen(title, 'Avalanche Fuji',
       `<form class="stack" id="room-form">${wallet}${fields}
         <p id="sheet-error" class="form-error" role="status"></p>
+        <div data-wallet-access-recovery hidden>${btn('Allow wallet access', 'room-wallet-access', { tone: 'secondary' })}</div>
       </form>`,
       '<button class="btn full" type="submit" form="room-form">' + title + '</button>',
     );
+  }
+
+  async function restoreRoomWalletAccess() {
+    const context = walletContext();
+    if (!context.provider || rooms.busy || walletSession.busy) return;
+    const form = sheet.querySelector('#room-form');
+    const message = form?.querySelector('#sheet-error');
+    rooms.busy = true;
+    try {
+      const accounts = await request(context.provider, 'eth_requestAccounts');
+      if (walletSession.provider !== context.provider) return;
+      if (accounts?.[0]?.toLowerCase() !== context.account) {
+        await syncWallet(context.provider);
+        return;
+      }
+      if (message) message.textContent = ui('Wallet access restored. Try again and approve the sign-in signature.');
+      const recovery = form?.querySelector('[data-wallet-access-recovery]');
+      if (recovery) recovery.hidden = true;
+    } catch (error) {
+      if (message) message.textContent = ui(walletError(error));
+    } finally {
+      rooms.busy = false;
+    }
   }
 
   async function submitRoomForm(data, fail) {
@@ -341,11 +377,14 @@
           url.searchParams.delete('join');
           window.history.replaceState(null, '', url);
         }
+        if (intent.kind === 'join' && state.trip?.shared) showJoinedRoomGuide(state.trip);
       }
       notice(intent.kind === 'create' ? 'Room created. Share the link or six-digit code.'
         : intent.kind === 'join' ? 'You joined the room.' : 'Signed in to TripVault rooms.');
     } catch (error) {
       if (error.status === 401 && rooms.token) clearRoomSession();
+      const recovery = sheet.querySelector('[data-wallet-access-recovery]');
+      if (recovery && walletAccessDenied(error)) recovery.hidden = false;
       fail(walletError(error));
     } finally {
       rooms.busy = false;
@@ -361,14 +400,15 @@
     const token = rooms.token;
     rooms.busy = true;
     const savingBill = type === 'bill.add' || type === 'bill.edit';
-    const reviewAction = ['bill.approve', 'bill.feedback'].includes(type);
+    const reviewAction = ['bill.approve', 'bill.feedback', 'bill.feedback-vote'].includes(type);
+    const timeout = type === 'bill.feedback' ? 15000 : 0;
     const payload = version => ({ type, version, ...fields });
     const path = '/rooms/' + trip.id + '/actions';
     if (savingBill) updateBillFundingForm();
     try {
       let room;
       try {
-        room = await roomApi(path, payload(trip.version), token);
+        room = await roomApi(path, payload(trip.version), token, timeout);
       } catch (error) {
         if (!reviewAction || error.status !== 409 || !await syncRooms()) throw error;
         const latest = rooms.list.get(trip.id);
@@ -376,7 +416,7 @@
         const latestBill = latest?.bills.find(bill => bill.id === fields.id);
         if (token !== rooms.token || trip.id !== state.trip?.id || !latest || latest.version <= trip.version
           || !sameBillReview(originalBill, latestBill) || latest.reviewQuote || latest.settled) throw error;
-        room = await roomApi(path, payload(latest.version), token);
+        room = await roomApi(path, payload(latest.version), token, timeout);
       }
       if (token !== rooms.token || rooms.account !== walletSession.account) return null;
       keepRoom(room);

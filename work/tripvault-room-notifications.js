@@ -1,14 +1,24 @@
   let notificationReadKey;
   let readNotifications;
   let migratedNotificationRooms;
+  let notificationDismissedKey;
+  let dismissedNotifications;
   let notificationAttention = false;
   let notificationAttentionTimer;
+
+  const BILL_EVENT_HEADINGS = {
+    'suggestion-agreed': 'Someone agreed with the suggestion',
+    'suggestion-disagreed': 'Someone disagreed with the suggestion',
+    'cancellation-requested': 'Bill removal requested',
+    'cancellation-declined': 'Bill cancellation declined',
+  };
 
   function billFeedbackNotifications(trip, bill, member, involved) {
     const entries = new Map();
     const add = (id, label, feedback) => entries.set(id, {
       id: 'feedback:' + bill.id + ':' + id, billId: bill.id, title: label,
       heading: 'Bill change requested', message: feedback.comment, userMessage: true,
+      changeRequest: true,
       receivedAt: feedback.receivedAt,
       sender: trip.members.find(person => person.id === feedback.author)?.name,
     });
@@ -19,7 +29,11 @@
       const versions = [...(bill.history || []), bill];
       for (const version of versions) {
         for (const feedback of version.feedback || []) {
-          if (feedback.id || feedback.author === member.id) continue;
+          if (feedback.author === member.id || entries.has(feedback.id)) continue;
+          if (feedback.id) {
+            add(feedback.id, version.label, feedback);
+            continue;
+          }
           let fingerprint = 0;
           for (const char of feedback.comment) fingerprint = Math.imul(fingerprint, 31) + char.codePointAt(0) | 0;
           add([feedback.author, version.reviewBy, fingerprint].join(':'), version.label, feedback);
@@ -36,20 +50,33 @@
     const bills = trip.bills.slice().reverse().flatMap(bill => {
       const involved = [bill.createdBy || bill.payer, bill.payer, ...bill.participants].includes(member.id);
       const feedback = billFeedbackNotifications(trip, bill, member, involved);
-      if (!involved) return feedback;
       const related = { billId: bill.id, title: bill.label };
-      const review = [];
-      if (bill.status === 'pending' && bill.participants.includes(member.id)
+      const review = (bill.notificationLog || []).map(event => ({
+        ...related, title: event.label,
+        id: (event.kind === 'cancellation-requested' ? 'removal' : 'bill-event') + ':' + bill.id + ':' + event.id,
+        heading: BILL_EVENT_HEADINGS[event.kind], receivedAt: event.receivedAt,
+        message: event.comment, userMessage: Boolean(event.comment),
+        sender: trip.members.find(person => person.id === event.actor)?.name,
+      }));
+      if (involved && bill.status === 'pending' && bill.participants.includes(member.id)
         && !bill.approvals.includes(member.id) && (bill.createdBy || bill.payer) !== member.id) {
         review.push({ ...related, id: 'review:' + bill.id + ':' + bill.reviewBy,
-          heading: 'Bill needs your approval', sender: trip.members.find(person => person.id === (bill.createdBy || bill.payer))?.name });
+          heading: 'Bill needs your approval',
+          receivedAt: bill.reviewStartedAt || (bill.reviewBy ? bill.reviewBy - 86_400_000 : undefined),
+          sender: trip.members.find(person => person.id === (bill.createdBy || bill.payer))?.name });
       }
-      if (bill.status === 'cancellation' && !bill.cancellation.votes.includes(member.id)) {
-        review.push({ ...related, id: 'removal:' + bill.id + ':' + bill.reviewBy,
-          heading: 'Bill removal requested', sender: trip.members.find(person => person.id === bill.cancellation.votes[0])?.name });
+      const cancellation = bill.cancellation;
+      if (bill.status === 'cancellation' && cancellation && (involved || cancellation.reason)
+        && !cancellation.votes.includes(member.id)
+        && !review.some(item => item.id === 'removal:' + bill.id + ':' + cancellation.id)) {
+        review.push({ ...related, id: 'removal:' + bill.id + ':' + (cancellation.id || bill.reviewBy),
+          heading: 'Bill removal requested', message: cancellation.reason, userMessage: Boolean(cancellation.reason),
+          receivedAt: cancellation.requestedAt,
+          sender: trip.members.find(person => person.id === (cancellation.requestedBy || cancellation.votes[0]))?.name });
       }
-      if (bill.status === 'rejected') {
+      if (bill.status === 'rejected' && (involved || cancellation?.reason)) {
         review.push({ ...related, id: 'removed:' + bill.id, heading: 'Bill removed',
+          receivedAt: cancellation?.resolvedAt,
           message: 'Everyone involved agreed to handle this bill separately. It is excluded from the final amounts.' });
       }
       return [...feedback, ...review];
@@ -57,28 +84,34 @@
 
     const reminders = rooms.reminders.filter(reminder => reminder.roomId === trip.id).map(reminder => ({
       id: 'top-up:' + reminder.id, reminder, heading: 'Top-up reminder', title: reminder.draft.label,
-      sender: reminder.sender,
+      sender: reminder.sender, receivedAt: reminder.receivedAt,
     }));
 
     const notices = [];
     if (roomFundingCancelled(trip)) {
       notices.push({ id: 'cancelled', heading: 'Trip cancelled', view: 'wallet',
+        receivedAt: Date.parse(trip.depositDeadline),
         message: trip.fuji?.address ? 'Someone was below the minimum at the deadline. Open Wallet to take back your deposit.'
           : 'The deposit deadline passed without a linked trip fund.' });
     } else if (trip.settled) {
       notices.push({ id: 'settled', heading: 'Group payments complete', view: 'wallet',
+        receivedAt: trip.fuji?.settledAt,
         message: 'Open Wallet to send any remaining balance to your wallet.' });
     } else if (trip.billsClosedAt) {
-      notices.push({ id: 'ended', heading: trip.endedAt ? 'Trip ended early' : 'Trip ended', view: 'bills',
-        message: 'The trip has ended. Review any bills that are still open.' });
+      notices.push({ id: 'ended', heading: trip.endedAt ? 'Trip ended early' : 'Trip ended', view: trip.endedAt ? 'split' : 'bills',
+        receivedAt: Date.parse(trip.billsClosedAt),
+        message: trip.endedAt ? 'Open Final split to review the trip expenses.' : 'The trip has ended. Review any bills that are still open.' });
       if (trip.owner !== member.id && trip.fuji?.publishedRevision) {
-        notices.push({ id: 'split:' + trip.fuji.publishedRevision, heading: 'Final amounts are ready to review', view: 'split' });
+        notices.push({ id: 'split:' + trip.fuji.publishedRevision, heading: 'Final amounts are ready to review',
+          receivedAt: trip.fuji.publishedAt, view: 'split' });
       }
     } else if (trip.locked) {
       notices.push({ id: 'roster-locked', heading: 'Roster locked', view: 'people',
+        receivedAt: trip.rosterLockedAt,
         message: 'The vault uses the member list saved at setup. Invitations are closed.' });
       if (trip.owner === member.id && trip.fuji?.address && trip.fuji.contractVersion < 2 && roomEndTime(trip) > Date.now()) {
         notices.push({ id: 'original-end', heading: 'Trip end', view: 'wallet',
+          receivedAt: trip.fuji.linkedAt,
           message: 'This vault uses its original end time. Early ending is available for newly deployed vaults.' });
       }
       const funding = getDisplayedFunding(trip);
@@ -94,16 +127,44 @@
     }));
   }
 
-  function readRoomNotifications(seen) {
+  function readRoomNotifications() {
     if (!rooms.account) return [];
-    const items = [...rooms.list.values()].flatMap(tripNotificationEntries);
-    return items.sort((a, b) => Number(Boolean(seen?.has(a.id))) - Number(Boolean(seen?.has(b.id)))
-      || (b.receivedAt || 0) - (a.receivedAt || 0));
+    const dismissed = dismissedRoomNotifications();
+    const items = [...rooms.list.values()].flatMap(tripNotificationEntries).filter(item => !dismissed.has(item.id));
+    return items.sort((a, b) => (b.receivedAt || 0) - (a.receivedAt || 0) || a.id.localeCompare(b.id));
   }
 
   function notificationIds() {
     return new Set(readRoomNotifications().map(item => item.id));
   }
+
+  function dismissedRoomNotifications() {
+    const key = 'tripvault-notifications-dismissed:' + rooms.account;
+    if (key !== notificationDismissedKey) {
+      notificationDismissedKey = key;
+      const saved = readStorage(key);
+      dismissedNotifications = new Set(Array.isArray(saved) ? saved : []);
+    }
+    return dismissedNotifications;
+  }
+
+  function clearRoomNotifications() {
+    if (!rooms.account || !sheet.open) return;
+    const items = readRoomNotifications();
+    if (!items.length) return;
+    const dismissed = dismissedRoomNotifications();
+    items.forEach(item => dismissed.add(item.id));
+    try {
+      localStorage.setItem(notificationDismissedKey, JSON.stringify([...dismissed]));
+    } catch {}
+    if (!refreshNotificationSheet()) openRoomNotifications();
+  }
+
+  window.addEventListener('storage', event => {
+    if (!rooms.account || event.key !== notificationDismissedKey) return;
+    notificationDismissedKey = undefined;
+    if (!refreshNotificationSheet()) render();
+  });
 
   function seenRoomNotifications() {
     const key = 'tripvault-notifications-read:' + rooms.account;
@@ -153,17 +214,32 @@
     return [`${money(units)} still needed`, action];
   }
 
+  function notificationTime(timestamp) {
+    if (!Number.isFinite(timestamp) || timestamp <= 0) return '<small class="notification-time">Time unavailable</small>';
+    const date = new Date(timestamp);
+    const minutes = Math.max(0, Math.floor((Date.now() - timestamp) / 60_000));
+    const formatter = new Intl.RelativeTimeFormat(siteLanguage === 'vi' ? 'vi-VN' : 'en-US', { numeric: 'always' });
+    let elapsed = ui('Just now');
+    if (minutes >= 1440) elapsed = formatter.format(-Math.floor(minutes / 1440), 'day');
+    else if (minutes >= 60) elapsed = formatter.format(-Math.floor(minutes / 60), 'hour');
+    else if (minutes) elapsed = formatter.format(-minutes, 'minute');
+    return `<small class="notification-time"><time datetime="${date.toISOString()}">${safe(formatTripTime(timestamp))}</time>
+      <span aria-hidden="true"> · </span><span>${safe(elapsed)}</span></small>`;
+  }
+
   function roomNotificationsBody(trip, items, seen) {
-    return items.length ? items.map(item => {
+    return items.length ? '<div class="inline notification-tools">' +
+      btn('Clear notifications', 'clear-room-notifications', { tone: 'secondary' }) + '</div>' + items.map(item => {
       const current = trip?.id === item.roomId;
       const [message, action] = item.reminder ? topUpNotificationDetails(current ? trip : null, item.reminder) : [
-        item.message, btn(item.billId ? 'Open bill' : 'Open trip', 'open-room-notification',
+        item.message, btn(item.billId ? 'Open bill' : item.view === 'split' ? 'Open Final split' : 'Open trip', 'open-room-notification',
           { tone: 'secondary', data: `data-id="${safe(item.id)}"` }),
       ];
       const context = [item.roomName, item.sender, item.title].filter(Boolean).map(userText).join(' · ');
       return `<article class="trip-notification${seen.has(item.id) ? '' : ' unread'}">
         <strong>${item.heading}</strong>
         ${context ? '<span>' + context + '</span>' : ''}
+        ${notificationTime(item.receivedAt)}
         ${message ? '<small>' + (item.userMessage ? userText(message) : safe(message)) + '</small>' : ''}
         ${action ? '<div class="inline">' + action + '</div>' : ''}
       </article>`;
@@ -173,7 +249,7 @@
   function openRoomNotifications() {
     if (!rooms.account) return;
     const seen = seenRoomNotifications();
-    const items = readRoomNotifications(seen);
+    const items = readRoomNotifications();
     const markup = roomNotificationsBody(state.trip, items, seen);
     sheetOpen('Notifications', 'Your trips',
       '<div class="stack" data-room-notifications>' + markup + '</div>' + billSignInButton());
@@ -194,7 +270,7 @@
     return seen;
   }
 
-  function refreshNotificationSheet(items = readRoomNotifications(seenRoomNotifications())) {
+  function refreshNotificationSheet(items = readRoomNotifications()) {
     const panel = sheet.open && sheet.querySelector('[data-room-notifications]');
     if (!panel) return false;
     const markup = roomNotificationsBody(state.trip, items, seenRoomNotifications());
@@ -210,9 +286,11 @@
   function updateRoomNotifications(previous) {
     if (!rooms.account) return;
     const seen = seenRoomNotifications();
-    const items = readRoomNotifications(seen);
+    const items = readRoomNotifications();
     if (refreshNotificationSheet(items)) return;
-    if (!items.some(item => !previous.has(item.id) && !seen.has(item.id))) return;
+    const incoming = items.filter(item => !previous.has(item.id) && !seen.has(item.id));
+    if (!incoming.length) return;
+    const message = incoming.some(item => item.changeRequest) ? 'New bill change request' : 'New trip notification';
     notificationAttention = true;
     clearTimeout(notificationAttentionTimer);
     notificationAttentionTimer = setTimeout(() => {
@@ -220,7 +298,12 @@
       app.querySelector?.('.trip-bell')?.classList.remove('attention');
     }, 1800);
     render();
-    notice('New trip notification');
+    const sheetAlert = sheet.open && sheet.querySelector('[data-sheet-notification]');
+    if (sheetAlert) {
+      sheetAlert.querySelector('[role="status"]').textContent = ui(message);
+      sheetAlert.hidden = false;
+    }
+    notice(message);
   }
 
   function openRoomNotification(id) {
@@ -233,5 +316,6 @@
     render();
     window.scrollTo(0, 0);
     if (['wallet', 'split'].includes(item.view)) refreshVault();
+    if (item.view === 'split') refreshRoomFunding();
     if (item.billId) roomBillDetail(item.billId);
   }

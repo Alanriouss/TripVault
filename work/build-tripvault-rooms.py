@@ -41,13 +41,44 @@ replace('</head>', '''<style>
 .trip-profile .btn { flex-shrink: 0; }
 .trip-profile .avatar { width: 32px; height: 32px; flex-shrink: 0; }
 .btn.rename-member { border-color: #cbbaf7; }
-.ui-language { min-width: 0; width: auto; margin: 0; padding: 0 8px; min-height: 44px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); color: var(--ink); font: 650 13px Inter, sans-serif; }
+.language-select { position: relative; display: inline-flex; align-items: center; color: var(--accent-dark); }
+.language-select::after { content: ''; position: absolute; inset-inline-end: 12px; top: calc(50% - 5px); width: 6px; height: 6px; border-right: 1.5px solid; border-bottom: 1.5px solid; transform: rotate(45deg); pointer-events: none; }
+.ui-language { appearance: none; min-width: 0; width: auto; margin: 0; min-height: 44px; padding: 0 28px 0 12px; border: 1px solid transparent; border-radius: 12px; background: var(--tint); color: inherit; font: 650 13px Inter, sans-serif; cursor: pointer; }
+.ui-language option { background: var(--paper); color: var(--ink); }
+.ui-language:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .header .breadcrumb { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .wallet-actions { margin-top: 4px; }
 .wallet-utilities { padding-top: 8px; border-top: 1px solid var(--line); }
+.room-final-split { gap: 12px; }
+.split-payment { border-top: 3px solid var(--accent); }
+.split-payment > h2, .split-breakdown h2 { font-size: clamp(18px, 2.2vw, 22px); }
+.split-payment .subtitle, .split-breakdown .subtitle { color: var(--muted); }
+.split-date { font-weight: 650; }
+.split-amount { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; padding: 10px 12px; background: var(--tint); color: var(--accent-dark); border-radius: 10px; }
+.split-amount strong { font-size: 1.1rem; font-variant-numeric: tabular-nums; }
+.split-actions .btn { padding-inline: 16px; white-space: normal; }
+.split-utilities .btn { white-space: normal; }
+.split-details { border-top: 1px solid var(--line); }
+.split-details summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; cursor: pointer; color: var(--accent-dark); font-size: 14px; font-weight: 700; list-style: none; }
+.split-details summary::-webkit-details-marker { display: none; }
+.split-details summary::after { content: ''; width: 7px; height: 7px; margin-inline-end: 3px; border-right: 2px solid; border-bottom: 2px solid; transform: rotate(45deg); }
+.split-details[open] summary::after { transform: rotate(225deg); }
+.split-detail-body { padding-bottom: 6px; overflow-wrap: anywhere; }
+.split-detail-body .row { padding: 8px 0; }
+.split-breakdown { row-gap: 6px; }
+.split-breakdown .panel-head { margin: 0; }
+@media (max-width: 520px) {
+  .split-actions .btn { width: 100%; }
+}
 .bill-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .bill-removal-actions { margin-top: 4px; padding-top: 10px; border-top: 1px solid var(--line); }
 .bill-removal-actions.solo { margin: 0; padding: 0; border: 0; }
+.bill-cancellation-note h3 { margin-bottom: 4px; }
+.bill-cancellation-reason { margin-top: 4px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.bill-suggestion { display: grid; gap: 4px; padding: 10px 0; }
+.bill-suggestion + .bill-suggestion { border-top: 1px solid var(--line); }
+.bill-suggestion .inline { margin-top: 4px; }
+.notification-tools { justify-content: flex-end; }
 .btn.trip-bell { position: relative; padding: 0; width: 44px; flex: 0 0 44px; color: var(--accent-dark); }
 .trip-bell-dot { position: absolute; top: 7px; inset-inline-end: 7px; width: 10px; height: 10px; border: 2px solid white; border-radius: 50%; background: var(--danger); }
 .trip-bell.attention svg { transform-origin: 50% 20%; animation: notification-ring 550ms ease-in-out 3; }
@@ -66,6 +97,7 @@ replace('</head>', '''<style>
 .trip-notification { width: 100%; display: grid; gap: 4px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); color: var(--ink); text-align: start; overflow-wrap: anywhere; }
 .trip-notification.unread { background: var(--tint); }
 .trip-notification small { color: var(--muted); }
+.trip-notification .notification-time { font-size: 12px; font-variant-numeric: tabular-nums; }
 .trip-notification .inline { margin-top: 4px; }
 .fund-summary { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 20px; }
 .fund-summary > strong { color: var(--accent-dark); font-size: 1.25rem; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
@@ -100,6 +132,13 @@ replace("const disconnected = () => { clearWallet(); render(); };", "const disco
 replace("      case 'fuji-disconnect': clearWallet(); render(); break;", "      case 'fuji-disconnect': clearWallet(); roomWalletChanged(); render(); break;")
 replace("Open TripVault through the Firefox launcher to use it at http://127.0.0.1:8787/.", "Open TripVault through the Rooms launcher to use it at http://127.0.0.1:8788/.")
 replace("      walletSession.account = '';\n      walletSession.chain = '';\n      walletStatus", "      walletSession.account = '';\n      walletSession.chain = '';\n      roomWalletChanged();\n      walletStatus")
+replace("  function walletError(error) {", """  function walletAccessDenied(error) {
+    return Number(error?.code) === 4100
+      || /(?:account|method).*not been authorized/i.test(error?.shortMessage || error?.message || '');
+  }
+
+  function walletError(error) {
+    if (walletAccessDenied(error)) return 'Allow TripVault to use this account in your wallet, then try again.';""")
 replace("""    const trip = state.trip?.id === tripId ? state.trip : state.trips.find(item => item.id === tripId);
     if (!trip) return;
     trip.fuji = { ...trip.fuji, lastTx: tx };""", """    const trip = state.trip?.id === tripId ? state.trip : availableTrips().find(item => item.id === tripId);
@@ -219,6 +258,7 @@ replace("  function screen(){return ({overview,people,bills,split,wallet}[state.
     if (state.trip.shared) {
       if (state.view === 'overview') return roomOverview();
       if (state.view === 'people') return roomMembers(state.trip);
+      if (state.view === 'split') return roomFinalSplit(state.trip);
       if (state.view === 'wallet') return fujiPanel();
     }
     return ({ overview, people, bills, split, wallet }[state.view] || overview)();
@@ -286,11 +326,14 @@ replace("    if (act === 'room-copy') return copyRoomInvite(trip);", """    if (
     if (act === 'room-funding-refresh') return refreshRoomFunding();
     if (act === 'room-rename' || act === 'room-rename-member') return showRoomRename(trip, act);
     if (act === 'room-reauthenticate') return reauthenticateRoom();
+    if (act === 'room-wallet-access') return restoreRoomWalletAccess();
     if (['bill-edit', 'bill-feedback', 'bill-cancel-yes', 'bill-cancel-no'].includes(act)) return roomBillAction(act, Number(id));
+    if (act === 'bill-feedback-vote') return respondToBillFeedback(Number(id), element.dataset);
     if (act === 'send-top-up-reminder') return sendBillTopUpReminder(element);
     if (act === 'open-top-up-reminder') return openTopUpReminder(id);
     if (act === 'pay-top-up-reminder') return payTopUpReminder(id, element.dataset.units);
     if (act === 'room-notifications') return openRoomNotifications();
+    if (act === 'clear-room-notifications') return clearRoomNotifications();
     if (act === 'open-room-notification') return openRoomNotification(id);
     if (act === 'room-funding-top-up') return topUpRoomFunding(element);""")
 replace("disabled:!!t.settled})}</div><section class=\"panel\"><div class=\"panel-head\"><h2>Trip expenses",
@@ -308,7 +351,15 @@ replace('name="participant" value="${m.id}" checked', 'name="participant" value=
 replace('<p class="notice">No recipient wallet is needed: the payer is recorded now. USDC recipients are calculated automatically in Final split.</p>',
         """${t.shared ? '<div id="bill-funding-status" aria-live="polite"></div><p id="bill-reminder-feedback" role="status"></p>' : '<p class="notice">USDC recipients are calculated automatically in Final split.</p>'}""")
 replace('form="bill-form">Save bill</button>`)}', 'form="bill-form">Save bill</button>`);\n    if (t.shared) updateBillFundingForm();\n  }')
-replace('    app.innerHTML = header();', '    app.innerHTML = header();\n    updateBillFundingForm();\n    updateRoomSignInButton();')
+replace('    app.innerHTML = header();', """    const split = app.querySelector?.('[data-split-trip]');
+    const openDetails = new Set(state.view === 'split' && split?.dataset.splitTrip === state.trip?.id
+      ? [...split.querySelectorAll('details[data-split-detail][open]')].map(item => item.dataset.splitDetail) : []);
+    app.innerHTML = header();
+    for (const detail of app.querySelectorAll?.('details[data-split-detail]') || []) {
+      if (openDetails.has(detail.dataset.splitDetail)) detail.open = true;
+    }
+    updateBillFundingForm();
+    updateRoomSignInButton();""")
 replace("            ${content}\n          </main>", """            ${trip?.shared ? roomTripToolbar(trip) : ''}
             ${trip?.shared && !rooms.token ? '<p class="notice warn">Your room sign-in expired. ' + btn('Sign in again', 'room-reauthenticate', { tone: 'secondary' }) + '</p>' : ''}
             ${content}
@@ -332,10 +383,20 @@ replace("    if (trip.settled || (trip.approvalMode === 'organizer' && state.act
 replace("    if (bill.approvals.includes(state.actor) === approve) return;",
         "    if (!trip.shared && bill.approvals.includes(state.actor) === approve) return;")
 replace("'fuji-link-form', 'room-form'].includes(form.id)",
-        "'fuji-link-form', 'room-form', 'bill-feedback-form', 'room-rename-form'].includes(form.id)")
+        "'fuji-link-form', 'room-form', 'bill-feedback-form', 'bill-cancellation-form', 'room-rename-form'].includes(form.id)")
 replace("    else if (form.id === 'fuji-link-form') linkExistingVault(data, fail);", """    else if (form.id === 'bill-feedback-form') submitBillFeedback(data, fail);
+    else if (form.id === 'bill-cancellation-form') submitBillCancellation(data, fail);
     else if (form.id === 'room-rename-form') submitRoomRename(data, fail);
     else if (form.id === 'fuji-link-form') linkExistingVault(data, fail);""")
+submit_start = source.index("  document.addEventListener('submit',")
+submit_end = source.index("\n  window.addEventListener('storage',", submit_start)
+submit_handler = source[submit_start:submit_end].replace('form.id', 'formId').replace(
+    '    const form = event.target;\n',
+    "    const form = event.target;\n"
+    "    // A form control named id can shadow the form's id property.\n"
+    "    const formId = form.getAttribute('id');\n",
+)
+source = source[:submit_start] + submit_handler + source[submit_end:]
 replace("""    const calldata = '0x' + VAULT.bytecode + abiWord(128) + abiWord(start) + abiWord(end)
       + abiWord(trip.minimumUnits) + abiArray(members);""", """    const deadline = Math.floor(Date.parse(trip.depositDeadline) / 1000);
     if (deadline && Date.now() >= deadline * 1000) return fail('The deposit deadline has passed.');
@@ -415,6 +476,10 @@ replace("function sheetOpen(title,subtitle,body,footer='',language='en'){sheet.l
         "function sheetOpen(title,subtitle,body,footer='',language=null){sheet.lang=language || siteLanguage;")
 replace('<h2 id="sheet-title">${safe(title)}</h2><p>${safe(subtitle)}</p>',
         '<h2 id="sheet-title">${sheetText(title)}</h2><p>${sheetText(subtitle)}</p>')
+replace('<div class="sheet-body">${body}</div>${footer?', '''<div class="sheet-body">
+  <div class="notice" data-sheet-notification hidden><p role="status"></p>${btn('Open notifications', 'room-notifications', { tone: 'secondary' })}</div>
+  ${body}
+</div>${footer?''')
 replace("if(!sheet.open)sheet.showModal();sheet.scrollTop=0}",
         "if(!language)localizeUI(sheet);if(!sheet.open)sheet.showModal();sheet.scrollTop=0}")
 replace("toast.textContent=s;", "toast.textContent=ui(s);")
@@ -475,7 +540,8 @@ replace("        fx = quote;\n        lockQuote(trip, quote);",
 replace("  refreshFX();\n  if (!demoMode) enableRooms();",
         "  if (!demoMode) {\n    refreshFX();\n    enableRooms();\n  }")
 replace("  discoverWallets();", "  if (!demoMode) discoverWallets();")
-replace("  function fujiPanel(section = 'wallet') {\n    const trip", "  function fujiPanel(section = 'wallet') {\n    if (demoMode) return '';\n    const trip")
+replace("  function fujiPanel(section = 'wallet', review = null) {\n    const trip",
+        "  function fujiPanel(section = 'wallet', review = null) {\n    if (demoMode) return '';\n    const trip")
 replace('!rooms.online && window.location?.protocol', '!demoMode && !rooms.online && window.location?.protocol')
 
 (root / 'outputs/TripVault_Rooms_v9.html').write_text(source)

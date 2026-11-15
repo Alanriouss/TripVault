@@ -8,15 +8,24 @@ const origin = 'http://127.0.0.1:8788';
 
 function providerFor(wallet, readChain) {
   let signatures = 0;
+  let denyNextSignature = false;
+  let accountRequests = 0;
   const account = wallet.address.toLowerCase();
   return {
     isMetaMask: true,
     signatures: () => signatures,
+    denyNextSignature() { denyNextSignature = true; },
+    accountRequests: () => accountRequests,
     async request({ method, params }) {
       if (method === 'eth_chainId') return '0xa869';
+      if (method === 'eth_requestAccounts') accountRequests++;
       if (method === 'eth_accounts' || method === 'eth_requestAccounts') return [account];
       if (method === 'personal_sign') {
         assert.equal(params[1], account);
+        if (denyNextSignature) {
+          denyNextSignature = false;
+          throw Object.assign(new Error('The requested account and/or method has not been authorized by the user.'), { code: 4100 });
+        }
         signatures++;
         const message = new TextDecoder().decode(getBytes(params[0]));
         assert.equal(message.split(' wants you to sign in')[0], origin);
@@ -89,10 +98,20 @@ export async function testRoomsUi({ launch, flush, start, end }) {
   assert.match(owner.sheet.innerHTML, /name="depositDeadline"/);
   assert.match(owner.sheet.innerHTML, /The trip is cancelled if anyone is below the minimum/);
   assert.match(owner.sheet.innerHTML, /After this time, the organizer can share the final amounts/);
-  owner.submit('room-form', {
+  const createFields = {
     name: 'Room UI check', location: '', displayName: 'Owner',
     minimum: '5', mode: 'everyone', depositDeadline, startTime: start, endTime: end,
-  });
+  };
+  ownerProvider.denyNextSignature();
+  const accessError = { textContent: '' };
+  owner.submit('room-form', createFields, accessError);
+  await flush();
+  assert.match(accessError.textContent, /Allow TripVault to use this account/);
+  assert.match(owner.sheet.innerHTML, /data-act="room-wallet-access"/);
+  owner.click('room-wallet-access');
+  await flush();
+  assert.equal(ownerProvider.accountRequests(), 2);
+  owner.submit('room-form', createFields);
   await flush();
   assert.match(owner.page.innerHTML, /Invite members/);
   assert.match(owner.page.innerHTML, /All trips/);
@@ -119,6 +138,12 @@ export async function testRoomsUi({ launch, flush, start, end }) {
   assert.match(guest.sheet.innerHTML, /Six-digit room code/);
   guest.submit('room-form', { key: code, displayName: 'Guest via code' });
   await flush();
+  assert.match(guest.sheet.innerHTML, /Cách dùng TripVault/);
+  guest.click('close-sheet');
+  guest.click('room-join');
+  guest.submit('room-form', { key: code, displayName: 'Guest via code' });
+  await flush();
+  assert.equal(guest.sheet.open, false);
   assert.match(guest.page.innerHTML, /Guest via code · You/);
   assert.match(guest.page.innerHTML, /data-view="people"[^>]*>View members<\/button>/);
   await owner.poll();
@@ -148,6 +173,8 @@ export async function testRoomsUi({ launch, flush, start, end }) {
   assert.doesNotMatch(friend.sheet.innerHTML, /Six-digit room code/);
   friend.submit('room-form', { key, displayName: 'Guest via link' });
   await flush();
+  assert.match(friend.sheet.innerHTML, /Cách dùng TripVault/);
+  friend.click('close-sheet');
   await owner.poll();
   await guest.poll();
   assert.match(owner.page.innerHTML, /3 of 12/);
@@ -246,6 +273,9 @@ export async function testRoomsUi({ launch, flush, start, end }) {
   assert.equal(oneBrowser.button('room-end'), undefined);
   oneBrowser.view('split');
   assert.match(oneBrowser.page.innerHTML, /Group payments/);
+  assert.match(oneBrowser.page.innerHTML, /<details class="split-details" data-split-detail="wallet">/);
+  assert.match(oneBrowser.page.innerHTML, /<details class="split-details" data-split-detail="rate">/);
+  assert.doesNotMatch(oneBrowser.page.innerHTML, /Review trip expenses/);
   assert.ok(oneBrowser.button('fuji-deploy'));
   assert.doesNotMatch(oneBrowser.page.innerHTML, /Group payments can start after/);
 
@@ -406,6 +436,8 @@ async function testMemberDeposit({ launch, flush, start, end, cancelAtDeadline =
   await connect(guest);
   guest.submit('room-form', { key: code, displayName: 'Xu' });
   await flush();
+  assert.match(guest.sheet.innerHTML, /Cách dùng TripVault/);
+  guest.click('close-sheet');
   guest.view('wallet');
   assert.match(guest.button('fuji-deposit'), /disabled/);
   await browser.poll();
@@ -630,6 +662,11 @@ async function testMemberDeposit({ launch, flush, start, end, cancelAtDeadline =
   assert.equal(vaultEnd, chainTime);
   assert.match(browser.page.innerHTML, /Trip ended early/);
   await guest.poll();
+  guest.click('room-notifications');
+  const endNotification = guest.sheet.innerHTML.match(/data-act="open-room-notification"\s+data-id="([^"]+:ended)"/)[1];
+  assert.match(guest.sheet.innerHTML, /Trip ended early[\s\S]*?Open Final split/);
+  guest.click('open-room-notification', { id: endNotification });
+  assert.match(guest.page.innerHTML, /<h1>Final split<\/h1>/);
   browser.view('bills');
   await flush();
   assert.match(browser.page.innerHTML, /Dinner/);
@@ -655,6 +692,8 @@ async function testMemberDeposit({ launch, flush, start, end, cancelAtDeadline =
   guest.submit('bill-feedback-form', { id: '2', comment: 'I paid separately' });
   await flush();
   assert.match(guest.sheet.innerHTML, /I paid separately/);
+  assert.match(guest.sheet.innerHTML, /Suggestion sent. The bill creator/);
+  assert.match(guest.toast.textContent, /Suggestion sent. The bill creator/);
   assert.doesNotMatch(guest.page.innerHTML, /Your room sign-in expired/);
   await guest.poll();
   guest.click('room-notifications');
@@ -662,6 +701,7 @@ async function testMemberDeposit({ launch, flush, start, end, cancelAtDeadline =
   guest.click('close-sheet');
   browser.view('split');
   await flush();
+  assert.match(browser.page.innerHTML, /split-actions[^>]*>[\s\S]*?data-act="navigate" data-view="bills"[^>]*>Review open bills/);
   browser.click('fuji-refresh');
   assert.match(browser.page.innerHTML, /Updating status/);
   await flush();
@@ -671,14 +711,24 @@ async function testMemberDeposit({ launch, flush, start, end, cancelAtDeadline =
   browser.click('room-notifications');
   assert.match(browser.sheet.innerHTML, /Bill change requested/);
   assert.match(browser.sheet.innerHTML, /I paid separately/);
+  assert.match(browser.sheet.innerHTML, /<small class="notification-time"><time datetime="[^"]+">/);
   assert.doesNotMatch(browser.page.innerHTML, /class="trip-bell-dot"/);
   const notificationId = browser.sheet.innerHTML.match(/data-act="open-room-notification"\s+data-id="([^"]+:feedback:[^"]+)"/)[1];
   browser.click('open-room-notification', { id: notificationId });
   assert.match(browser.sheet.innerHTML, /data-bill-review="2"/);
   assert.match(browser.sheet.innerHTML, /Suggested changes/);
+  const [,, proposalId] = browser.sheet.innerHTML.match(/data-act="bill-feedback-vote"[^>]*data-author="(m1)" data-suggestion="([^"]+)"/);
+  browser.click('bill-feedback-vote', { id: '2', author: 'm1', suggestion: proposalId, agree: 'false' });
+  await flush();
+  assert.match(browser.sheet.innerHTML, /Disagreed/);
+  await guest.poll();
+  guest.click('room-notifications');
+  assert.match(guest.sheet.innerHTML, /Someone disagreed with the suggestion[\s\S]*?I paid separately/);
+  guest.click('close-sheet');
   await browser.poll();
   assert.doesNotMatch(browser.page.innerHTML, /class="trip-bell-dot"/);
   browser.click('close-sheet');
+  serverTime += 5 * 60_000;
   guest.click('bill-feedback', { id: '2' });
   guest.submit('bill-feedback-form', { id: '2', comment: 'Please remove my share' });
   await flush();
@@ -693,11 +743,14 @@ async function testMemberDeposit({ launch, flush, start, end, cancelAtDeadline =
   });
   await flush();
   assert.match(browser.page.innerHTML, /<h1>A different room<\/h1>/);
+  browser.now(new Date(serverTime + 2 * 60_000).toISOString());
   await browser.poll();
-  assert.match(browser.toast.textContent, /New trip notification/);
+  assert.match(browser.toast.textContent, /New bill change request/);
   assert.match(browser.page.innerHTML, /class="trip-bell-dot"/);
   browser.click('room-notifications');
   assert.match(browser.sheet.innerHTML, /Please remove my share/);
+  assert.match(browser.sheet.innerHTML, /2 minutes ago/);
+  assert.ok(browser.sheet.innerHTML.indexOf('Please remove my share') < browser.sheet.innerHTML.indexOf('I paid separately'));
   const newNotificationId = browser.sheet.innerHTML.match(/data-act="open-room-notification"\s+data-id="([^"]+:feedback:[^"]+)"/)[1];
   browser.click('open-room-notification', { id: newNotificationId });
   assert.match(browser.sheet.innerHTML, /Please remove my share/);
@@ -709,15 +762,47 @@ async function testMemberDeposit({ launch, flush, start, end, cancelAtDeadline =
   assert.match(browser.page.innerHTML, /Snack/);
   browser.click('room-notifications');
   assert.match(browser.sheet.innerHTML, /Please remove my share/);
+  assert.match(browser.sheet.innerHTML, /Clear notifications/);
+  browser.click('clear-room-notifications');
+  assert.match(browser.sheet.innerHTML, /You have no trip notifications/);
+  assert.doesNotMatch(browser.sheet.innerHTML, /Please remove my share/);
+  const dismissed = browser.storage.get('tripvault-notifications-dismissed:' + owner.address.toLowerCase());
+  assert.ok(JSON.parse(dismissed).some(id => id.includes(':feedback:2:')));
+  await browser.poll();
+  browser.click('close-sheet');
+  browser.click('room-notifications');
+  assert.match(browser.sheet.innerHTML, /You have no trip notifications/);
   browser.click('close-sheet');
   browser.click('bill-cancel-yes', { id: '2' });
+  assert.match(browser.sheet.innerHTML, /Reason for cancellation/);
+  browser.submit('bill-cancellation-form', { id: '2', reason: 'Both of us recorded this expense.' });
   await flush();
   assert.match(browser.sheet.innerHTML, /1 of 2 agreed/);
+  await guest.poll();
+  guest.click('room-notifications');
+  assert.match(guest.sheet.innerHTML, /Bill removal requested[\s\S]*?Both of us recorded this expense/);
+  guest.click('close-sheet');
+  guest.click('bill-detail', { id: '2' });
+  assert.match(guest.sheet.innerHTML, /Reason for cancellation[\s\S]*?Both of us recorded this expense/);
+  guest.click('bill-cancel-no', { id: '2' });
+  await flush();
+  await browser.poll();
+  browser.click('room-notifications');
+  assert.match(browser.sheet.innerHTML, /Bill cancellation declined/);
+  browser.click('close-sheet');
+  browser.click('bill-cancel-yes', { id: '2' });
+  browser.submit('bill-cancellation-form', { id: '2', reason: 'Both of us recorded this expense.' });
+  await flush();
   await guest.poll();
   guest.click('bill-cancel-yes', { id: '2' });
   await flush();
   assert.match(guest.sheet.innerHTML, /Rejected · Handle separately/);
+  assert.match(guest.sheet.innerHTML, /Both of us recorded this expense/);
   await browser.poll();
+  browser.click('room-notifications');
+  assert.match(browser.sheet.innerHTML, /Bill removed/);
+  assert.doesNotMatch(browser.sheet.innerHTML, /Please remove my share/);
+  browser.click('close-sheet');
   browser.view('split');
   await flush();
   assert.doesNotMatch(browser.page.innerHTML, /Finish open bill reviews/);
@@ -733,4 +818,5 @@ async function testMemberDeposit({ launch, flush, start, end, cancelAtDeadline =
   console.log('PASS: overview updates from setup to funding, bills and final payments as the room and Fuji state change');
   console.log('PASS: funded organizer can end early from Overview; existing bills remain reviewable');
   console.log('PASS: manual status refresh gets remote feedback; only recipients get unread notifications with a direct link to the bill');
+  console.log('PASS: clearing existing notifications keeps new cancellation notices visible; bills are rejected after all votes and keep the reason');
 }
