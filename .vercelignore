@@ -5,3 +5,6 @@ outputs/
 docs/
 scratch/
 *.sqlite3*
+Dockerfile
+docker-compose.yml
+deploy/

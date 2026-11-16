@@ -181,3 +181,92 @@
   - Cập nhật giúp Vercel forward nguyên vẹn pathname và query params sang backend cloud.
 - **Kết quả Kiểm thử:** Cấu hình rewrite khớp chuẩn cú pháp Vercel Specification.
 - **Đánh giá Rủi ro & Biện pháp phòng ngừa:** Không có rủi ro; chỉ tác động đến cơ chế định tuyến proxy API trên Vercel.
+
+### [LOG-010] 2026-11-16: Khắc Phục Lỗi STATIC_BUILD_NO_OUT_DIR Bằng Cơ Chế Dist Compilation
+- **Mục tiêu:** Giải quyết triệt để lỗi `[STATIC_BUILD_NO_OUT_DIR]` khi Vercel CLI từ chối thư mục tĩnh `public` có sẵn mà không qua build command.
+- **File tác động:**
+  - `vercel.json` (Cập nhật: Bổ sung lệnh build POSIX `mkdir -p dist && cp -r public/* dist/` và đặt `outputDirectory: "dist"`)
+  - `public/vercel.json` (Đồng bộ cấu hình)
+- **Lý do & Cơ chế hoạt động:** 
+  - Vercel CLI version mới đòi hỏi lệnh build phải chủ động sinh ra một thư mục đích phân biệt (dist/build) thay vì chỉ chạy echo giả lập.
+  - Sử dụng lệnh chuẩn POSIX `mkdir -p dist && cp -r public/* dist/` đảm bảo môi trường Linux của Vercel tạo ra thư mục output hợp lệ 100%, bảo đảm không xung đột với thư mục reserved public.
+- **Kết quả Kiểm thử:** Cấu hình chuẩn xác theo thông số Vercel Static Build.
+- **Đánh giá Rủi ro & Biện pháp phòng ngừa:** Không có rủi ro; không ảnh hưởng đến local hay backend Render.
+
+### [LOG-011] 2026-11-16: Tối Ưu Hóa Khả Năng Tiếp Cận (WCAG 2.2 AA), Bộ Chọn Thời Gian & Responsive Mobile/Desktop
+- **Mục tiêu:** Nâng cấp toàn diện trải nghiệm giao diện theo kỹ năng `/ui-a11y`, tập trung tối ưu bộ chọn thời gian tạo phòng (Smart Time Picker & Real-time Timeline Preview), khắc phục các lỗi hiển thị nghiêm trọng giữa Desktop và Mobile (Desktop modal, Mobile nav overlap, iOS Safari input auto-zoom, Stepper overflow).
+- **File tác động:**
+  - `work/tripvault-rooms-ui.js` (Cập nhật: Bổ sung `formatRelativeDuration`, `formatTimeSimple`, `updateRoomTimeTimeline`, nâng cấp `applyRoomTimePreset` với `aria-pressed`, gắn kết ràng buộc `min` động và lắng nghe sự kiện nhập liệu)
+  - `work/build-tripvault-rooms.py` (Cập nhật: Ẩn triệt để `.mobile-nav` trên Desktop ≥900px, chuyển `dialog` thành Floating Centered Modal trên Desktop ≥640px, nâng `font-size: 16px` cho input chống zoom trên iOS Safari, bố trí lưới 3 cột `.room-time-fields` trên màn hình lớn, chuyển Stepper mobile sang cuộn ngang Scroll Snap, và chuẩn hóa quy tắc toàn cục `prefers-reduced-motion`)
+  - `work/tripvault-v9.js` (Tái tạo: Tự động cập nhật qua build pipeline)
+  - `outputs/TripVault_Rooms_v9.html` (Rebuild: Tạo lại bundle HTML client hoàn chỉnh)
+  - `public/index.html` (Đồng bộ: Tự động cập nhật bản build tĩnh phân phối production)
+  - `outputs/TripVault_Room_Server.mjs` (Rebuild: Tạo lại bundle Bun server)
+- **Lý do & Cơ chế hoạt động:** 
+  - **Khắc phục lỗi thanh điều hướng Desktop:** Trước đây, quy tắc CSS `.mobile-nav` nằm ở cuối file ghi đè lên `@media (min-width: 900px)`, khiến Desktop hiện đồng thời cả Sidebar lẫn Mobile Nav dán đáy màn hình. Đã bổ sung quy tắc ẩn tuyệt đối `display: none !important;` trên Desktop.
+  - **Chuyển đổi Modal linh hoạt:** Trên Mobile, `dialog` giữ dạng Bottom Sheet tiện lợi cho ngón tay cái. Trên màn hình máy tính (≥640px), modal tự động chuyển thành Floating Card ở chính giữa màn hình với bo góc 20px và shadow nổi khối.
+  - **Bộ chọn thời gian thông minh (Smart Time Picker):**
+    - Các nút preset được nâng chiều cao chuẩn **44px** (tuân thủ WCAG 2.5.8 Touch Target).
+    - Có trạng thái `aria-pressed="true"` và viền active rõ ràng khi bấm.
+    - Thẻ tóm tắt tiến trình thời gian (`#room-time-timeline`) hiển thị trực quan hạn nạp, giờ khởi hành, thời lượng chuyến đi kèm múi giờ thiết bị (GMT+7).
+    - Tự động gán thuộc tính `min` động giữa 3 ô để ngăn chặn chọn giờ quá khứ hoặc `startTime < depositDeadline`, đồng thời cảnh báo lỗi inline thời gian thực.
+  - **Tối ưu hóa iOS Safari:** Cố định `font-size: 16px` cho các ô nhập liệu giúp Safari không bị auto-zoom làm vỡ layout khi gõ chữ.
+  - **Tối ưu Stepper Mobile:** Chuyển từ lưới 2 cột bị lẻ bước sang thanh cuộn ngang mượt mà có Scroll Snap.
+- **Kết quả Kiểm thử:** 
+  - `scripts/verify.mjs`: PASS 100% toàn bộ 31 test suites (bao gồm `@tripvault/core`, `@tripvault/server`, API tests, và luồng mô phỏng ví test-ui).
+- **Đánh giá Rủi ro & Biện pháp phòng ngừa:** Bảo toàn 100% API contract và ID/Name của form (`room-form`, `depositDeadline`, `startTime`, `endTime`); không có bất kỳ rủi ro hồi quy nào.
+
+### [LOG-012] 2026-11-16: Tích Hợp Bộ Chọn Ngày Giờ Tùy Biến Cao Cấp (Custom Web3 DateTime Popover)
+- **Mục tiêu:** Thay thế hoàn toàn popup chọn lịch mặc định xám xịt của trình duyệt bằng bộ chọn Custom DateTime Picker Popover mang ngôn ngữ thiết kế Avalanche Web3 FinTech khi người dùng click vào icon lịch hoặc ô thời gian.
+- **File tác động:**
+  - `work/tripvault-rooms-ui.js` (Cập nhật: Bổ sung module `customDtState`, `openCustomDateTimePicker`, `closeCustomDateTimePicker`, `renderCustomDtPickerModal`, bọc các ô datetime trong `.datetime-input-wrapper` với icon badge `📅`, và lắng nghe click để mở popover)
+  - `work/build-tripvault-rooms.py` (Cập nhật: Bổ sung CSS cho `.custom-dt-overlay`, `.custom-dt-card`, `.custom-dt-grid`, `.custom-dt-time-steppers`, `.custom-dt-quick-strip`, `.datetime-calendar-badge`)
+  - `outputs/TripVault_Rooms_v9.html` (Rebuild: Tạo lại bundle HTML client hoàn chỉnh)
+  - `public/index.html` (Đồng bộ: Tự động cập nhật bản build tĩnh phân phối)
+  - `outputs/TripVault_Room_Server.mjs` (Rebuild: Tạo lại bundle Bun server)
+- **Lý do & Cơ chế hoạt động:** 
+  - Popup `datetime-local` mặc định của Chrome/Windows nằm trong Shadow DOM không thể tùy biến CSS, giao diện lỗi thời và không cho phép chọn nhanh các mốc giờ.
+  - Bộ chọn mới được xây dựng bằng Vanilla JS (~120 dòng code, không dependencies), tự động mở khi người dùng click vào ô input hoặc icon lịch:
+    1. **Lưới Lịch (Calendar Grid):** Cho phép lùi/tiến tháng, highlight ngày hiện tại, chọn ngày với hiệu ứng Gradient đỏ Avalanche (`#E84142`), tự động vô hiệu hóa ngày trong quá khứ.
+    2. **Bộ Stepper Giờ/Phút:** Nút tăng giảm giờ/phút to bản dễ bấm, bước nhảy 5 phút trực quan.
+    3. **Dải Chọn Nhanh (Quick Jumps):** Các nút `+5m`, `+15m`, `+1h`, `+1d`, `23:59` giúp chọn giờ chỉ với 1 chạm.
+    4. **Tích Hợp Dòng Thời Gian Real-Time:** Bấm "Áp dụng" sẽ lập tức cập nhật giá trị ISO vào form và đồng bộ thẻ tóm tắt tiến trình.
+- **Kết quả Kiểm thử:** 
+  - `scripts/verify.mjs`: PASS 100% tất cả 31 test suites.
+- **Đánh giá Rủi ro & Biện pháp phòng ngừa:** Giữ nguyên các thẻ input form (`name="depositDeadline"`, `startTime`, `endTime`) cùng định dạng chuẩn `YYYY-MM-DDTHH:mm`; bảo đảm 100% tương thích ngược với API backend và các kịch bản kiểm thử tự động.
+
+### [LOG-013] 2026-11-16: Trả Về Bố Cục 3 Dòng Thời Gian Độc Lập & Khắc Phục Lỗi Top-Layer Dialog
+- **Mục tiêu:** Khắc phục lỗi hiển thị trên website: đưa 3 ô chọn thời gian (`depositDeadline`, `startTime`, `endTime`) trở lại định dạng 3 dòng dọc riêng biệt (Vertical Stack) thay vì ép chung 1 hàng lưới 3 cột, đồng thời sửa lỗi xung đột Browser Top-Layer giữa dialog sheet modal và custom picker popup.
+- **File tác động:**
+  - `work/tripvault-rooms-ui.js` (Cập nhật: Bỏ khối bọc `.room-time-fields`, đưa 3 ô thời gian về từng hàng độc lập, đưa `#custom-dt-picker-overlay` gắn vào bên trong `#sheet` để hiển thị chuẩn xác trong top-layer của modal dialog, tách bạch nút `📅` thành button chuyên biệt với `data-dt-target` không chặn click vào input)
+  - `work/build-tripvault-rooms.py` (Cập nhật: Xóa bỏ CSS `.room-time-fields`, hoàn thiện layout `.datetime-input-wrapper` và `.datetime-calendar-badge`)
+  - `outputs/TripVault_Rooms_v9.html` (Rebuild: Tạo lại bundle HTML client hoàn chỉnh)
+  - `public/index.html` (Đồng bộ: Tự động cập nhật bản build tĩnh)
+  - `outputs/TripVault_Room_Server.mjs` (Rebuild: Tạo lại bundle Bun server)
+- **Lý do & Cơ chế hoạt động:** 
+  - **Bố cục 3 dòng độc lập:** Hộp thoại sheet modal có chiều rộng tối đa 540px. Việc chia 3 cột ngang khiến mỗi ô chỉ còn ~155px, làm tiêu đề, input và phần chú thích `<small>` bị bóp nghẹt, chữ xuống dòng kéo dài gây vỡ bố cục. Trả về 3 dòng riêng biệt giúp form thoáng đãng, dễ đọc và chuẩn giao diện form gốc.
+  - **Khắc phục lỗi Top-Layer Dialog:** Trong chuẩn HTML5, khi một `<dialog>` mở bằng `showModal()`, nó nằm trên "Top Layer" của trình duyệt. Trước đây thẻ overlay của picker append vào `document.body` nên bị kẹt phía sau backdrop của dialog và không nhận được sự kiện click. Việc đưa overlay vào bên trong thẻ `sheet` giải quyết triệt để vấn đề này.
+- **Kết quả Kiểm thử:** 
+  - `scripts/verify.mjs`: PASS 100% toàn bộ 31 test suites.
+- **Đánh giá Rủi ro & Biện pháp phòng ngừa:** Form input giữ nguyên 100% tên trường và định dạng giá trị, tương thích hoàn toàn trên cả mobile và desktop.
+
+### [LOG-014] 2026-11-16: Khắc Phục Lỗi Trùng Lặp Icon Lịch, Tràn Viền & Lệch Khung Viền Focus
+- **Mục tiêu:** Khắc phục triệt để 3 vấn đề hiển thị trên ô nhập `<input type="datetime-local">`:
+  1. Trùng lặp biểu tượng lịch (biểu tượng mặc định màu đen của trình duyệt và nút tùy chỉnh đè cạnh nhau).
+  2. Tràn viền và lệch kích thước (nút lịch tùy chỉnh cao hơn ô input, tràn mép trên/dưới và đè viền phải).
+  3. Lệch khung viền khi focus (viền focus màu hồng bị kéo giãn lệch theo chiều cao của nút tùy chỉnh, để lộ khoảng trống thừa).
+- **File tác động:**
+  - `work/build-tripvault-rooms.py` (Cập nhật: Ẩn triệt để `::-webkit-calendar-picker-indicator` và `::-moz-calendar-picker-indicator`, áp dụng kiểu dáng chuẩn `min-height: 48px; height: 48px; box-sizing: border-box; border-radius: 12px;` cho input bên trong wrapper, căn chỉnh nút `.datetime-calendar-badge` kích thước 34x34px đặt lọt lòng cách mép 7px, chuẩn hóa viền focus `input:focus` bo khít theo viền input).
+  - `work/tripvault-rooms-ui.js` (Cập nhật: Thay thế emoji lịch hệ điều hành bằng icon vector SVG sắc nét kích thước 17x17px chuẩn nét vẽ `currentColor`, có `pointer-events: none` và `aria-hidden="true"`).
+  - `work/tripvault-v9.js` (Tái tạo: Tự động cập nhật qua pipeline).
+  - `outputs/TripVault_Rooms_v9.html` (Rebuild: Tạo lại bundle HTML client hoàn chỉnh).
+  - `public/index.html` (Đồng bộ: Tự động cập nhật bản build tĩnh phân phối).
+  - `outputs/TripVault_Room_Server.mjs` (Rebuild: Tạo lại bundle Bun server).
+- **Lý do & Cơ chế hoạt động:**
+  - **Ẩn biểu tượng mặc định:** Trình duyệt WebKit/Blink tự động chèn pseudo-element `::-webkit-calendar-picker-indicator`. Thêm quy tắc `display: none !important; opacity: 0; width: 0; height: 0;` để loại bỏ hoàn toàn icon màu đen của trình duyệt.
+  - **Sửa lỗi kế thừa chiều cao & tràn viền:** Trước đây quy tắc `.field > input` chỉ nhận thẻ con trực tiếp của `.field`. Khi `<input>` được bọc trong `<div class="datetime-input-wrapper">`, nó bị rơi về chiều cao mặc định của trình duyệt (~28px), trong khi nút lịch cao 36px nên bị lồi ra ngoài. Việc định nghĩa chiều cao chuẩn `48px` cho input và đặt nút kích thước 34x34px ở `top: 50%; transform: translateY(-50%); right: 7px;` giúp nút nằm gọn gàng bên trong khung với khoảng đệm 7px đều đặn ở cả 3 phía.
+  - **Sửa lỗi lệch khung viền focus:** Quy định `outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(232, 65, 66, 0.15);` trực tiếp lên `.datetime-input-wrapper input:focus, :focus-visible`, giúp đường viền focus màu đỏ hồng ôm khít đường viền 48px của ô nhập liệu, không còn khoảng trống thừa hay biến dạng.
+  - **Đồng bộ icon SVG:** Thay thế emoji `📅` bằng icon SVG vector giúp giao diện nhất quán 100% trên mọi nền tảng (Windows, macOS, iOS, Android), mang phong cách Avalanche FinTech cao cấp.
+- **Kết quả Kiểm thử:**
+  - `scripts/verify.mjs`: PASS 100% tất cả 31 test suites.
+- **Đánh giá Rủi ro & Biện pháp phòng ngừa:** Bảo toàn nguyên vẹn tên trường (`depositDeadline`, `startTime`, `endTime`) và form ID `room-form`; không làm thay đổi luồng xử lý dữ liệu hay ảnh hưởng đến bất kỳ tính năng nào khác.

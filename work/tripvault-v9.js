@@ -1459,6 +1459,347 @@
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   }
 
+  function formatRelativeDuration(ms) {
+    if (ms <= 0) return '0p';
+    if (ms < 3_600_000) return `${Math.max(1, Math.round(ms / 60_000))} phút`;
+    if (ms < 86_400_000) {
+      const h = Math.floor(ms / 3_600_000);
+      const m = Math.round((ms % 3_600_000) / 60_000);
+      return m > 0 ? `${h}h ${m}p` : `${h} giờ`;
+    }
+    const days = (ms / 86_400_000).toFixed(1).replace('.0', '');
+    return `${days} ngày`;
+  }
+
+  function formatTimeSimple(d) {
+    if (!d || isNaN(d.getTime())) return '';
+    const pad = n => String(n).padStart(2, '0');
+    return `${pad(d.getHours())}:${pad(d.getMinutes())} (${pad(d.getDate())}/${pad(d.getMonth() + 1)})`;
+  }
+
+  function updateRoomTimeTimeline(form = sheet.querySelector('#room-form')) {
+    if (!form) return;
+    const container = form.querySelector('#room-time-timeline');
+    if (!container) return;
+    const deadlineInput = form.querySelector('input[name="depositDeadline"]');
+    const startInput = form.querySelector('input[name="startTime"]');
+    const endInput = form.querySelector('input[name="endTime"]');
+    if (!deadlineInput || !startInput || !endInput) return;
+
+    const nowLocal = localDatetimeValue(0);
+    deadlineInput.min = nowLocal;
+    if (deadlineInput.value) startInput.min = deadlineInput.value;
+    if (startInput.value) endInput.min = startInput.value;
+
+    const dVal = deadlineInput.value ? new Date(deadlineInput.value) : null;
+    const sVal = startInput.value ? new Date(startInput.value) : null;
+    const eVal = endInput.value ? new Date(endInput.value) : null;
+
+    if (!dVal || !sVal || !eVal || isNaN(dVal.getTime()) || isNaN(sVal.getTime()) || isNaN(eVal.getTime())) {
+      container.innerHTML = '<p class="notice" style="margin:0;">Vui lòng chọn đủ 3 mốc thời gian để xem tiến trình.</p>';
+      return;
+    }
+
+    const now = Date.now();
+    let error = '';
+    if (dVal.getTime() <= now) {
+      error = '⚠️ Hạn nạp tiền phải ở thời điểm tương lai.';
+      deadlineInput.setAttribute('aria-invalid', 'true');
+    } else {
+      deadlineInput.removeAttribute('aria-invalid');
+    }
+
+    if (sVal.getTime() < dVal.getTime()) {
+      error = '⚠️ Giờ bắt đầu chuyến đi phải sau hạn nạp quỹ.';
+      startInput.setAttribute('aria-invalid', 'true');
+    } else {
+      startInput.removeAttribute('aria-invalid');
+    }
+
+    if (eVal.getTime() <= sVal.getTime()) {
+      error = '⚠️ Giờ kết thúc phải sau giờ bắt đầu.';
+      endInput.setAttribute('aria-invalid', 'true');
+    } else {
+      endInput.removeAttribute('aria-invalid');
+    }
+
+    const tzOffsetMinutes = -new Date().getTimezoneOffset();
+    const tzSign = tzOffsetMinutes >= 0 ? '+' : '-';
+    const tzHours = Math.floor(Math.abs(tzOffsetMinutes) / 60);
+    const tzString = `GMT${tzSign}${tzHours}`;
+
+    if (error) {
+      container.innerHTML = `<div class="timeline-header">
+          <span>⏱️ Tiến trình thời gian</span>
+          <span class="timeline-badge">${tzString}</span>
+        </div>
+        <div class="timeline-error">${error}</div>`;
+      return;
+    }
+
+    const depositWindow = formatRelativeDuration(dVal.getTime() - now);
+    const tripDuration = formatRelativeDuration(eVal.getTime() - sVal.getTime());
+
+    container.innerHTML = `<div class="timeline-header">
+        <span>⏱️ Tiến trình thời gian (Dự kiến)</span>
+        <span class="timeline-badge">${tzString}</span>
+      </div>
+      <div class="timeline-items">
+        <div class="timeline-item">
+          <strong>⏳ Hạn nạp tiền</strong>
+          <span>${formatTimeSimple(dVal)}</span>
+          <span style="color:var(--accent-dark); font-weight:600;">(còn ${depositWindow})</span>
+        </div>
+        <div class="timeline-arrow">→</div>
+        <div class="timeline-item">
+          <strong>🚀 Khởi hành</strong>
+          <span>${formatTimeSimple(sVal)}</span>
+          <span>(Mở hóa đơn & top-up)</span>
+        </div>
+        <div class="timeline-arrow">→</div>
+        <div class="timeline-item">
+          <strong>🏁 Chốt sổ & Chia tiền</strong>
+          <span>${formatTimeSimple(eVal)}</span>
+          <span style="color:var(--positive); font-weight:600;">(Thời lượng: ${tripDuration})</span>
+        </div>
+      </div>`;
+  }
+
+  let customDtState = {
+    targetName: null,
+    targetInput: null,
+    viewYear: new Date().getFullYear(),
+    viewMonth: new Date().getMonth(),
+    selectedYear: new Date().getFullYear(),
+    selectedMonth: new Date().getMonth(),
+    selectedDay: new Date().getDate(),
+    hours: new Date().getHours(),
+    minutes: Math.ceil(new Date().getMinutes() / 5) * 5 % 60,
+  };
+
+  function openCustomDateTimePicker(targetName, inputElement) {
+    if (!inputElement) return;
+    const now = new Date();
+    customDtState.targetName = targetName;
+    customDtState.targetInput = inputElement;
+
+    if (inputElement.value) {
+      const cur = new Date(inputElement.value);
+      if (!isNaN(cur.getTime())) {
+        customDtState.viewYear = cur.getFullYear();
+        customDtState.viewMonth = cur.getMonth();
+        customDtState.selectedYear = cur.getFullYear();
+        customDtState.selectedMonth = cur.getMonth();
+        customDtState.selectedDay = cur.getDate();
+        customDtState.hours = cur.getHours();
+        customDtState.minutes = cur.getMinutes();
+      }
+    } else {
+      customDtState.viewYear = now.getFullYear();
+      customDtState.viewMonth = now.getMonth();
+      customDtState.selectedYear = now.getFullYear();
+      customDtState.selectedMonth = now.getMonth();
+      customDtState.selectedDay = now.getDate();
+      customDtState.hours = now.getHours();
+      customDtState.minutes = Math.ceil(now.getMinutes() / 5) * 5 % 60;
+    }
+
+    renderCustomDtPickerModal();
+  }
+
+  function closeCustomDateTimePicker() {
+    const overlay = document.getElementById('custom-dt-picker-overlay');
+    if (overlay) overlay.remove();
+    customDtState.targetInput = null;
+  }
+
+  function renderCustomDtPickerModal() {
+    let overlay = sheet ? sheet.querySelector('#custom-dt-picker-overlay') : document.getElementById('custom-dt-picker-overlay');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'custom-dt-picker-overlay';
+      overlay.className = 'custom-dt-overlay';
+      overlay.setAttribute('role', 'dialog');
+      overlay.setAttribute('aria-modal', 'true');
+      overlay.setAttribute('aria-label', 'Chọn thời gian');
+      if (sheet) sheet.appendChild(overlay);
+      else document.body.appendChild(overlay);
+
+      overlay.addEventListener('click', e => {
+        if (e.target === overlay) closeCustomDateTimePicker();
+      });
+    }
+
+    const vi = siteLanguage === 'vi';
+    const monthNames = vi
+      ? ['Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6', 'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12']
+      : ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    const weekDays = vi ? ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'] : ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
+    const fieldTitles = {
+      depositDeadline: vi ? '⏳ Hạn chốt nạp quỹ' : '⏳ Deposit Deadline',
+      startTime: vi ? '🚀 Giờ khởi hành' : '🚀 Trip Start Time',
+      endTime: vi ? '🏁 Giờ kết thúc chuyến đi' : '🏁 Trip End Time',
+    };
+    const titleText = fieldTitles[customDtState.targetName] || (vi ? 'Chọn thời gian' : 'Select Date & Time');
+
+    const year = customDtState.viewYear;
+    const month = customDtState.viewMonth;
+    const firstDay = (new Date(year, month, 1).getDay() + 6) % 7;
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+    const now = new Date();
+    const todayY = now.getFullYear();
+    const todayM = now.getMonth();
+    const todayD = now.getDate();
+
+    let gridHtml = '';
+    for (let i = 0; i < firstDay; i++) {
+      gridHtml += '<span class="custom-dt-weekday"></span>';
+    }
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const isPast = new Date(year, month, day, 23, 59, 59) < now;
+      const isSelected = (year === customDtState.selectedYear && month === customDtState.selectedMonth && day === customDtState.selectedDay);
+      const isToday = (year === todayY && month === todayM && day === todayD);
+      const classes = ['custom-dt-day'];
+      if (isSelected) classes.push('selected');
+      if (isToday) classes.push('today');
+
+      gridHtml += `<button type="button" class="${classes.join(' ')}"${isPast ? ' disabled' : ''} data-dt-act="select-day" data-day="${day}">${day}</button>`;
+    }
+
+    const pad = n => String(n).padStart(2, '0');
+    const hoursStr = pad(customDtState.hours);
+    const minStr = pad(customDtState.minutes);
+
+    const tzOffsetMinutes = -new Date().getTimezoneOffset();
+    const tzSign = tzOffsetMinutes >= 0 ? '+' : '-';
+    const tzHours = Math.floor(Math.abs(tzOffsetMinutes) / 60);
+    const tzString = `GMT${tzSign}${tzHours}`;
+
+    overlay.innerHTML = `
+      <div class="custom-dt-card" role="document">
+        <div class="custom-dt-head">
+          <h3>${titleText}</h3>
+          <button type="button" class="btn ghost" style="width:32px;height:32px;padding:0;min-height:0;" data-dt-act="cancel" aria-label="Đóng">✕</button>
+        </div>
+        <div class="custom-dt-month-nav">
+          <button type="button" class="custom-dt-nav-btn" data-dt-act="prev-month" aria-label="Tháng trước">‹</button>
+          <strong>${monthNames[month]} ${year}</strong>
+          <button type="button" class="custom-dt-nav-btn" data-dt-act="next-month" aria-label="Tháng sau">›</button>
+        </div>
+        <div class="custom-dt-grid" role="grid">
+          ${weekDays.map(w => `<span class="custom-dt-weekday">${w}</span>`).join('')}
+          ${gridHtml}
+        </div>
+        <div class="custom-dt-time-section">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span style="font-size:12px; font-weight:700; color:var(--muted);">${vi ? '🕒 GIỜ VÀ PHÚT:' : '🕒 TIME (HOURS : MINS):'}</span>
+            <span class="timeline-badge">${tzString}</span>
+          </div>
+          <div class="custom-dt-time-steppers">
+            <div class="custom-dt-stepper">
+              <button type="button" class="custom-dt-stepper-btn" data-dt-act="hour-minus" aria-label="Giảm giờ">−</button>
+              <span class="custom-dt-stepper-value">${hoursStr}</span>
+              <button type="button" class="custom-dt-stepper-btn" data-dt-act="hour-plus" aria-label="Tăng giờ">+</button>
+            </div>
+            <span class="custom-dt-colon">:</span>
+            <div class="custom-dt-stepper">
+              <button type="button" class="custom-dt-stepper-btn" data-dt-act="min-minus" aria-label="Giảm phút">−</button>
+              <span class="custom-dt-stepper-value">${minStr}</span>
+              <button type="button" class="custom-dt-stepper-btn" data-dt-act="min-plus" aria-label="Tăng phút">+</button>
+            </div>
+          </div>
+          <div class="custom-dt-quick-strip">
+            <button type="button" class="custom-dt-quick-btn" data-dt-act="quick-add" data-min="5">+5m</button>
+            <button type="button" class="custom-dt-quick-btn" data-dt-act="quick-add" data-min="15">+15m</button>
+            <button type="button" class="custom-dt-quick-btn" data-dt-act="quick-add" data-min="60">+1h</button>
+            <button type="button" class="custom-dt-quick-btn" data-dt-act="quick-add" data-min="1440">+1d</button>
+            <button type="button" class="custom-dt-quick-btn" data-dt-act="quick-eod">23:59</button>
+          </div>
+        </div>
+        <div class="custom-dt-footer">
+          <button type="button" class="btn secondary" data-dt-act="cancel">${vi ? 'Hủy' : 'Cancel'}</button>
+          <button type="button" class="btn" data-dt-act="confirm">${vi ? 'Áp dụng' : 'Apply'}</button>
+        </div>
+      </div>
+    `;
+
+    overlay.onclick = e => {
+      const btn = e.target.closest('[data-dt-act]');
+      if (!btn) {
+        if (!e.target.closest('.custom-dt-card')) closeCustomDateTimePicker();
+        return;
+      }
+      e.stopPropagation();
+      const act = btn.dataset.dtAct;
+      if (act === 'cancel') {
+        closeCustomDateTimePicker();
+      } else if (act === 'confirm') {
+        const p = n => String(n).padStart(2, '0');
+        const formatted = `${customDtState.selectedYear}-${p(customDtState.selectedMonth + 1)}-${p(customDtState.selectedDay)}T${p(customDtState.hours)}:${p(customDtState.minutes)}`;
+        if (customDtState.targetInput) {
+          customDtState.targetInput.value = formatted;
+          const form = customDtState.targetInput.closest('form');
+          if (form) {
+            form.querySelectorAll('[data-act="room-preset-time"]').forEach(b => b.setAttribute('aria-pressed', 'false'));
+            updateRoomTimeTimeline(form);
+          }
+        }
+        closeCustomDateTimePicker();
+      } else if (act === 'prev-month') {
+        if (customDtState.viewMonth === 0) {
+          customDtState.viewMonth = 11;
+          customDtState.viewYear--;
+        } else {
+          customDtState.viewMonth--;
+        }
+        renderCustomDtPickerModal();
+      } else if (act === 'next-month') {
+        if (customDtState.viewMonth === 11) {
+          customDtState.viewMonth = 0;
+          customDtState.viewYear++;
+        } else {
+          customDtState.viewMonth++;
+        }
+        renderCustomDtPickerModal();
+      } else if (act === 'select-day') {
+        customDtState.selectedYear = customDtState.viewYear;
+        customDtState.selectedMonth = customDtState.viewMonth;
+        customDtState.selectedDay = Number(btn.dataset.day);
+        renderCustomDtPickerModal();
+      } else if (act === 'hour-minus') {
+        customDtState.hours = (customDtState.hours + 23) % 24;
+        renderCustomDtPickerModal();
+      } else if (act === 'hour-plus') {
+        customDtState.hours = (customDtState.hours + 1) % 24;
+        renderCustomDtPickerModal();
+      } else if (act === 'min-minus') {
+        customDtState.minutes = (customDtState.minutes + 55) % 60;
+        renderCustomDtPickerModal();
+      } else if (act === 'min-plus') {
+        customDtState.minutes = (customDtState.minutes + 5) % 60;
+        renderCustomDtPickerModal();
+      } else if (act === 'quick-add') {
+        const addedMin = Number(btn.dataset.min || 5);
+        const baseDate = new Date(customDtState.selectedYear, customDtState.selectedMonth, customDtState.selectedDay, customDtState.hours, customDtState.minutes);
+        const newDate = new Date(baseDate.getTime() + addedMin * 60 * 1000);
+        customDtState.selectedYear = newDate.getFullYear();
+        customDtState.selectedMonth = newDate.getMonth();
+        customDtState.viewYear = newDate.getFullYear();
+        customDtState.viewMonth = newDate.getMonth();
+        customDtState.selectedDay = newDate.getDate();
+        customDtState.hours = newDate.getHours();
+        customDtState.minutes = newDate.getMinutes();
+        renderCustomDtPickerModal();
+      } else if (act === 'quick-eod') {
+        customDtState.hours = 23;
+        customDtState.minutes = 59;
+        renderCustomDtPickerModal();
+      }
+    };
+  }
+
   function applyRoomTimePreset(element) {
     const form = sheet.querySelector('#room-form');
     if (!form) return;
@@ -1471,6 +1812,12 @@
     if (deadlineInput) deadlineInput.value = localDatetimeValue(d);
     if (startInput) startInput.value = localDatetimeValue(s);
     if (endInput) endInput.value = localDatetimeValue(e);
+
+    form.querySelectorAll('[data-act="room-preset-time"]').forEach(btn => {
+      btn.setAttribute('aria-pressed', btn === element ? 'true' : 'false');
+    });
+
+    updateRoomTimeTimeline(form);
   }
 
   function showRoomIntent() {
@@ -1501,19 +1848,34 @@
         <label class="field">Destination<input name="location" maxlength="80" value="${safe(template?.location)}"></label>
         ${name}
         <label class="field">Minimum each person adds (test USDC)<input name="minimum" type="number" min="0.000001" step="0.000001" required value="${safe(template?.minimum ?? 5)}"></label>
-        <div class="inline" style="gap:6px; margin:4px 0 8px 0; flex-wrap:wrap;">
-          <span style="font-size:12px; font-weight:600; color:var(--muted); align-self:center;">⚡ Chọn nhanh giờ test:</span>
-          <button type="button" class="btn soft" style="min-height:34px; padding:0 10px; font-size:12px;" data-act="room-preset-time" data-d="5" data-s="6" data-e="20">5p / 6p / 20p (Khuyên dùng)</button>
-          <button type="button" class="btn soft" style="min-height:34px; padding:0 10px; font-size:12px;" data-act="room-preset-time" data-d="15" data-s="20" data-e="60">15p / 20p / 1h</button>
-          <button type="button" class="btn soft" style="min-height:34px; padding:0 10px; font-size:12px;" data-act="room-preset-time" data-d="1440" data-s="1450" data-e="4320">1 ngày</button>
+        <div class="stack" style="gap:6px; margin:4px 0 8px 0;">
+          <span style="font-size:12px; font-weight:700; color:var(--muted);">⚡ Chọn nhanh mốc thời gian:</span>
+          <div class="room-time-presets" role="group" aria-label="Quick test time presets">
+            <button type="button" class="btn soft" aria-pressed="true" data-act="room-preset-time" data-d="5" data-s="6" data-e="20">⚡ 5p / 6p / 20p (Khuyên dùng)</button>
+            <button type="button" class="btn soft" aria-pressed="false" data-act="room-preset-time" data-d="15" data-s="20" data-e="60">🚀 15p / 20p / 1h (Demo)</button>
+            <button type="button" class="btn soft" aria-pressed="false" data-act="room-preset-time" data-d="1440" data-s="1450" data-e="4320">🏖️ 1 ngày / 3 ngày (Thực tế)</button>
+          </div>
+          <div id="room-time-timeline" class="room-time-timeline" aria-live="polite"></div>
         </div>
-        <label class="field">Deposit deadline<input name="depositDeadline" type="datetime-local" required aria-describedby="room-deadline-help"${defaultDeadline ? ` value="${defaultDeadline}"` : ''}>
+        <label class="field">Deposit deadline
+          <div class="datetime-input-wrapper">
+            <input name="depositDeadline" type="datetime-local" required aria-describedby="room-deadline-help"${defaultDeadline ? ` value="${defaultDeadline}"` : ''}>
+            <button type="button" class="datetime-calendar-badge" data-dt-target="depositDeadline" title="Chọn thời gian nhanh" aria-label="Mở bộ chọn lịch và giờ"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="pointer-events:none;"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg></button>
+          </div>
           <small id="room-deadline-help">Before this time, members can add funds or take back their own deposit. The trip is cancelled if anyone is below the minimum at the deadline.</small>
         </label>
-        <label class="field">Trip start<input name="startTime" type="datetime-local" required aria-describedby="room-start-help"${defaultStart ? ` value="${defaultStart}"` : ''}>
+        <label class="field">Trip start
+          <div class="datetime-input-wrapper">
+            <input name="startTime" type="datetime-local" required aria-describedby="room-start-help"${defaultStart ? ` value="${defaultStart}"` : ''}>
+            <button type="button" class="datetime-calendar-badge" data-dt-target="startTime" title="Chọn thời gian nhanh" aria-label="Mở bộ chọn lịch và giờ"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="pointer-events:none;"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg></button>
+          </div>
           <small id="room-start-help">If everyone has funded on time, bills and top-ups open at the scheduled start.</small>
         </label>
-        <label class="field">Trip end<input name="endTime" type="datetime-local" required aria-describedby="room-end-help"${defaultEnd ? ` value="${defaultEnd}"` : ''}>
+        <label class="field">Trip end
+          <div class="datetime-input-wrapper">
+            <input name="endTime" type="datetime-local" required aria-describedby="room-end-help"${defaultEnd ? ` value="${defaultEnd}"` : ''}>
+            <button type="button" class="datetime-calendar-badge" data-dt-target="endTime" title="Chọn thời gian nhanh" aria-label="Mở bộ chọn lịch và giờ"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="pointer-events:none;"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg></button>
+          </div>
           <small id="room-end-help">After this time, the organizer can share the final amounts for approval and make group payments when everyone is ready.</small>
         </label>`;
     } else if (intent.kind === 'join') {
@@ -1530,6 +1892,28 @@
       </form>`,
       '<button class="btn full" type="submit" form="room-form">' + title + '</button>',
     );
+    if (intent.kind === 'create') {
+      const roomForm = sheet.querySelector('#room-form');
+      if (roomForm) {
+        updateRoomTimeTimeline(roomForm);
+        roomForm.addEventListener('input', e => {
+          if (['depositDeadline', 'startTime', 'endTime'].includes(e.target.name)) {
+            roomForm.querySelectorAll('[data-act="room-preset-time"]').forEach(btn => btn.setAttribute('aria-pressed', 'false'));
+            updateRoomTimeTimeline(roomForm);
+          }
+        });
+
+        roomForm.addEventListener('click', e => {
+          const badge = e.target.closest('.datetime-calendar-badge');
+          if (badge) {
+            e.preventDefault();
+            const targetName = badge.dataset.dtTarget;
+            const inp = roomForm.querySelector(`input[name="${targetName}"]`);
+            if (inp) openCustomDateTimePicker(targetName, inp);
+          }
+        });
+      }
+    }
   }
 
   async function restoreRoomWalletAccess() {
