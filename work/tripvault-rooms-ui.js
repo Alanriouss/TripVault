@@ -222,14 +222,36 @@
     return '0x' + Array.from(new TextEncoder().encode(message), byte => byte.toString(16).padStart(2, '0')).join('');
   }
 
+  async function signPersonalMessage(provider, message, account) {
+    const hex = walletAuthMessage(message);
+    const checksummed = message.split('\n')[1] || account;
+    const attempts = [
+      [hex, checksummed],
+      [hex, account],
+      [checksummed, hex],
+      [account, hex],
+      [message, checksummed],
+      [message, account],
+    ];
+    let lastError = null;
+    for (const params of attempts) {
+      try {
+        return await request(provider, 'personal_sign', params);
+      } catch (err) {
+        lastError = err;
+        if (err?.code === 4001 || Number(err?.code) === 4100 || err?.code === 'ACTION_REJECTED') throw err;
+      }
+    }
+    throw lastError;
+  }
+
   async function authenticateRoomWallet() {
     const context = walletContext();
     await checkWallet(context);
     if (rooms.token && rooms.account === context.account) return rooms.token;
     const challenge = await roomApi('/auth/challenge', { address: context.account }, '');
     await checkWallet(context);
-    const signature = await request(context.provider, 'personal_sign',
-      [walletAuthMessage(challenge.message), context.account]);
+    const signature = await signPersonalMessage(context.provider, challenge.message, context.account);
     await checkWallet(context);
     const auth = await roomApi('/auth/verify', { nonce: challenge.nonce, signature }, '');
     if (auth.address !== walletSession.account) throw new Error('The wallet account changed. Try again.');
@@ -260,6 +282,26 @@
     });
   }
 
+  function localDatetimeValue(minutesFromNow) {
+    const d = new Date(Date.now() + minutesFromNow * 60 * 1000);
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  function applyRoomTimePreset(element) {
+    const form = sheet.querySelector('#room-form');
+    if (!form) return;
+    const d = Number(element?.dataset?.d || 5);
+    const s = Number(element?.dataset?.s || 6);
+    const e = Number(element?.dataset?.e || 20);
+    const deadlineInput = form.querySelector('input[name="depositDeadline"]');
+    const startInput = form.querySelector('input[name="startTime"]');
+    const endInput = form.querySelector('input[name="endTime"]');
+    if (deadlineInput) deadlineInput.value = localDatetimeValue(d);
+    if (startInput) startInput.value = localDatetimeValue(s);
+    if (endInput) endInput.value = localDatetimeValue(e);
+  }
+
   function showRoomIntent() {
     const intent = rooms.intent;
     if (!intent) return;
@@ -280,18 +322,27 @@
     const wallet = '<p class="notice">Wallet: ' + safe(connected) + '</p>';
     let fields = '';
     if (intent.kind === 'create') {
+      const defaultDeadline = template?.depositDeadline ? safe(template.depositDeadline.slice(0, 16)) : (template ? '' : localDatetimeValue(5));
+      const defaultStart = template?.startTime ? safe(template.startTime.slice(0, 16)) : (template ? '' : localDatetimeValue(6));
+      const defaultEnd = template?.endTime ? safe(template.endTime.slice(0, 16)) : (template ? '' : localDatetimeValue(20));
       fields = `${template ? '<p class="notice">Choose a new deposit deadline and trip dates. This creates a room with a new invite code. Invite your group again before setting up the vault.</p>' : ''}
         <label class="field">Trip name<input name="name" required maxlength="70" placeholder="e.g. Da Lat weekend" value="${safe(template?.name)}"></label>
         <label class="field">Destination<input name="location" maxlength="80" value="${safe(template?.location)}"></label>
         ${name}
         <label class="field">Minimum each person adds (test USDC)<input name="minimum" type="number" min="0.000001" step="0.000001" required value="${safe(template?.minimum ?? 5)}"></label>
-        <label class="field">Deposit deadline<input name="depositDeadline" type="datetime-local" required aria-describedby="room-deadline-help">
+        <div class="inline" style="gap:6px; margin:4px 0 8px 0; flex-wrap:wrap;">
+          <span style="font-size:12px; font-weight:600; color:var(--muted); align-self:center;">⚡ Chọn nhanh giờ test:</span>
+          <button type="button" class="btn soft" style="min-height:34px; padding:0 10px; font-size:12px;" data-act="room-preset-time" data-d="5" data-s="6" data-e="20">5p / 6p / 20p (Khuyên dùng)</button>
+          <button type="button" class="btn soft" style="min-height:34px; padding:0 10px; font-size:12px;" data-act="room-preset-time" data-d="15" data-s="20" data-e="60">15p / 20p / 1h</button>
+          <button type="button" class="btn soft" style="min-height:34px; padding:0 10px; font-size:12px;" data-act="room-preset-time" data-d="1440" data-s="1450" data-e="4320">1 ngày</button>
+        </div>
+        <label class="field">Deposit deadline<input name="depositDeadline" type="datetime-local" required aria-describedby="room-deadline-help"${defaultDeadline ? ` value="${defaultDeadline}"` : ''}>
           <small id="room-deadline-help">Before this time, members can add funds or take back their own deposit. The trip is cancelled if anyone is below the minimum at the deadline.</small>
         </label>
-        <label class="field">Trip start<input name="startTime" type="datetime-local" required aria-describedby="room-start-help">
+        <label class="field">Trip start<input name="startTime" type="datetime-local" required aria-describedby="room-start-help"${defaultStart ? ` value="${defaultStart}"` : ''}>
           <small id="room-start-help">If everyone has funded on time, bills and top-ups open at the scheduled start.</small>
         </label>
-        <label class="field">Trip end<input name="endTime" type="datetime-local" required aria-describedby="room-end-help">
+        <label class="field">Trip end<input name="endTime" type="datetime-local" required aria-describedby="room-end-help"${defaultEnd ? ` value="${defaultEnd}"` : ''}>
           <small id="room-end-help">After this time, the organizer can share the final amounts for approval and make group payments when everyone is ready.</small>
         </label>`;
     } else if (intent.kind === 'join') {
@@ -661,16 +712,26 @@
     }
   }
 
+  async function copyRoomCode(trip) {
+    if (!trip?.code) return;
+    try {
+      await navigator.clipboard.writeText(trip.code);
+      notice('Room code copied: ' + trip.code);
+    } catch {
+      notice('Room code: ' + trip.code);
+    }
+  }
+
   function roomInviteCard(trip) {
     if (trip.locked || roomDeadlinePassed(trip) || !trip.invite || !trip.code) return '';
     return `<section class="panel stack">
       <h2>Invite members</h2>
       <p class="subtitle">Share the link or have members choose Join a room and enter this code.</p>
-      <div class="room-code" aria-label="Room code ${safe(trip.code.split('').join(' '))}">${safe(trip.code)}</div>
+      <div class="room-code" data-act="room-copy-code" title="Click to copy room code" aria-label="Room code ${safe(trip.code.split('').join(' '))}">${safe(trip.code)}</div>
       <label class="field">Invite link
         <input id="trip-invite-link" type="url" readonly value="${safe(roomInviteUrl(trip))}">
       </label>
-      <div class="inline">${btn('Copy invite link', 'room-copy')}</div>
+      <div class="inline">${btn('Copy invite link', 'room-copy')}${btn('Copy code', 'room-copy-code', { tone: 'secondary' })}</div>
     </section>`;
   }
 
@@ -763,7 +824,17 @@
         </div>
         ${btn('Try a local demo', 'local-demo', { tone: 'ghost' })}
       </section>
-      ${trips.length ? '<section class="panel">' + tripSelectionControls() + trips.map(tripListRow).join('') + '</section>' : ''}
+      ${trips.length ? '<section class="panel">' + tripSelectionControls() + trips.map(tripListRow).join('') + '</section>'
+        : `<section class="panel stack" style="border: 1px dashed var(--tint-border); background: var(--tint);">
+            <div class="panel-head">
+              <h2 style="color: var(--accent-dark);">Đà Lạt weekend · Demo Room</h2>
+              <span class="chip">UI Preview</span>
+            </div>
+            <p class="subtitle">Experience the full group expense workflow: funding progress, bills, approvals, and settlements.</p>
+            <div class="inline">
+              ${btn('Open demo trip', 'judge-demo-sample')}
+            </div>
+          </section>`}
       ${fujiPanel()}
       </div>`;
   }

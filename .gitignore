@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Local SQLite databases
+*.sqlite3
+*.sqlite3-shm
+*.sqlite3-wal
+
+# Temporary diagnostics & screenshots
+scratch/
+outputs/console.log
+outputs/dump.html
+outputs/head_dump.txt
+outputs/*.png
+
+# OS metadata
+.DS_Store
+Thumbs.db

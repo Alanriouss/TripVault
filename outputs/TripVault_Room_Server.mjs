@@ -14,6 +14,30 @@ var __export = (target, all) => {
     });
 };
 
+// work/tripvault-room-server/node_modules/@noble/curves/esm/abstract/utils.js
+var exports_utils = {};
+__export(exports_utils, {
+  bitGet: () => bitGet,
+  bitLen: () => bitLen,
+  bitMask: () => bitMask,
+  bitSet: () => bitSet,
+  bytesToHex: () => bytesToHex,
+  bytesToNumberBE: () => bytesToNumberBE,
+  bytesToNumberLE: () => bytesToNumberLE,
+  concatBytes: () => concatBytes2,
+  createHmacDrbg: () => createHmacDrbg,
+  ensureBytes: () => ensureBytes,
+  equalBytes: () => equalBytes,
+  hexToBytes: () => hexToBytes,
+  hexToNumber: () => hexToNumber,
+  numberToBytesBE: () => numberToBytesBE,
+  numberToBytesLE: () => numberToBytesLE,
+  numberToHexUnpadded: () => numberToHexUnpadded,
+  numberToVarBytesBE: () => numberToVarBytesBE,
+  utf8ToBytes: () => utf8ToBytes2,
+  validateObject: () => validateObject
+});
+
 // work/tripvault-room-server/entry.js
 import { Database } from "bun:sqlite";
 import { createHash, randomBytes as randomBytes2, randomInt, randomUUID } from "crypto";
@@ -1592,28 +1616,6 @@ var hmac = (hash, key, message) => new HMAC(hash, key).update(message).digest();
 hmac.create = (hash, key) => new HMAC(hash, key);
 
 // work/tripvault-room-server/node_modules/@noble/curves/esm/abstract/utils.js
-var exports_utils = {};
-__export(exports_utils, {
-  bitGet: () => bitGet,
-  bitLen: () => bitLen,
-  bitMask: () => bitMask,
-  bitSet: () => bitSet,
-  bytesToHex: () => bytesToHex,
-  bytesToNumberBE: () => bytesToNumberBE,
-  bytesToNumberLE: () => bytesToNumberLE,
-  concatBytes: () => concatBytes2,
-  createHmacDrbg: () => createHmacDrbg,
-  ensureBytes: () => ensureBytes,
-  equalBytes: () => equalBytes,
-  hexToBytes: () => hexToBytes,
-  hexToNumber: () => hexToNumber,
-  numberToBytesBE: () => numberToBytesBE,
-  numberToBytesLE: () => numberToBytesLE,
-  numberToHexUnpadded: () => numberToHexUnpadded,
-  numberToVarBytesBE: () => numberToVarBytesBE,
-  utf8ToBytes: () => utf8ToBytes2,
-  validateObject: () => validateObject
-});
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 var _0n2 = BigInt(0);
 var _1n2 = BigInt(1);
@@ -6287,9 +6289,23 @@ async function checkVaultCanBeDeleted(address, contractVersion, rpc) {
   }
   assert2(balances.every((balance) => balance === 0n), 409, "Members must claim their remaining Fuji balances before this trip can be deleted.");
 }
+function isAllowedOrigin(from, origin) {
+  if (!from || from === origin)
+    return true;
+  try {
+    const fromUrl = new URL(from);
+    const originUrl = new URL(origin);
+    const isLocalFrom = fromUrl.hostname === "127.0.0.1" || fromUrl.hostname === "localhost";
+    const isLocalOrigin = originUrl.hostname === "127.0.0.1" || originUrl.hostname === "localhost";
+    return isLocalFrom && isLocalOrigin && fromUrl.port === originUrl.port;
+  } catch {
+    return false;
+  }
+}
 function createRoomApi({ database, origin, rpc = fujiRpc, fetchFundingRate = marketFundingRate, now = Date.now }) {
   const db = database;
-  const signInHeader = `${origin} wants you to sign in with your Ethereum account:`;
+  const domain = new URL(origin).host;
+  const signInHeader = `${domain} wants you to sign in with your Ethereum account:`;
   db.exec(`
     PRAGMA journal_mode = WAL;
     PRAGMA foreign_keys = ON;
@@ -6541,7 +6557,7 @@ function createRoomApi({ database, origin, rpc = fujiRpc, fetchFundingRate = mar
   const signIn = db.transaction((data) => {
     const nonce = text(data.nonce, 48, "sign-in nonce");
     const challenge = getChallenge.get(nonce, Date.now());
-    assert2(challenge?.message.startsWith(signInHeader + `
+    assert2(challenge?.message.includes(` wants you to sign in with your Ethereum account:
 `), 401, "Wallet sign-in expired. Try again.");
     assert2(typeof data.signature === "string" && /^0x[0-9a-f]{130}$/i.test(data.signature), 401, "Invalid wallet signature.");
     let signer;
@@ -6851,10 +6867,14 @@ function createRoomApi({ database, origin, rpc = fujiRpc, fetchFundingRate = mar
         return json({ app: "tripvault-rooms", rooms: true, chainId: CHAIN, deleteTrip: true, endTrip: true, bulkDelete: true, billFunding: true, topUpReminders: true, depositDeadline: true, billReview: true, billCancellationReason: true, notificationTimestamps: true, suggestionResponses: true });
       if (method === "POST") {
         const from = request.headers.get("origin");
-        assert2(!from || from === origin, 403, "Open TripVault at its configured web address.");
+        assert2(isAllowedOrigin(from, origin), 403, "Open TripVault at its configured web address.");
       }
       if (method === "POST" && path === "/api/auth/challenge") {
         throttle("challenge", ip, 90);
+        const from = request.headers.get("origin");
+        const reqOrigin = from && isAllowedOrigin(from, origin) ? from : origin;
+        const reqDomain = new URL(reqOrigin).host;
+        const reqHeader = `${reqDomain} wants you to sign in with your Ethereum account:`;
         const data = await readJson(request);
         const address = safeAddress(data.address);
         const nonce = randomBytes2(16).toString("hex");
@@ -6862,12 +6882,12 @@ function createRoomApi({ database, origin, rpc = fujiRpc, fetchFundingRate = mar
         const expires = now + FIVE_MINUTES;
         db.query("DELETE FROM auth_challenges WHERE expires <= ?").run(now);
         db.query("DELETE FROM auth_sessions WHERE expires <= ?").run(now);
-        const message = `${signInHeader}
+        const message = `${reqHeader}
 ${getAddress(address)}
 
 Sign in to TripVault rooms. This signature does not send a transaction.
 
-URI: ${origin}
+URI: ${reqOrigin}
 Version: 1
 Chain ID: ${CHAIN}
 Nonce: ${nonce}

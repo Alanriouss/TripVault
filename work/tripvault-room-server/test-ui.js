@@ -21,14 +21,15 @@ function providerFor(wallet, readChain) {
       if (method === 'eth_requestAccounts') accountRequests++;
       if (method === 'eth_accounts' || method === 'eth_requestAccounts') return [account];
       if (method === 'personal_sign') {
-        assert.equal(params[1], account);
+        assert.equal(params[1].toLowerCase(), account.toLowerCase());
         if (denyNextSignature) {
           denyNextSignature = false;
           throw Object.assign(new Error('The requested account and/or method has not been authorized by the user.'), { code: 4100 });
         }
         signatures++;
         const message = new TextDecoder().decode(getBytes(params[0]));
-        assert.equal(message.split(' wants you to sign in')[0], origin);
+        const domain = new URL(origin).host;
+        assert.equal(message.split(' wants you to sign in')[0], domain);
         return wallet.signMessage(message);
       }
       if (readChain) return readChain(method, params);
@@ -54,9 +55,10 @@ function switchingProvider() {
       if (method === 'eth_chainId') return '0xa869';
       if (method === 'eth_accounts' || method === 'eth_requestAccounts') return [active.address.toLowerCase()];
       if (method === 'personal_sign') {
-        assert.equal(params[1], active.address.toLowerCase());
+        assert.equal(params[1].toLowerCase(), active.address.toLowerCase());
         const message = new TextDecoder().decode(getBytes(params[0]));
-        assert.equal(message.split(' wants you to sign in')[0], origin);
+        const domain = new URL(origin).host;
+        assert.equal(message.split(' wants you to sign in')[0], domain);
         return active.signMessage(message);
       }
       throw new Error('Unexpected wallet request: ' + method);

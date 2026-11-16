@@ -2,10 +2,14 @@
   "name": "tripvault",
   "private": true,
   "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
   "packageManager": "bun@1.4.2",
   "scripts": {
     "start": "bun outputs/TripVault_Room_Server.mjs",
     "build": "python3 work/build-tripvault-rooms.py && bun build work/tripvault-room-server/entry.js --target=bun --outfile outputs/TripVault_Room_Server.mjs",
+    "vercel-build": "echo 'Static build ready in public/'",
     "verify": "bun scripts/verify.mjs"
   }
 }

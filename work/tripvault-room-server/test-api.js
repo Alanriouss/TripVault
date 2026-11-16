@@ -63,7 +63,8 @@ const stranger = Wallet.createRandom();
 
 async function login(wallet) {
   const challenge = await send('/auth/challenge', { body: { address: wallet.address } });
-  assert.equal(challenge.message.split('\n')[0], origin + ' wants you to sign in with your Ethereum account:');
+  const domain = new URL(origin).host;
+  assert.equal(challenge.message.split('\n')[0], domain + ' wants you to sign in with your Ethereum account:');
   assert.ok(challenge.message.includes('\nURI: ' + origin + '\n'));
   const body = { nonce: challenge.nonce, signature: await wallet.signMessage(challenge.message) };
   const auth = await send('/auth/verify', { body });
@@ -342,7 +343,8 @@ const publicResponse = await publicApi(new Request(publicOrigin + '/api/auth/cha
 }));
 assert.equal(publicResponse.status, 200);
 const publicChallenge = await publicResponse.json();
-assert.equal(publicChallenge.message.split('\n')[0], publicOrigin + ' wants you to sign in with your Ethereum account:');
+const publicDomain = new URL(publicOrigin).host;
+assert.equal(publicChallenge.message.split('\n')[0], publicDomain + ' wants you to sign in with your Ethereum account:');
 assert.ok(publicChallenge.message.includes('\nURI: ' + publicOrigin + '\n'));
 console.log('PASS: wallet sign-in messages declare the exact HTTP or HTTPS origin of the app');
 

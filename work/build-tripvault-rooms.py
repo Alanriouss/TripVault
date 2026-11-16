@@ -19,8 +19,354 @@ def replace(old, new):
 
 replace('<title>TripVault · Trip workspace</title>', '<title>TripVault · Rooms</title>')
 replace('</head>', '''<style>
-.room-code { width: fit-content; color: var(--accent-dark); background: var(--tint); border-radius: 12px; padding: 6px 12px; font: 750 clamp(22px, 7vw, 34px)/1.25 Inter, sans-serif; letter-spacing: .16em; font-variant-numeric: tabular-nums; }
-.room-wallet-address { overflow-wrap: anywhere; }
+:root {
+  --page: #f8fafc;
+  --paper: #ffffff;
+  --ink: #0f172a;
+  --muted: #475569;
+  --subtle: #64748b;
+  --line: #e2e8f0;
+  --line-strong: #cbd5e1;
+  --accent: #e84142;
+  --accent-dark: #c52223;
+  --accent-light: #ff6b6c;
+  --tint: #fef2f2;
+  --tint-border: #fecaca;
+  --positive: #059669;
+  --positive-bg: #ecfdf5;
+  --warning: #d97706;
+  --warning-bg: #fffbeb;
+  --danger: #dc2626;
+  --danger-bg: #fef2f2;
+  --radius: 16px;
+  --radius-sm: 10px;
+  --radius-lg: 20px;
+  --shadow-sm: 0 1px 2px 0 rgba(15, 23, 42, 0.05);
+  --shadow: 0 4px 16px -2px rgba(15, 23, 42, 0.06), 0 2px 6px -1px rgba(15, 23, 42, 0.03);
+  --shadow-md: 0 10px 24px -4px rgba(15, 23, 42, 0.08), 0 4px 8px -2px rgba(15, 23, 42, 0.03);
+  --shadow-lg: 0 20px 35px -5px rgba(15, 23, 42, 0.12), 0 8px 16px -4px rgba(15, 23, 42, 0.05);
+}
+body {
+  background-color: var(--page);
+  color: var(--ink);
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+:focus-visible {
+  outline: 3px solid rgba(232, 65, 66, 0.45);
+  outline-offset: 2px;
+}
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--line);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03);
+}
+.brand-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #e84142 0%, #c52223 100%);
+  color: white;
+  box-shadow: 0 2px 8px rgba(232, 65, 66, 0.35);
+}
+.hero {
+  min-height: 175px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  isolation: isolate;
+  overflow: hidden;
+  color: white;
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 55%, #181124 100%);
+  box-shadow: 0 12px 30px -6px rgba(15, 23, 42, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  margin-bottom: 4px;
+}
+.hero::before {
+  content: "";
+  position: absolute;
+  top: -50px;
+  right: -50px;
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(232, 65, 66, 0.4) 0%, rgba(232, 65, 66, 0) 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+.hero::after {
+  content: "";
+  position: absolute;
+  bottom: -40px;
+  left: 20%;
+  width: 160px;
+  height: 160px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(99, 102, 241, 0.15) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+.hero h1 {
+  font-size: clamp(23px, 5.5vw, 32px);
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  color: #ffffff;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+  z-index: 1;
+}
+.hero .chip {
+  align-self: flex-start;
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  font-weight: 700;
+  z-index: 1;
+}
+.panel {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 20px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.panel:hover {
+  border-color: var(--line-strong);
+}
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 18px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: var(--accent);
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 13.5px;
+  text-align: center;
+  white-space: nowrap;
+  box-shadow: 0 2px 6px rgba(232, 65, 66, 0.2);
+  transition: all 0.15s ease-in-out;
+  cursor: pointer;
+}
+.btn:hover:not(:disabled) {
+  background: var(--accent-dark);
+  box-shadow: 0 4px 12px rgba(232, 65, 66, 0.32);
+  transform: translateY(-1px);
+}
+.btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+.btn:disabled {
+  opacity: 0.55;
+  box-shadow: none;
+  cursor: default;
+}
+.btn.secondary {
+  border-color: var(--line);
+  background: #ffffff;
+  color: var(--ink);
+  box-shadow: var(--shadow-sm);
+}
+.btn.secondary:hover:not(:disabled) {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.07);
+}
+.btn.soft {
+  background: var(--tint);
+  color: var(--accent-dark);
+  border-color: #fecaca;
+  box-shadow: none;
+}
+.btn.soft:hover:not(:disabled) {
+  background: #fee2e2;
+  border-color: #fca5a5;
+}
+.btn.ghost {
+  background: transparent;
+  color: var(--accent-dark);
+  box-shadow: none;
+  padding: 0 10px;
+}
+.btn.ghost:hover:not(:disabled) {
+  background: var(--tint);
+}
+.btn.danger {
+  background: #fef2f2;
+  color: var(--danger);
+  border-color: #fecaca;
+  box-shadow: none;
+}
+.btn.danger:hover:not(:disabled) {
+  background: #fee2e2;
+  border-color: #f87171;
+}
+.btn.full {
+  width: 100%;
+}
+.notice {
+  padding: 13px 16px;
+  border-radius: 12px;
+  font-size: 13px;
+  background: #f8fafc;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent);
+}
+.notice.warn {
+  color: #92400e;
+  background: #fffbeb;
+  border-color: #fde68a;
+  border-left-color: var(--warning);
+}
+.notice.green {
+  color: #065f46;
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+  border-left-color: var(--positive);
+}
+.notice.danger {
+  color: #991b1b;
+  background: #fef2f2;
+  border-color: #fecaca;
+  border-left-color: var(--danger);
+}
+.mobile-nav {
+  position: fixed;
+  z-index: 10;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  padding: 7px 12px max(7px, env(safe-area-inset-bottom));
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-top: 1px solid var(--line);
+  box-shadow: 0 -4px 20px rgba(15, 23, 42, 0.05);
+}
+.nav-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 4px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 650;
+  min-height: 50px;
+  padding: 6px 4px;
+  transition: all 0.15s ease;
+}
+.nav-btn[aria-current="page"] {
+  color: var(--accent);
+  background: var(--tint);
+  font-weight: 750;
+}
+.nav-btn:hover:not([aria-current]) {
+  background: #f1f5f9;
+  color: var(--ink);
+}
+dialog {
+  width: min(100%, 540px);
+  max-width: 100%;
+  margin: auto auto 0;
+  padding: 0;
+  border: 0;
+  border-radius: 24px 24px 0 0;
+  color: var(--ink);
+  background: #ffffff;
+  box-shadow: 0 -8px 40px rgba(15, 23, 42, 0.18);
+  max-height: min(94dvh, 850px);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+dialog::backdrop {
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.sheet-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 15px 20px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(8px);
+}
+.sheet-head h2 {
+  font-size: 21px;
+  font-weight: 750;
+  color: var(--ink);
+}
+.sheet-body {
+  padding: 18px 20px;
+  display: grid;
+  gap: 14px;
+}
+.sheet-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  padding: 12px 20px max(12px, env(safe-area-inset-bottom));
+  border-top: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(8px);
+}
+.field {
+  display: grid;
+  gap: 6px;
+  font-weight: 700;
+  font-size: 13px;
+  min-width: 0;
+  color: var(--ink);
+}
+.field > input, .field > select, .input-affix {
+  width: 100%;
+  min-width: 0;
+  min-height: 46px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #ffffff;
+  color: var(--ink);
+  padding: 10px 13px;
+  font-size: 15px;
+  font-weight: 500;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.field > input:focus, .field > select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(232, 65, 66, 0.15);
+}
+.room-code { width: fit-content; color: var(--accent-dark); background: var(--tint); border: 2px dashed #fca5a5; border-radius: 14px; padding: 8px 18px; font: 800 clamp(24px, 7vw, 36px)/1.2 Inter, monospace, sans-serif; letter-spacing: .2em; font-variant-numeric: tabular-nums; box-shadow: 0 2px 8px rgba(232, 65, 66, 0.08); user-select: all; }
+.room-wallet-address { overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; }
 .trip-settings-actions { margin-top: 12px; }
 .trip-list-row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; padding: 12px 0; }
 .trip-list-row + .trip-list-row { border-top: 1px solid var(--line); }
@@ -33,35 +379,35 @@ replace('</head>', '''<style>
 .trip-delete-list { margin: 0; padding-inline-start: 20px; overflow-wrap: anywhere; }
 .field > small { color: var(--muted); font-size: 13px; font-weight: 400; line-height: 1.4; }
 #bill-reminder-feedback:empty { display: none; }
-.btn.danger.cancel-approval { border-color: #e7a6b2; background: #fce2e9; }
-.btn.danger.cancel-approval:hover:not(:disabled) { background: #f9d3df; }
+.btn.danger.cancel-approval { border-color: #fecaca; background: #fef2f2; }
+.btn.danger.cancel-approval:hover:not(:disabled) { background: #fee2e2; }
 .trip-return { display: flex; justify-content: space-between; align-items: center; gap: 8px 16px; flex-wrap: wrap; margin-bottom: 14px; }
 .trip-profile { display: flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; margin-inline-start: auto; }
 .trip-profile-name { min-width: 0; color: var(--muted); font-size: 13px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .trip-profile .btn { flex-shrink: 0; }
 .trip-profile .avatar { width: 32px; height: 32px; flex-shrink: 0; }
-.btn.rename-member { border-color: #cbbaf7; }
+.btn.rename-member { border-color: #e2e8f0; }
 .language-select { position: relative; display: inline-flex; align-items: center; color: var(--accent-dark); }
 .language-select::after { content: ''; position: absolute; inset-inline-end: 12px; top: calc(50% - 5px); width: 6px; height: 6px; border-right: 1.5px solid; border-bottom: 1.5px solid; transform: rotate(45deg); pointer-events: none; }
-.ui-language { appearance: none; min-width: 0; width: auto; margin: 0; min-height: 44px; padding: 0 28px 0 12px; border: 1px solid transparent; border-radius: 12px; background: var(--tint); color: inherit; font: 650 13px Inter, sans-serif; cursor: pointer; }
+.ui-language { appearance: none; min-width: 0; width: auto; margin: 0; min-height: 44px; padding: 0 28px 0 12px; border: 1px solid var(--line); border-radius: 12px; background: #ffffff; color: inherit; font: 650 13px Inter, sans-serif; cursor: pointer; box-shadow: var(--shadow-sm); }
 .ui-language option { background: var(--paper); color: var(--ink); }
 .ui-language:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .header .breadcrumb { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .wallet-actions { margin-top: 4px; }
 .wallet-utilities { padding-top: 8px; border-top: 1px solid var(--line); }
-.room-final-split { gap: 12px; }
-.split-payment { border-top: 3px solid var(--accent); }
-.split-payment > h2, .split-breakdown h2 { font-size: clamp(18px, 2.2vw, 22px); }
+.room-final-split { gap: 14px; }
+.split-payment { border-top: 4px solid var(--accent); }
+.split-payment > h2, .split-breakdown h2 { font-size: clamp(18px, 2.2vw, 22px); font-weight: 800; }
 .split-payment .subtitle, .split-breakdown .subtitle { color: var(--muted); }
 .split-date { font-weight: 650; }
-.split-amount { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; padding: 10px 12px; background: var(--tint); color: var(--accent-dark); border-radius: 10px; }
-.split-amount strong { font-size: 1.1rem; font-variant-numeric: tabular-nums; }
+.split-amount { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; padding: 12px 14px; background: var(--tint); color: var(--accent-dark); border: 1px solid #fecaca; border-radius: 12px; }
+.split-amount strong { font-size: 1.2rem; font-variant-numeric: tabular-nums; font-weight: 800; }
 .split-actions .btn { padding-inline: 16px; white-space: normal; }
 .split-utilities .btn { white-space: normal; }
 .split-details { border-top: 1px solid var(--line); }
 .split-details summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; cursor: pointer; color: var(--accent-dark); font-size: 14px; font-weight: 700; list-style: none; }
 .split-details summary::-webkit-details-marker { display: none; }
-.split-details summary::after { content: ''; width: 7px; height: 7px; margin-inline-end: 3px; border-right: 2px solid; border-bottom: 2px solid; transform: rotate(45deg); }
+.split-details summary::after { content: ''; width: 7px; height: 7px; margin-inline-end: 3px; border-right: 2px solid; border-bottom: 2px solid; transform: rotate(45deg); transition: transform 0.2s ease; }
 .split-details[open] summary::after { transform: rotate(225deg); }
 .split-detail-body { padding-bottom: 6px; overflow-wrap: anywhere; }
 .split-detail-body .row { padding: 8px 0; }
@@ -99,8 +445,8 @@ replace('</head>', '''<style>
 .trip-notification small { color: var(--muted); }
 .trip-notification .notification-time { font-size: 12px; font-variant-numeric: tabular-nums; }
 .trip-notification .inline { margin-top: 4px; }
-.fund-summary { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 20px; }
-.fund-summary > strong { color: var(--accent-dark); font-size: 1.25rem; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.fund-summary { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 20px; background: linear-gradient(135deg, #ffffff 0%, #fef8f8 100%); border: 1px solid #fee2e2; border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px 20px; }
+.fund-summary > strong { color: var(--accent); font-size: clamp(1.4rem, 4vw, 1.85rem); font-weight: 850; font-variant-numeric: tabular-nums; letter-spacing: -0.03em; overflow-wrap: anywhere; }
 @media (max-width: 420px) {
   .trip-profile .avatar { display: none; }
   .trip-profile-name { max-width: 96px; }
@@ -110,7 +456,7 @@ replace('</head>', '''<style>
 .trip-progress { display: grid; gap: 14px; }
 .trip-progress-steps { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; list-style: none; padding: 0; margin: 0; }
 .trip-progress-steps li { display: grid; align-items: center; min-height: 44px; padding: 6px 9px; border: 1px solid var(--line); border-radius: 10px; color: var(--muted); text-align: center; font-size: 13px; font-weight: 650; }
-.trip-progress-steps [aria-current="step"] { background: var(--accent); border-color: var(--accent); color: white; font-weight: 750; }
+.trip-progress-steps [aria-current="step"] { background: var(--accent); border-color: var(--accent); color: white; font-weight: 750; box-shadow: 0 2px 8px rgba(232, 65, 66, 0.25); }
 .trip-progress-next { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
 .trip-progress-next h3 { font-size: 18px; margin-bottom: 4px; }
 @media (max-width: 520px) {
@@ -205,6 +551,7 @@ replace("""    if (act === 'close-sheet') return sheet.close();""", """    if (a
       return sheet.close();
     }
     if (act === 'room-create') return startRoomFlow('create');
+    if (act === 'room-preset-time') return applyRoomTimePreset(element);
     if (act === 'room-replace-expired') return openReplacementTrip(trip);
     if (act === 'room-join') return startRoomFlow('join');
     if (act === 'room-sign-in') return startRoomFlow('signin');
@@ -224,6 +571,8 @@ replace("""    if (act === 'close-sheet') return sheet.close();""", """    if (a
       });
     }""")
 replace("    if (act === 'new-trip') return setup();", "    if (act === 'new-trip') return rooms.online ? startRoomFlow('create') : setup();")
+replace("${btn('Create a trip','new-trip',{symbol:'plus'})}${btn('Join a trip','join-trip',{tone:'secondary'})}",
+        "${btn('Create a trip','new-trip',{symbol:'plus'})}${btn('Join a trip','join-trip',{tone:'secondary'})}${btn('Explore demo trip','judge-demo-sample',{tone:'secondary'})}")
 replace("      const selected = state.trips.find(item => item.id === id);", "      const selected = availableTrips().find(item => item.id === id);")
 replace("    if (act === 'join-trip') {\n      sheetOpen", "    if (act === 'join-trip') {\n      if (rooms.online) return startRoomFlow('join');\n      sheetOpen")
 replace("""    if (!trip) return;
@@ -309,7 +658,8 @@ replace("    if (act === 'guide') return showGuide();",
 replace("  showFirstVisitGuide();\n  refreshFX();", "  showFirstVisitGuide();\n  refreshFX();\n  enableRooms();")
 replace("${content}\n          </main>", "${!rooms.online && window.location?.protocol === 'file:' ? '<p class=\"notice warn\">Open the TripVault Rooms launcher for invite links and room codes.</p>' : ''}\n            ${content}\n          </main>")
 replace("""        ${btn('Try a local demo', 'local-demo', { tone: 'ghost' })}
-""", "")
+""", """        ${btn('Explore demo trip', 'judge-demo-sample', { tone: 'secondary' })}
+""")
 replace("    const ended = Date.now() >= Date.parse(trip.endTime);", "    const ended = Date.now() >= roomEndTime(trip);")
 replace("${isAddress(trip.fuji?.address) ? fujiPanel('split') : ''}", "${trip.shared || isAddress(trip.fuji?.address) ? fujiPanel('split') : ''}")
 replace("const next = [state.trip.startTime, state.trip.endTime].map(value => Date.parse(value)).find(time => time > now);",
@@ -323,6 +673,7 @@ replace("if (next) phaseTimer = setTimeout(render, Math.min(next - now, 2_147_48
 replace("trip.shared ? 'Deploy a Fuji vault in Wallet. The organizer can publish this split after the trip ends.' : 'Demo settlement moves balances within the simulated vault. Each member can claim their balance in Wallet.'",
         "trip.shared ? 'These amounts are estimates until the split is published and settled on Fuji.' : 'Demo settlement moves balances within the simulated vault. Each member can claim their balance in Wallet.'")
 replace("    if (act === 'room-copy') return copyRoomInvite(trip);", """    if (act === 'room-copy') return copyRoomInvite(trip);
+    if (act === 'room-copy-code') return copyRoomCode(trip);
     if (act === 'room-funding-refresh') return refreshRoomFunding();
     if (act === 'room-rename' || act === 'room-rename-member') return showRoomRename(trip, act);
     if (act === 'room-reauthenticate') return reauthenticateRoom();
@@ -511,7 +862,7 @@ replace('.trip-return { display:', """.judge-demo-actions { margin-bottom: 16px;
 replace("""    const content = trip ? screen() : rooms.online ? roomsHome()""", """    const content = trip ? screen() : demoMode && !state.trips.length
       ? '<div class="section-head"><div><h1>TripVault demo</h1><p>Try a local simulation with two sample members. No wallet or network fees.</p></div></div>'
       : rooms.online ? roomsHome()""")
-replace("    if (act === 'room-create')", """    if (act === 'judge-demo-sample' && demoMode) return startJudgeSample();
+replace("    if (act === 'room-create')", """    if (act === 'judge-demo-sample') return startJudgeSample();
     if (act === 'room-create')""")
 replace("  function selectTrip(trip) {", """  function startJudgeSample() {
     const members = [{ id: 'm0', name: 'An' }, { id: 'm1', name: 'Bình' }];
@@ -545,6 +896,9 @@ replace("  function fujiPanel(section = 'wallet', review = null) {\n    const tr
 replace('!rooms.online && window.location?.protocol', '!demoMode && !rooms.online && window.location?.protocol')
 
 (root / 'outputs/TripVault_Rooms_v9.html').write_text(source)
+public_dir = root / 'public'
+public_dir.mkdir(exist_ok=True)
+(public_dir / 'index.html').write_text(source)
 (root / 'work/tripvault-v9.js').write_text(source.split('<script>\n', 1)[1].split('</script>', 1)[0])
 backend = root / 'work/tripvault-room-server/server.js'
 generated = backend.read_text().replace('/*ROOM_CONTRACT*/', json.dumps({
