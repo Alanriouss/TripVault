@@ -5,7 +5,7 @@ import { dirname, resolve } from 'node:path';
 import { getAddress, Interface, verifyMessage } from 'ethers';
 import { roomFundingShortfalls } from '../tripvault-room-funding.js';
 
-const CONTRACT = /*ROOM_CONTRACT*/;
+const CONTRACT = /*ROOM_CONTRACT*/null;
 const CHAIN = 43113;
 const RPC = 'https://api.avax-test.network/ext/bc/C/rpc';
 const MAX_MEMBERS = 12;

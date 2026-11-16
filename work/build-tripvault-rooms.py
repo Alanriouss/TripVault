@@ -901,7 +901,7 @@ public_dir.mkdir(exist_ok=True)
 (public_dir / 'index.html').write_text(source)
 (root / 'work/tripvault-v9.js').write_text(source.split('<script>\n', 1)[1].split('</script>', 1)[0])
 backend = root / 'work/tripvault-room-server/server.js'
-generated = backend.read_text().replace('/*ROOM_CONTRACT*/', json.dumps({
+generated = backend.read_text().replace('/*ROOM_CONTRACT*/null', json.dumps({
     'runtime': contract['runtime'], 'legacyRuntime': contract['legacyRuntime'], 'deadlineRuntime': contract['deadlineRuntime'],
 }))
 (backend.parent / 'entry.js').write_text(generated)

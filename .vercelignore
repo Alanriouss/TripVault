@@ -1,0 +1,7 @@
+work/
+scripts/
+packages/
+outputs/
+docs/
+scratch/
+*.sqlite3*
