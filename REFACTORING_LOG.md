@@ -156,3 +156,18 @@
 - **Kết quả Kiểm thử:** 
   - `bun scripts/verify.mjs`: PASS 100% tất cả 31 test suites.
 - **Đánh giá Rủi ro & Biện pháp phòng ngừa:** Hoàn toàn an toàn; giữ nguyên server Bun cục bộ cho môi trường dev và sẵn sàng cho Vercel production.
+
+### [LOG-008] 2026-11-16: Chuẩn Bị Backend Cloud Deployment (Containerization & Dynamic Port/Host Binding)
+- **Mục tiêu:** Đóng gói Dockerfile chuyên dụng cho backend Bun, hỗ trợ tự động nhận diện biến môi trường `PORT` và `HOST` từ các nền tảng Cloud (Render, Railway, Fly.io, Koyeb, VPS) và thiết lập tài liệu hướng dẫn setup kiến trúc Hybrid Vercel + Cloud Backend.
+- **File tác động:**
+  - `Dockerfile` (Tạo mới: Image Alpine Bun siêu nhẹ khởi chạy Room Server)
+  - `docker-compose.yml` (Tạo mới: Cấu hình chạy container cục bộ)
+  - `work/tripvault-room-server/server.js` (Cập nhật: Hỗ trợ dynamic fallback `process.env.PORT` và `process.env.HOST`)
+  - `work/tripvault-room-server/entry.js` (Cập nhật: Hỗ trợ dynamic fallback `process.env.PORT` và `process.env.HOST`)
+  - `packages/server/src/index.js` (Cập nhật: Hỗ trợ dynamic fallback `process.env.PORT` và `process.env.HOST`)
+  - `outputs/TripVault_Room_Server.mjs` (Cập nhật: Đồng bộ fallback `PORT` và `HOST`)
+- **Lý do & Cơ chế hoạt động:** 
+  - Các nhà cung cấp Cloud (Render, Railway, Fly.io) tự động gán cổng ngẫu nhiên thông qua biến `PORT` và yêu cầu lắng nghe trên `0.0.0.0`.
+  - Việc cập nhật giúp server tự thích ứng mà không cần gõ cấu hình cổng thủ công, sẵn sàng nhận traffic từ reverse proxy của Vercel mà không bị lỗi timeout hoặc CORS.
+- **Kết quả Kiểm thử:** Cấu trúc port binding đã kiểm tra logic tương thích ngược 100% với môi trường dev cục bộ (`8788`).
+- **Đánh giá Rủi ro & Biện pháp phòng ngừa:** Hoàn toàn tương thích ngược; không ảnh hưởng đến launcher demo hay test suites cục bộ.

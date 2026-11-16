@@ -6987,9 +6987,9 @@ Expiration Time: ${new Date(expires).toISOString()}`;
   };
 }
 if (import.meta.main) {
-  const host = process.env.TRIPVAULT_HOST || "127.0.0.1";
-  const port = Number(process.env.TRIPVAULT_PORT || "8788");
-  const origin = new URL(process.env.TRIPVAULT_ORIGIN || `http://${host}:${port}`).origin;
+  const host = process.env.TRIPVAULT_HOST || process.env.HOST || (process.env.PORT ? "0.0.0.0" : "127.0.0.1");
+  const port = Number(process.env.PORT || process.env.TRIPVAULT_PORT || "8788");
+  const origin = new URL(process.env.TRIPVAULT_ORIGIN || `http://${host === "0.0.0.0" ? "127.0.0.1" : host}:${port}`).origin;
   const databasePath = resolve(process.env.TRIPVAULT_DB || resolve(import.meta.dir, "../work/tripvault-rooms.sqlite3"));
   mkdirSync(dirname(databasePath), { recursive: true });
   const db = new Database(databasePath);
