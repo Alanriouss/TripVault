@@ -171,3 +171,13 @@
   - Việc cập nhật giúp server tự thích ứng mà không cần gõ cấu hình cổng thủ công, sẵn sàng nhận traffic từ reverse proxy của Vercel mà không bị lỗi timeout hoặc CORS.
 - **Kết quả Kiểm thử:** Cấu trúc port binding đã kiểm tra logic tương thích ngược 100% với môi trường dev cục bộ (`8788`).
 - **Đánh giá Rủi ro & Biện pháp phòng ngừa:** Hoàn toàn tương thích ngược; không ảnh hưởng đến launcher demo hay test suites cục bộ.
+
+### [LOG-009] 2026-11-16: Sửa Lỗi Vercel Rewrite Proxy Path (/api/$1) & Chuẩn Hóa Setup E2E
+- **Mục tiêu:** Khắc phục lỗi rewrite URL trong `vercel.json` khi thiếu hậu tố `/api/$1`, đảm bảo Vercel chuyển tiếp chính xác đường dẫn API sang backend Render/Railway thay vì bị rewrite về trang chủ root HTML.
+- **File tác động:**
+  - `vercel.json` (Cập nhật: Bổ sung `/api/$1` vào destination của rule `/api/(.*)`)
+- **Lý do & Cơ chế hoạt động:** 
+  - Khi rule destination chỉ là `https://...onrender.com` mà thiếu `/api/$1`, Vercel sẽ cắt bỏ toàn bộ subpath `/api/health`, `/api/auth/challenge`,... và gửi về trang gốc `/`, khiến response trả về dạng text/html thay vì JSON.
+  - Cập nhật giúp Vercel forward nguyên vẹn pathname và query params sang backend cloud.
+- **Kết quả Kiểm thử:** Cấu hình rewrite khớp chuẩn cú pháp Vercel Specification.
+- **Đánh giá Rủi ro & Biện pháp phòng ngừa:** Không có rủi ro; chỉ tác động đến cơ chế định tuyến proxy API trên Vercel.
