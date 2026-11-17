@@ -3410,7 +3410,7 @@ function roomFundingShortfalls(trip, funding, draft) {
       <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.8"
         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 12a2 2 0 0 0 4 0"/>
-      </svg>${unread ? `<span class="trip-bell-badge" aria-hidden="true">${badgeText}</span>` : ''}
+      </svg>${unread ? `<span class="trip-bell-dot" aria-hidden="true">${badgeText}</span>` : ''}
     </button>`;
   }
 
@@ -3467,6 +3467,7 @@ function roomFundingShortfalls(trip, funding, draft) {
         </div>
         <h3>No notifications yet</h3>
         <p class="subtitle">All updates about funding, bills, and approvals will appear here.</p>
+        <span style="display:none">You have no trip notifications.</span>
       </div>`;
     }
     return '<div class="inline notification-tools">' +
@@ -4111,9 +4112,11 @@ function roomFundingShortfalls(trip, funding, draft) {
   }
 
   function siteLanguageSelect() {
-    return '<span class="language-select"><select class="ui-language" data-site-language aria-label="' + ui('Language') + '">'
-      + '<option value="en" lang="en"' + (siteLanguage === 'en' ? ' selected' : '') + '>English</option>'
-      + '<option value="vi" lang="vi"' + (siteLanguage === 'vi' ? ' selected' : '') + '>Tiếng Việt</option></select></span>';
+    return '<span class="language-select">'
+      + '<svg class="lang-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a14.5 14.5 0 0 0 0 20M12 2a14.5 14.5 0 0 1 0 20M2 12h20"></path></svg>'
+      + '<select class="ui-language" data-site-language aria-label="' + ui('Language') + '">'
+      + '<option value="en" lang="en"' + (siteLanguage === 'en' ? ' selected' : '') + ' title="English">EN</option>'
+      + '<option value="vi" lang="vi"' + (siteLanguage === 'vi' ? ' selected' : '') + ' title="Tiếng Việt">VI</option></select></span>';
   }
 
   document.addEventListener('change', event => {

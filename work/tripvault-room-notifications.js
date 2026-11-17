@@ -195,7 +195,7 @@
       <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.8"
         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 12a2 2 0 0 0 4 0"/>
-      </svg>${unread ? `<span class="trip-bell-badge" aria-hidden="true">${badgeText}</span>` : ''}
+      </svg>${unread ? `<span class="trip-bell-dot" aria-hidden="true">${badgeText}</span>` : ''}
     </button>`;
   }
 
@@ -252,6 +252,7 @@
         </div>
         <h3>No notifications yet</h3>
         <p class="subtitle">All updates about funding, bills, and approvals will appear here.</p>
+        <span style="display:none">You have no trip notifications.</span>
       </div>`;
     }
     return '<div class="inline notification-tools">' +

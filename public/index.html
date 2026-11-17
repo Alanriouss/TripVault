@@ -665,10 +665,11 @@ dialog::backdrop {
 .trip-profile .btn { flex-shrink: 0; }
 .trip-profile .avatar { width: 32px; height: 32px; flex-shrink: 0; }
 .btn.rename-member { border-color: #e2e8f0; }
-.language-select { position: relative; display: inline-flex; align-items: center; color: var(--accent-dark); }
-.language-select::after { content: ''; position: absolute; inset-inline-end: 12px; top: calc(50% - 5px); width: 6px; height: 6px; border-right: 1.5px solid; border-bottom: 1.5px solid; transform: rotate(45deg); pointer-events: none; }
-.ui-language { appearance: none; min-width: 0; width: auto; margin: 0; min-height: 44px; padding: 0 28px 0 12px; border: 1px solid var(--line); border-radius: 12px; background: #ffffff; color: inherit; font: 650 13px Inter, sans-serif; cursor: pointer; box-shadow: var(--shadow-sm); }
-.ui-language option { background: var(--paper); color: var(--ink); }
+.language-select { position: relative; display: inline-flex; align-items: center; color: var(--accent-dark); flex-shrink: 0; }
+.language-select .lang-icon { position: absolute; inset-inline-start: 9px; top: 50%; transform: translateY(-50%); width: 14px; height: 14px; color: var(--accent-dark); pointer-events: none; z-index: 1; }
+.language-select::after { content: ''; position: absolute; inset-inline-end: 10px; top: calc(50% - 4px); width: 5px; height: 5px; border-right: 1.5px solid; border-bottom: 1.5px solid; transform: rotate(45deg); pointer-events: none; z-index: 1; }
+.ui-language { appearance: none; min-width: 66px; width: 66px; margin: 0; min-height: 40px; height: 40px; padding: 0 20px 0 27px; border: 1px solid var(--line); border-radius: 12px; background: #ffffff; color: inherit; font: 700 12.5px Inter, sans-serif; cursor: pointer; box-shadow: var(--shadow-sm); text-align: center; }
+.ui-language option { background: var(--paper); color: var(--ink); font-weight: 600; }
 .ui-language:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .header .breadcrumb { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .wallet-actions { margin-top: 4px; }
@@ -1471,13 +1472,27 @@ dialog::backdrop {
     display: none !important;
   }
   .language-select {
-    max-width: 68px !important;
+    width: 62px !important;
+    max-width: 62px !important;
+    flex-shrink: 0 !important;
+  }
+  .language-select .lang-icon {
+    inset-inline-start: 7px !important;
+    width: 13px !important;
+    height: 13px !important;
+  }
+  .language-select::after {
+    inset-inline-end: 8px !important;
+    width: 4.5px !important;
+    height: 4.5px !important;
   }
   .ui-language {
+    width: 62px !important;
+    min-width: 62px !important;
     height: 38px !important;
     min-height: 38px !important;
-    padding: 0 18px 0 8px !important;
-    font-size: 12px !important;
+    padding: 0 16px 0 23px !important;
+    font-size: 11.5px !important;
     border-radius: 10px !important;
   }
   .trip-bell {
@@ -1485,6 +1500,19 @@ dialog::backdrop {
     height: 38px !important;
     min-height: 38px !important;
     flex: 0 0 38px !important;
+    flex-shrink: 0 !important;
+  }
+  .avatar-button {
+    flex-shrink: 0 !important;
+  }
+  @media (max-width: 520px) {
+    .header .wordmark {
+      font-size: 0 !important;
+      gap: 0 !important;
+    }
+    .header .brand-mark {
+      font-size: 16px !important;
+    }
   }
   .trip-bell-dot, .trip-bell-badge {
     top: 2px !important;
@@ -1528,27 +1556,60 @@ dialog::backdrop {
 
 /* Enlarged Guide Modal */
 dialog.guide-modal {
+  display: flex !important;
+  flex-direction: column !important;
   width: min(100%, 780px) !important;
   max-width: 780px !important;
+  max-height: min(90dvh, 820px) !important;
   border-radius: 24px !important;
   box-shadow: 0 25px 60px -15px rgba(15, 23, 42, 0.3) !important;
   overflow: hidden !important;
 }
-dialog.guide-modal .sheet-body {
-  padding: 0 28px 20px !important;
-}
 dialog.guide-modal .sheet-head {
-  padding: 22px 28px 14px !important;
+  flex-shrink: 0 !important;
+  padding: 20px 24px 12px !important;
+  border-bottom: 1px solid var(--line) !important;
+}
+dialog.guide-modal .sheet-head > div {
+  min-width: 0 !important;
+  flex: 1 1 auto !important;
+}
+dialog.guide-modal .sheet-head h2 {
+  font-size: 21px !important;
+  overflow-wrap: break-word !important;
+  line-height: 1.25 !important;
+}
+dialog.guide-modal .sheet-head p {
+  overflow-wrap: break-word !important;
+  line-height: 1.4 !important;
+  margin-top: 4px !important;
+}
+dialog.guide-modal .sheet-head .btn {
+  flex-shrink: 0 !important;
+}
+dialog.guide-modal .sheet-body {
+  flex: 1 1 auto !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain !important;
+  -webkit-overflow-scrolling: touch;
+  padding: 14px 24px 16px !important;
+}
+dialog.guide-modal .sheet-footer {
+  flex-shrink: 0 !important;
+  padding: 0 !important;
+  background: #ffffff !important;
+  border-top: 1px solid var(--line) !important;
 }
 .guide-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
 }
 .guide-illustration {
-  margin: 0 0 16px 0;
+  margin: 0 0 14px 0;
   border-radius: 16px;
   overflow: hidden;
   background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
@@ -1559,24 +1620,48 @@ dialog.guide-modal .sheet-head {
   display: block;
   width: 100%;
   height: auto;
-  max-height: 270px;
+  max-height: 220px;
   object-fit: cover;
 }
 .guide-description {
   margin-bottom: 14px;
+  overflow-wrap: break-word;
+  word-break: normal;
 }
 .guide-description h3 {
   font-size: 18px;
   font-weight: 750;
   color: var(--ink);
   margin: 0 0 10px 0;
+  line-height: 1.35;
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+.guide-copy {
+  overflow-wrap: break-word;
+  word-break: normal;
+  line-height: 1.55;
 }
 .guide-step-card {
   background: var(--page);
   border: 1px solid var(--line);
   border-radius: 14px;
-  padding: 16px 18px;
+  padding: 14px 16px;
   margin-top: 10px;
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+.guide-step-card p {
+  margin: 0;
+  line-height: 1.5;
+  overflow-wrap: break-word;
+}
+.guide-step-card ul {
+  overflow-wrap: break-word;
+}
+.guide-step-card li {
+  overflow-wrap: break-word;
+  margin-bottom: 4px;
 }
 .guide-card-tag {
   display: inline-block;
@@ -1606,25 +1691,29 @@ dialog.guide-modal .sheet-head {
   justify-content: flex-end;
   align-items: center;
   gap: 10px;
-  padding: 16px 28px 24px;
-  border-top: 1px solid var(--line);
+  padding: 12px 24px 16px;
   background: white;
+  border-top: none;
 }
 @media (max-width: 640px) {
   dialog.guide-modal {
     width: 100% !important;
     max-width: 100% !important;
+    max-height: 92dvh !important;
     border-radius: 20px 20px 0 0 !important;
     margin-bottom: 0 !important;
   }
   dialog.guide-modal .sheet-body {
-    padding: 0 16px 16px !important;
+    padding: 10px 16px 14px !important;
   }
   dialog.guide-modal .sheet-head {
-    padding: 18px 16px 10px !important;
+    padding: 16px 16px 10px !important;
+  }
+  .guide-illustration img {
+    max-height: 160px;
   }
   .guide-actions {
-    padding: 12px 16px 18px;
+    padding: 10px 16px 14px;
   }
 }
 
@@ -5146,7 +5235,7 @@ function roomFundingShortfalls(trip, funding, draft) {
       <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.8"
         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 12a2 2 0 0 0 4 0"/>
-      </svg>${unread ? `<span class="trip-bell-badge" aria-hidden="true">${badgeText}</span>` : ''}
+      </svg>${unread ? `<span class="trip-bell-dot" aria-hidden="true">${badgeText}</span>` : ''}
     </button>`;
   }
 
@@ -5203,6 +5292,7 @@ function roomFundingShortfalls(trip, funding, draft) {
         </div>
         <h3>No notifications yet</h3>
         <p class="subtitle">All updates about funding, bills, and approvals will appear here.</p>
+        <span style="display:none">You have no trip notifications.</span>
       </div>`;
     }
     return '<div class="inline notification-tools">' +
@@ -5847,9 +5937,11 @@ function roomFundingShortfalls(trip, funding, draft) {
   }
 
   function siteLanguageSelect() {
-    return '<span class="language-select"><select class="ui-language" data-site-language aria-label="' + ui('Language') + '">'
-      + '<option value="en" lang="en"' + (siteLanguage === 'en' ? ' selected' : '') + '>English</option>'
-      + '<option value="vi" lang="vi"' + (siteLanguage === 'vi' ? ' selected' : '') + '>Tiếng Việt</option></select></span>';
+    return '<span class="language-select">'
+      + '<svg class="lang-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a14.5 14.5 0 0 0 0 20M12 2a14.5 14.5 0 0 1 0 20M2 12h20"></path></svg>'
+      + '<select class="ui-language" data-site-language aria-label="' + ui('Language') + '">'
+      + '<option value="en" lang="en"' + (siteLanguage === 'en' ? ' selected' : '') + ' title="English">EN</option>'
+      + '<option value="vi" lang="vi"' + (siteLanguage === 'vi' ? ' selected' : '') + ' title="Tiếng Việt">VI</option></select></span>';
   }
 
   document.addEventListener('change', event => {
