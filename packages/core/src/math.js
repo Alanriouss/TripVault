@@ -13,8 +13,14 @@ export function calculateShares(bill) {
   if (!bill || !Array.isArray(bill.participants) || bill.participants.length === 0) {
     return [];
   }
-  const count = bill.participants.length;
   const amount = Math.round(Number(bill.amount) || 0);
+  if (bill.splitType === 'custom' && bill.customShares && typeof bill.customShares === 'object') {
+    return bill.participants.map(id => ({
+      id,
+      amount: Math.round(Number(bill.customShares[id]) || 0),
+    }));
+  }
+  const count = bill.participants.length;
   const base = Math.floor(amount / count);
   const remainder = amount - base * count;
 
@@ -195,6 +201,7 @@ export function calculateRoomFundingShortfalls(trip, funding, draft) {
     const count = bill.participants.length;
     if (count === 0) continue;
 
+    const isCustom = bill.splitType === 'custom' && bill.customShares && typeof bill.customShares === 'object';
     const share = Math.floor(bill.amount / count);
     const remainder = bill.amount % count;
     const payerShare = bill.participants.indexOf(bill.payer);
@@ -204,7 +211,8 @@ export function calculateRoomFundingShortfalls(trip, funding, draft) {
     }
     for (const [index, id] of bill.participants.entries()) {
       if (bill.status !== 'approved' && index === payerShare) continue;
-      net.set(id, net.get(id) - share - (index < remainder ? 1 : 0));
+      const owedAmount = isCustom ? Math.round(Number(bill.customShares[id]) || 0) : (share + (index < remainder ? 1 : 0));
+      net.set(id, net.get(id) - owedAmount);
     }
   }
 

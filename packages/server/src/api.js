@@ -73,13 +73,25 @@ function logBillNotification(bill, kind, actor, recipients, receivedAt, comment,
 
 function billDetails(trip, data) {
   const label = text(data.label, 70, 'bill name');
-  const { amount, payer, participants } = data;
+  const { amount, payer, participants, splitType, customShares } = data;
   const ids = new Set(trip.members.map(member => member.id));
   assert(isUnits(amount) && amount <= 1e9 && ids.has(payer)
     && Array.isArray(participants) && participants.length > 0 && participants.length <= ids.size
     && new Set(participants).size === participants.length && participants.every(id => ids.has(id)),
   400, 'Enter valid bill details and choose the members sharing it.');
-  return { label, amount, payer, participants };
+  if (splitType === 'custom' && customShares && typeof customShares === 'object') {
+    let sum = 0;
+    const validated = {};
+    for (const pid of participants) {
+      const val = Math.round(Number(customShares[pid]) || 0);
+      assert(val >= 0 && Number.isSafeInteger(val), 400, 'Invalid custom share amount.');
+      validated[pid] = val;
+      sum += val;
+    }
+    assert(sum === amount, 400, `The sum of custom shares (${sum}) must equal the total bill amount (${amount}).`);
+    return { label, amount, payer, participants, splitType: 'custom', customShares: validated };
+  }
+  return { label, amount, payer, participants, splitType: 'equal' };
 }
 
 function cleanQuote(quote) {

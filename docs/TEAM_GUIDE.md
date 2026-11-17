@@ -95,7 +95,7 @@ Khi quy đổi từ số nguyên VND sang micro-USDC ($1 \text{ USDC} = 1,000,00
 
 Smart contract `TripVaultDeadline.sol` vận hành như một máy trạng thái (State Machine):
 
-```
+```ini
                        [Deploy Contract]
                               │
                     ┌─────────┴─────────┐

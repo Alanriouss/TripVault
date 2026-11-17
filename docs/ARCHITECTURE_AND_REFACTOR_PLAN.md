@@ -44,7 +44,7 @@
 
 ### 4.1. Phân Tách Gói Mã Nguồn (Modular Structure)
 
-```
+```ini
 TripVault/
 ├── packages/
 │   ├── core/                    # Pure ESM/TypeScript module (Logic toán học & ABI)

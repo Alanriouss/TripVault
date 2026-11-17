@@ -2,67 +2,125 @@
   const GUIDE_CONTENT = {
     vi: {
       title: 'Cách dùng TripVault',
-      subtitle: 'Hướng dẫn tạo phòng, tham gia và quyết toán.',
-      language: 'Ngôn ngữ hướng dẫn', close: 'Đã hiểu', skip: 'Bỏ qua', back: 'Quay lại', next: 'Tiếp theo',
+      subtitle: 'Hướng dẫn tạo phòng, nạp quỹ, chia chi phí và quyết toán an toàn.',
+      language: 'Ngôn ngữ hướng dẫn', close: 'Bắt đầu dùng ngay', skip: 'Bỏ qua', back: 'Quay lại', next: 'Tiếp theo',
       progress: (step, total) => `Bước ${step} / ${total}`,
       steps: [
         {
-          title: 'Tạo phòng và mời bạn',
-          copy: 'Bấm <b>Create a room</b>, đặt mức nạp tối thiểu và chọn <b>hạn nạp → giờ bắt đầu → giờ kết thúc</b>. Gửi link hoặc mã 6 số cho bạn bè.',
-          alt: 'Màn Your trips có nút Create a room. Màn Invite members hiển thị mã ví dụ 624183 và nút Copy invite link.',
+          title: 'Bước 1 · Tạo phòng mới (Your trips → Create a room)',
+          copy: `<p>Mở màn hình <b>Chuyến đi của bạn</b> và chọn <b>Tạo phòng</b>.</p>
+                 <div class="guide-step-card">
+                   <div class="guide-card-tag">💡 Định hướng sử dụng</div>
+                   <p>TripVault phục vụ cho các chuyến đi và sự kiện <b>trọn vẹn từ 1 ngày trở lên</b> có quỹ chung ký quỹ (không phù hợp chia bill lẻ tức thời).</p>
+                   <ul style="margin: 6px 0 0 18px; padding: 0; line-height: 1.6;">
+                     <li><b>Tên chuyến đi</b>: Điền tên sự kiện (ví dụ: <i>Đà Lạt weekend</i>, <i>Phú Quốc tour</i>).</li>
+                     <li><b>Mức nạp tối thiểu (USDC)</b>: Số tiền bảo chứng mỗi người nạp vào quỹ.</li>
+                     <li><b>3 mốc thời gian</b>: Chọn lần lượt <b>hạn nạp quỹ → Giờ bắt đầu → Giờ kết thúc</b>.</li>
+                   </ul>
+                 </div>`,
+          alt: 'Màn hình Your trips và giao diện tạo phòng với các trường tên chuyến, mức nạp và 3 mốc thời gian.',
         },
         {
-          title: 'Tham gia bằng ví',
-          copy: 'Mở link mời hoặc chọn <b>Join a room</b>. Kết nối ví hỗ trợ <b>Avalanche Fuji</b>, nhập mã nếu được mời bằng mã 6 số, rồi ký xác nhận.',
-          alt: 'Kết nối ví trên Avalanche Fuji rồi nhập mã trong Join a room.',
+          title: 'Bước 2 · Mời thành viên (Invite members)',
+          copy: `<p>Sau khi tạo phòng, chia sẻ phòng cho các thành viên trong nhóm:</p>
+                 <div class="guide-step-card">
+                   <ul style="margin: 0 0 0 18px; padding: 0; line-height: 1.6;">
+                     <li><b>Mã phòng 6 số</b>: Chia sẻ mã 6 số (ví dụ: <code class="room-code-badge">624183</code>), bạn bè chỉ cần bấm <b>Tham gia phòng (Join a room)</b> và nhập mã.</li>
+                     <li><b>Liên kết mời (Invite link)</b>: Bấm <b>Sao chép liên kết mời</b> để gửi qua Zalo, Telegram hoặc tin nhắn.</li>
+                     <li>Thành viên kết nối ví hỗ trợ mạng <b>Avalanche Fuji</b> và ký xác nhận SIWE không mật khẩu.</li>
+                   </ul>
+                 </div>`,
+          alt: 'Màn hình hiển thị mã phòng 6 chữ số và nút sao chép liên kết mời thành viên.',
         },
         {
-          title: 'Nạp vào quỹ trước hạn',
-          copy: 'Khi đủ thành viên, trưởng nhóm mở <b>Wallet → Deploy Fuji vault</b>. Mỗi người bấm <b>Deposit USDC</b> và có thể rút phần mình đã nạp trước hạn. Đến hạn, nếu có ai nạp thiếu, chuyến tự hủy và mỗi người có thể nhận lại tiền đã nạp. Nếu đủ, quỹ khóa rút và chuyến bắt đầu theo lịch.',
-          alt: 'Trong Wallet, trưởng nhóm tạo quỹ rồi từng thành viên nạp USDC trước hạn.',
+          title: 'Bước 3 · Làm quen thanh menu chức năng (Sidebar navigation)',
+          copy: `<p>Thanh điều hướng bên trái (hoặc thanh đáy trên Mobile) cung cấp 5 công cụ chính:</p>
+                 <div class="guide-step-card">
+                   <ul style="margin: 0 0 0 18px; padding: 0; line-height: 1.7;">
+                     <li>🏠 <b>Tổng quan (Overview)</b>: Xem mã phòng, tiến độ chuyến đi, số dư quỹ và cài đặt.</li>
+                     <li>👥 <b>Thành viên (People)</b>: Danh sách bạn đồng hành, chi tiết ai đã ứng tiền và ai nợ.</li>
+                     <li>🧾 <b>Hóa đơn (Bills)</b>: Ghi nhận chi tiêu thực tế (VND) với 2 phương thức <b>Chia đều</b> hoặc <b>Chia tùy chỉnh</b>.</li>
+                     <li>⚖️ <b>Quyết toán (Final split)</b>: Tính toán bù trừ công nợ Zero-Sum bảo toàn và quy đổi sang USDC.</li>
+                     <li>💳 <b>Ví & Quỹ (Wallet)</b>: Nạp USDC vào quỹ Avalanche Fuji, rút tiền trước hạn hoặc nhận tiền về ví.</li>
+                   </ul>
+                 </div>`,
+          alt: 'Thanh điều hướng bên trái hiển thị 5 mục: Overview, People, Bills, Final split, Wallet.',
         },
         {
-          title: 'Ghi chi phí bằng VND',
-          copy: 'Mở <b>Bills → Add bill</b> để ghi số tiền, người trả và người cùng chia. Chỉ người được chọn mới duyệt. Sau 24 giờ kể từ lúc tạo hoặc sửa, TripVault tự duyệt nếu không còn góp ý hay yêu cầu bỏ bill.',
-          alt: 'Một bill ăn trưa 300.000 đồng được lưu vào Bills và duyệt.',
-        },
-        {
-          title: 'Chốt tiền cuối chuyến',
-          copy: 'Sau khi chuyến kết thúc, nhóm vẫn có thể duyệt hoặc yêu cầu sửa bill đang chờ. Bill chỉ chuyển sang <b>Rejected</b> khi người tạo, người ứng tiền và tất cả người cùng chia đồng ý bỏ bill để tự tính riêng. Khi các bill đã xử lý xong, trưởng nhóm chốt tiền trong <b>Final split</b>.',
-          alt: 'Trong Final split, các thành viên duyệt số tiền, nạp bù nếu cần, rồi trưởng nhóm chốt thanh toán.',
+          title: 'Bước 4 · Quyết toán & Bắt buộc duyệt (Approve)',
+          copy: `<p>Khi chuyến đi kết thúc, quy trình quyết toán diễn ra minh bạch và an toàn:</p>
+                 <div class="guide-step-card">
+                   <div class="guide-card-tag danger">⚠️ Lưu ý chốt sổ</div>
+                   <ul style="margin: 6px 0 0 18px; padding: 0; line-height: 1.6;">
+                     <li><b>Khóa & duyệt hóa đơn</b>: Hoàn tất phê duyệt các hóa đơn đang chờ.</li>
+                     <li><b>Trưởng nhóm tính tiền</b>: Mở <b>Quyết toán (Final split)</b> để khóa tỷ giá USD/VND và công bố bảng phân bổ.</li>
+                     <li><b>Bắt buộc Approve</b>: <b>Tất cả thành viên phải bấm "Approve" (Xác nhận)</b> số tiền của mình thì hệ thống mới cho phép giải ngân.</li>
+                     <li><b>Thanh toán on-chain</b>: Trưởng nhóm thực hiện lệnh quyết toán; các thành viên vào <b>Ví (Wallet)</b> để rút số dư USDC về ví riêng.</li>
+                   </ul>
+                 </div>`,
+          alt: 'Màn hình Final split hiển thị bảng quyết toán và các nút Approve xác nhận của thành viên.',
         },
       ],
     },
     en: {
       title: 'How to use TripVault',
-      subtitle: 'Create a room, join, and settle up.',
-      language: 'Guide language', close: 'Got it', skip: 'Skip for now', back: 'Back', next: 'Next',
+      subtitle: 'Create a room, fund the vault, split expenses, and settle securely.',
+      language: 'Guide language', close: 'Get started', skip: 'Skip for now', back: 'Back', next: 'Next',
       progress: (step, total) => `Step ${step} of ${total}`,
       steps: [
         {
-          title: 'Create a room and invite friends',
-          copy: 'Choose <b>Create a room</b>, set the minimum deposit and choose a <b>deposit deadline, trip start, and trip end</b> in that order. Share the invite link or six-digit code.',
-          alt: 'Your trips shows Create a room. Invite members shows the example code 624183 and the Copy invite link button.',
+          title: 'Step 1 · Create a room (Your trips → Create a room)',
+          copy: `<p>Open <b>Your trips</b> and click <b>Create a room</b>.</p>
+                 <div class="guide-step-card">
+                   <div class="guide-card-tag">💡 Purpose of TripVault</div>
+                   <p>TripVault is dedicated to multi-day trips and complete group events (<b>1+ days</b>) with an escrowed vault (not for instant single-bill splits).</p>
+                   <ul style="margin: 6px 0 0 18px; padding: 0; line-height: 1.6;">
+                     <li><b>Trip name</b>: e.g. <i>Da Lat weekend</i> or <i>Phu Quoc tour</i>.</li>
+                     <li><b>Minimum deposit (USDC)</b>: Escrow amount each person funds upfront.</li>
+                     <li><b>3 milestones</b>: Set <b>Deposit deadline → Trip start → Trip end</b> in that order.</li>
+                   </ul>
+                 </div>`,
+          alt: 'Your trips view with Create a room button and the form showing name, deposit and times.',
         },
         {
-          title: 'Join with a wallet',
-          copy: 'Open the invite link or choose <b>Join a room</b>. Connect a wallet that supports <b>Avalanche Fuji</b>, enter the six-digit code if you have one, and sign in.',
-          alt: 'Connect a wallet on Avalanche Fuji, then enter the code in Join a room.',
+          title: 'Step 2 · Invite group members (Invite members)',
+          copy: `<p>Share the newly created room with your travel companions:</p>
+                 <div class="guide-step-card">
+                   <ul style="margin: 0 0 0 18px; padding: 0; line-height: 1.6;">
+                     <li><b>6-digit room code</b>: Share the code (e.g. <code class="room-code-badge">624183</code>). Members click <b>Join a room</b> and enter it.</li>
+                     <li><b>Copy invite link</b>: One click to copy the link and send via chat or social apps.</li>
+                     <li>Members connect a wallet on <b>Avalanche Fuji</b> and sign a passwordless SIWE challenge to join.</li>
+                   </ul>
+                 </div>`,
+          alt: 'Room invite card showing 6-digit room code and copy invite link button.',
         },
         {
-          title: 'Add money to the trip fund before the deadline',
-          copy: 'Once everyone joins, the organizer chooses <b>Wallet → Deploy Fuji vault</b>. Each person chooses <b>Deposit USDC</b> and can withdraw their own deposit before the deadline. If anyone is below the minimum at the deadline, the trip is cancelled and everyone can take back their deposit. If everyone has funded, withdrawals lock and the trip begins as scheduled.',
-          alt: 'The organizer sets up the trip fund in Wallet, then members add USDC before the deadline.',
+          title: 'Step 3 · Navigation menu & Key tools (Sidebar)',
+          copy: `<p>The sidebar navigation (or bottom bar on mobile) provides 5 essential tools:</p>
+                 <div class="guide-step-card">
+                   <ul style="margin: 0 0 0 18px; padding: 0; line-height: 1.7;">
+                     <li>🏠 <b>Overview</b>: Room code, trip progress stepper, vault balance, and settings.</li>
+                     <li>👥 <b>People</b>: Travelers roster, who paid what, who owes, and net positions.</li>
+                     <li>🧾 <b>Bills</b>: Record real-world VND expenses with <b>Equal split</b> or <b>Custom split</b>.</li>
+                     <li>⚖️ <b>Final split</b>: Calculate Zero-Sum balanced debt offsets converted to USDC.</li>
+                     <li>💳 <b>Wallet</b>: Manage Fuji smart contract deposits, early withdrawals, and payouts.</li>
+                   </ul>
+                 </div>`,
+          alt: 'Sidebar showing 5 navigation tabs: Overview, People, Bills, Final split, Wallet.',
         },
         {
-          title: 'Record expenses in VND',
-          copy: 'Open <b>Bills → Add bill</b> and enter the amount, who paid, and who shares it. Only the people listed review the bill. TripVault automatically approves it 24 hours after creation or editing if there are no open suggestions or removal requests.',
-          alt: 'A 300,000 VND lunch bill is recorded and approved in Bills.',
-        },
-        {
-          title: 'Make final payments',
-          copy: 'Members can finish open bill reviews after the trip ends. A bill becomes <b>Rejected</b> when its creator, payer, and everyone sharing it agree to handle it separately. After reviews are complete, the organizer settles in <b>Final split</b>.',
-          alt: 'Members review amounts and top up, then the organizer makes group payments.',
+          title: 'Step 4 · Settlement & Mandatory approvals (Approve)',
+          copy: `<p>Once the journey ends, the settlement process is democratic and transparent:</p>
+                 <div class="guide-step-card">
+                   <div class="guide-card-tag danger">⚠️ Settlement rule</div>
+                   <ul style="margin: 6px 0 0 18px; padding: 0; line-height: 1.6;">
+                     <li><b>Finalize open bills</b>: Ensure all recorded bills are reviewed and approved.</li>
+                     <li><b>Organizer prepares split</b>: Open <b>Final split</b> to lock the USD/VND reference rate and share amounts.</li>
+                     <li><b>Mandatory Approvals</b>: <b>All members must review and click "Approve"</b> on their balance before settlement unlocks.</li>
+                     <li><b>On-chain settlement</b>: Organizer triggers group payments; travelers claim their final USDC balances in <b>Wallet</b>.</li>
+                   </ul>
+                 </div>`,
+          alt: 'Final split screen showing member balance reviews and approval buttons.',
         },
       ],
     },
@@ -94,18 +152,22 @@
       ? btn(guide.close, 'close-sheet', { data: 'autofocus' })
       : btn(guide.next, 'guide-step', { data: `data-id="${guideStep + 1}" autofocus` });
     const skip = last ? '' : btn(guide.skip, 'close-sheet', { tone: 'ghost' });
+    const stepImage = (GUIDE_PICTURES.length >= 5
+      ? [GUIDE_PICTURES[0], GUIDE_PICTURES[1], GUIDE_PICTURES[3], GUIDE_PICTURES[4]][guideStep]
+      : GUIDE_PICTURES[guideStep]) || GUIDE_PICTURES[0];
+    
+    sheet?.classList?.add('guide-modal');
     sheetOpen(guide.title, guide.subtitle,
       `<div class="guide-toolbar">
         <div class="inline" role="group" aria-label="${guide.language}">${languageOptions}</div>
         <span class="chip">${guide.progress(guideStep + 1, guide.steps.length)}</span>
        </div>
        <figure class="guide-illustration">
-        <img src="${GUIDE_PICTURES[guideStep]}" alt="${safe(step.alt)}" width="968" height="408">
+        <img src="${stepImage}" alt="${safe(step.alt)}" width="968" height="408">
        </figure>
        <div class="guide-description">
         <h3 id="guide-step-title" tabindex="-1">${step.title}</h3>
-        <p>${step.copy.replace(/<b>([^<]+)<\/b>/g, (_, label) =>
-          '<b>' + label.split(' → ').map(value => safe(ui(value))).join(' → ') + '</b>')}</p>
+        <div class="guide-copy">${step.copy}</div>
        </div>`,
       `<div class="guide-actions">${skip}${previous}${next}</div>`,
       language,
@@ -120,6 +182,7 @@
 
   function dismissGuide() {
     guideOpen = false;
+    sheet?.classList?.remove('guide-modal');
     sheet.close();
     const invite = pendingGuideInvite;
     pendingGuideInvite = '';
@@ -134,7 +197,7 @@
 
   function moveGuide(value) {
     const step = Number(value);
-    if (!Number.isInteger(step) || step < 0 || step >= GUIDE_PICTURES.length) return;
+    if (!Number.isInteger(step) || step < 0 || step >= 4) return;
     guideStep = step;
     showGuide();
     sheet.querySelector('#guide-step-title')?.focus();

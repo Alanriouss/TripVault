@@ -128,9 +128,29 @@
     const label = String(fields.get('label') || '').trim();
     const amount = Number(fields.get('amount'));
     const payer = fields.get('payer');
+    const splitType = fields.get('split_type') || 'equal';
+    if (!Number.isSafeInteger(amount) || amount <= 0 || amount > 1e9 || !member(payer)) return null;
+
+    if (splitType === 'custom') {
+      const customShares = {};
+      const participants = [];
+      let sum = 0;
+      for (const m of (state.trip?.members || [])) {
+        const val = Number(fields.get('custom_share_' + m.id)) || 0;
+        if (val > 0) {
+          customShares[m.id] = Math.round(val);
+          participants.push(m.id);
+          sum += customShares[m.id];
+        }
+      }
+      if (sum !== amount || participants.length === 0) return null;
+      return { label, amount, payer, participants, splitType: 'custom', customShares };
+    }
+
     const participants = fields.getAll('participant');
-    if (Number.isSafeInteger(amount) && amount > 0 && amount <= 1e9 && member(payer)
-      && participants.length > 0 && participants.every(id => member(id))) return { label, amount, payer, participants };
+    if (participants.length > 0 && participants.every(id => member(id))) {
+      return { label, amount, payer, participants, splitType: 'equal' };
+    }
     return null;
   }
 

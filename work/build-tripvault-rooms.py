@@ -254,7 +254,7 @@ body {
   left: 0;
   right: 0;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 4px;
   padding: 7px 12px max(7px, env(safe-area-inset-bottom));
   background: rgba(255, 255, 255, 0.94);
@@ -886,14 +886,364 @@ dialog::backdrop {
 .custom-dt-footer .btn {
   flex: 1;
 }
-.guide-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
-.guide-illustration { margin: 0; border-radius: 13px; overflow: hidden; border: 1px solid var(--line); background: var(--tint); }
-.guide-illustration img { display: block; width: 100%; height: auto; }
-.guide-description { display: grid; gap: 6px; font-size: 14px; }
-.guide-description h3 { width: fit-content; font-size: 19px; }
-.guide-description p { color: var(--muted); }
-.guide-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.guide-actions .btn:last-child { margin-inline-start: auto; }
+/* Trip Settings unbolded & FX rate */
+.trip-settings-panel .row > strong {
+  font-weight: 400 !important;
+  user-select: text;
+  -webkit-user-select: text;
+  text-align: right;
+}
+.fx-rate-container {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
+}
+.fx-rate-primary {
+  font-weight: 700 !important;
+  color: var(--ink);
+  font-size: 14.5px;
+  display: block;
+}
+.fx-rate-sub {
+  font-weight: 400 !important;
+  font-size: 12.5px;
+  color: var(--muted);
+  display: block;
+  margin-top: 3px;
+}
+
+/* Warning notice prominent */
+.notice-prominent,
+.notice.notice-prominent {
+  font-size: 15px !important;
+  line-height: 1.6;
+  padding: 16px 20px;
+  border-radius: 14px;
+  font-weight: 500;
+  border-left: 5px solid var(--warning);
+  background: var(--warning-bg);
+  color: #92400e;
+  box-shadow: 0 2px 8px rgba(217, 119, 6, 0.12);
+  margin: 14px 0;
+}
+
+/* Travelers details subtitle font size */
+.traveler-details,
+.row-sub.traveler-details {
+  font-size: 14px !important;
+  font-weight: 500;
+  color: #334155;
+  line-height: 1.5;
+  margin-top: 3px;
+}
+@media (max-width: 640px) {
+  .traveler-details,
+  .row-sub.traveler-details {
+    font-size: 13px !important;
+  }
+}
+
+/* Desktop layout spacing */
+@media (min-width: 900px) {
+  .shell {
+    display: grid;
+    grid-template-columns: 250px minmax(0, 1fr) !important;
+  }
+  .sidebar {
+    padding: 24px 18px !important;
+    gap: 24px !important;
+  }
+  .sidebar nav {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+    margin: 16px 0 !important;
+  }
+  .sidebar .nav-btn {
+    padding: 12px 16px !important;
+    font-size: 14.5px !important;
+    border-radius: 12px !important;
+    gap: 12px !important;
+  }
+  .header-inner {
+    gap: 20px !important;
+    padding: 0 28px !important;
+  }
+  .header-actions {
+    gap: 12px !important;
+  }
+}
+
+/* Mobile header overflow & layout fixes */
+@media (max-width: 899px) {
+  body, html, .shell, .workspace, .header {
+    max-width: 100vw !important;
+    overflow-x: clip !important;
+  }
+  .header-inner {
+    padding: 0 10px !important;
+    gap: 6px !important;
+    min-height: 58px !important;
+    max-width: 100vw !important;
+    overflow-x: hidden !important;
+  }
+  .header-actions {
+    gap: 6px !important;
+    flex-shrink: 0 !important;
+    max-width: calc(100vw - 44px) !important;
+  }
+  .breadcrumb {
+    display: none !important;
+  }
+  .language-select {
+    max-width: 68px !important;
+  }
+  .ui-language {
+    height: 38px !important;
+    min-height: 38px !important;
+    padding: 0 18px 0 8px !important;
+    font-size: 12px !important;
+    border-radius: 10px !important;
+  }
+  .trip-bell {
+    width: 38px !important;
+    height: 38px !important;
+    min-height: 38px !important;
+    flex: 0 0 38px !important;
+  }
+  .header .btn {
+    min-height: 38px !important;
+    padding: 0 10px !important;
+    font-size: 12.5px !important;
+    border-radius: 10px !important;
+  }
+  .header-demo {
+    display: none !important;
+  }
+  .mobile-nav {
+    display: grid !important;
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    gap: 2px !important;
+    padding: 6px 6px max(6px, env(safe-area-inset-bottom)) !important;
+  }
+  .mobile-nav .nav-btn {
+    min-width: 0 !important;
+    padding: 4px 2px !important;
+    font-size: 11px !important;
+  }
+  .overview-grid {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 14px !important;
+    width: 100% !important;
+  }
+  .overview-grid > section {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+}
+
+/* Enlarged Guide Modal */
+dialog.guide-modal {
+  width: min(100%, 780px) !important;
+  max-width: 780px !important;
+  border-radius: 24px !important;
+  box-shadow: 0 25px 60px -15px rgba(15, 23, 42, 0.3) !important;
+  overflow: hidden !important;
+}
+dialog.guide-modal .sheet-body {
+  padding: 0 28px 20px !important;
+}
+dialog.guide-modal .sheet-head {
+  padding: 22px 28px 14px !important;
+}
+.guide-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.guide-illustration {
+  margin: 0 0 16px 0;
+  border-radius: 16px;
+  overflow: hidden;
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  border: 1px solid var(--line);
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
+}
+.guide-illustration img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 270px;
+  object-fit: cover;
+}
+.guide-description {
+  margin-bottom: 14px;
+}
+.guide-description h3 {
+  font-size: 18px;
+  font-weight: 750;
+  color: var(--ink);
+  margin: 0 0 10px 0;
+}
+.guide-step-card {
+  background: var(--page);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 16px 18px;
+  margin-top: 10px;
+}
+.guide-card-tag {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 6px;
+  background: var(--tint);
+  color: var(--accent-dark);
+  margin-bottom: 8px;
+}
+.guide-card-tag.danger {
+  background: var(--warning-bg);
+  color: #92400e;
+}
+.room-code-badge {
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-family: monospace;
+  font-weight: 700;
+  color: var(--accent-dark);
+}
+.guide-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 28px 24px;
+  border-top: 1px solid var(--line);
+  background: white;
+}
+@media (max-width: 640px) {
+  dialog.guide-modal {
+    width: 100% !important;
+    max-width: 100% !important;
+    border-radius: 20px 20px 0 0 !important;
+    margin-bottom: 0 !important;
+  }
+  dialog.guide-modal .sheet-body {
+    padding: 0 16px 16px !important;
+  }
+  dialog.guide-modal .sheet-head {
+    padding: 18px 16px 10px !important;
+  }
+  .guide-actions {
+    padding: 12px 16px 18px;
+  }
+}
+
+/* Custom Split UI Styles */
+.split-type-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 4px;
+  background: var(--page);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  margin-bottom: 12px;
+}
+.split-type-option {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 14px;
+  border-radius: 9px;
+  font-size: 13.5px;
+  font-weight: 650;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+.split-type-option input[type="radio"] {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.split-type-option:has(input:checked) {
+  background: #ffffff;
+  color: var(--accent-dark);
+  box-shadow: var(--shadow-sm);
+}
+.custom-split-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--page);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  transition: border-color 0.15s ease;
+}
+.custom-split-row:hover {
+  border-color: var(--line-strong);
+}
+.custom-split-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+.custom-split-name {
+  font-weight: 650;
+  font-size: 14px;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.custom-share-pct {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 600;
+  margin-top: 2px;
+}
+.custom-share-input {
+  width: 140px;
+  padding: 8px 12px;
+  font-size: 14px;
+  font-weight: 650;
+  text-align: right;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #ffffff;
+  color: var(--ink);
+}
+.custom-share-input:focus {
+  outline: 2px solid var(--accent);
+  border-color: var(--accent);
+}
+.custom-split-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 16px;
+  background: var(--tint);
+  border: 1px solid var(--tint-border);
+  border-radius: 12px;
+  font-size: 13.5px;
+  font-weight: 650;
+}
 </style>
 </head>''')
 replace('  function readStorage(key) {', room_ui + '\n  function readStorage(key) {')
@@ -1012,9 +1362,94 @@ replace("""          invalidateSplit(trip);
             invalidateSplit(trip);
             commit(trip, 'Split reopened. Prepare a new rate and collect approvals again.');
           }""")
-replace("""    trip.bills.push({ id: trip.nextBillId++, label, amount, payer, participants, approvals: [], status: 'pending' });""", """    if (trip.shared) {
+shares_old = """function shares(bill) {
+    const count = bill.participants.length;
+    const base = Math.floor(bill.amount / count);
+    const remainder = bill.amount - base * count;
+    return bill.participants.map((id, index) => ({ id, amount: base + (index < remainder ? 1 : 0) }));
+  }"""
+shares_new = """function shares(bill) {
+    if (bill && bill.splitType === 'custom' && bill.customShares && typeof bill.customShares === 'object') {
+      return (bill.participants || []).map(id => ({ id, amount: Math.round(Number(bill.customShares[id]) || 0) }));
+    }
+    const count = bill.participants.length;
+    const base = Math.floor(bill.amount / count);
+    const remainder = bill.amount - base * count;
+    return bill.participants.map((id, index) => ({ id, amount: base + (index < remainder ? 1 : 0) }));
+  }"""
+replace(shares_old, shares_new)
+
+# Demo trip settings unbolded, dates spacing & FX rate
+replace('<section class="panel"><div class="panel-head"><h2>Trip settings</h2>', '<section class="panel trip-settings-panel"><div class="panel-head"><h2>Trip settings</h2>')
+replace("row('Starts',safe(t.startTime.replace('T',' ')))", "row('Starts',formatTripTimeSpacious(t.startTime))")
+replace("row('Ends',safe(t.endTime.replace('T',' ')))", "row('Ends',formatTripTimeSpacious(t.endTime))")
+replace("row('Exchange rate',safe(fxLabel(t.reviewQuote || fx)))", "row('Exchange rate',fxRowValue(t.reviewQuote || fx))")
+
+# Warning notice prominent
+replace('<p class="notice">Early withdrawals use only your own balance. You remain a trip member after withdrawing all. After start, deposits are locked until final settlement; top-ups are allowed.</p>',
+        '<p class="notice warn notice-prominent">Early withdrawals use only your own balance. You remain a trip member after withdrawing all. After start, deposits are locked until final settlement; top-ups are allowed.</p>')
+
+# Travelers subtitle font size
+replace('<span class="row-sub">Paid ${vnd(m.paid)} · Owes ${vnd(m.owed)} · Deposited ${fmt(depositOf(m.id))} USDC</span>',
+        '<span class="row-sub traveler-details">Paid ${vnd(m.paid)} · Owes ${vnd(m.owed)} · Deposited ${fmt(depositOf(m.id))} USDC</span>')
+
+old_record_bill = """function recordBill(trip, data, fail) {
+    const label = String(data.get('label') || '').trim();
+    const amount = Number(data.get('amount'));
+    const payer = data.get('payer');
+    const participants = data.getAll('participant');
+    if (trip.settled || !label || !Number.isSafeInteger(amount) || amount <= 0 || amount > 1e9
+      || !member(payer) || !participants.length || new Set(participants).size !== participants.length
+      || participants.some(id => !member(id))) {
+      fail('Enter a valid amount, payer and at least one participant for an open trip.');
+      return;
+    }
+    trip.bills.push({ id: trip.nextBillId++, label, amount, payer, participants, approvals: [], status: 'pending' });
+    invalidateSplit(trip);
+    sheet.close();
+    state.view = 'bills';
+    commit(trip, 'Bill recorded. Waiting for approval.');
+  }"""
+
+new_record_bill = """function recordBill(trip, data, fail) {
+    const label = String(data.get('label') || '').trim();
+    const amount = Number(data.get('amount'));
+    const payer = data.get('payer');
+    const splitType = data.get('split_type') || 'equal';
+    const vi = siteLanguage === 'vi';
+    let participants = [];
+    let customShares = null;
+
+    if (splitType === 'custom') {
+      customShares = {};
+      let sum = 0;
+      for (const m of trip.members) {
+        const val = Number(data.get('custom_share_' + m.id)) || 0;
+        if (val > 0) {
+          customShares[m.id] = Math.round(val);
+          participants.push(m.id);
+          sum += customShares[m.id];
+        }
+      }
+      if (sum !== amount) {
+        fail(vi ? 'Tổng số tiền chia (' + vnd(sum) + ') phải bằng tổng hóa đơn (' + vnd(amount) + ')'
+          : 'The sum of custom shares (' + vnd(sum) + ') must equal the total bill amount (' + vnd(amount) + ')');
+        return;
+      }
+    } else {
+      participants = data.getAll('participant');
+    }
+
+    if (trip.settled || !label || !Number.isSafeInteger(amount) || amount <= 0 || amount > 1e9
+      || !member(payer) || !participants.length || new Set(participants).size !== participants.length
+      || participants.some(id => !member(id))) {
+      fail('Enter a valid amount, payer and at least one participant for an open trip.');
+      return;
+    }
+
+    if (trip.shared) {
       const id = Number(data.get('editing'));
-      changeRoom(trip, id ? 'bill.edit' : 'bill.add', { id, label, amount, payer, participants }, updated => {
+      changeRoom(trip, id ? 'bill.edit' : 'bill.add', { id, label, amount, payer, participants, splitType, customShares }, updated => {
         if (!updated) return;
         if (sheet.open) sheet.close();
         state.view = 'bills';
@@ -1023,7 +1458,14 @@ replace("""    trip.bills.push({ id: trip.nextBillId++, label, amount, payer, pa
       }, fail);
       return;
     }
-    trip.bills.push({ id: trip.nextBillId++, label, amount, payer, participants, approvals: [], status: 'pending' });""")
+
+    trip.bills.push({ id: trip.nextBillId++, label, amount, payer, participants, splitType, customShares, approvals: [], status: 'pending' });
+    invalidateSplit(trip);
+    sheet.close();
+    state.view = 'bills';
+    commit(trip, 'Bill recorded. Waiting for approval.');
+  }"""
+replace(old_record_bill, new_record_bill)
 replace("""'fuji-deploy-form', 'fuji-funds-form'].includes(form.id)""", """'fuji-deploy-form', 'fuji-funds-form', 'fuji-link-form', 'room-form'].includes(form.id)""")
 replace("    if (form.id === 'fuji-deploy-form') deployFuji(data, fail);", "    if (form.id === 'room-form') submitRoomForm(data, fail);\n    else if (form.id === 'fuji-link-form') linkExistingVault(data, fail);\n    else if (form.id === 'fuji-deploy-form') deployFuji(data, fail);")
 replace("      updateFunds(state.trip, data.get('kind'), parseUnits(data.get('amount')), fail);", "      if (!state.trip.shared) updateFunds(state.trip, data.get('kind'), parseUnits(data.get('amount')), fail);")
@@ -1113,19 +1555,155 @@ replace("    if (act === 'room-copy') return copyRoomInvite(trip);", """    if (
     if (act === 'room-funding-top-up') return topUpRoomFunding(element);""")
 replace("disabled:!!t.settled})}</div><section class=\"panel\"><div class=\"panel-head\"><h2>Trip expenses",
         "disabled:t.shared ? !roomBillFunding(t).ready : !!t.settled})}</div>${t.shared ? roomFundingPanel(t) : ''}<section class=\"panel\"><div class=\"panel-head\"><h2>Trip expenses")
-replace("function addBill(){const t=state.trip;if(t.settled)return;", """function addBill(editing = null) {
-    const t = state.trip;
-    if (t.settled || (!editing && t.shared && !roomBillFunding(t).ready)) return;
-    """.rstrip())
-replace("sheetOpen('Add a bill','Record a payment made outside TripVault.'", "sheetOpen(editing ? 'Edit bill' : 'Add a bill','Record a payment made outside TripVault.'")
-replace('<form id="bill-form" class="stack">', '<form id="bill-form" class="stack" ${t.shared ? `data-room="${safe(t.id)}" data-editing="${editing?.id || \'\'}"` : \'\'}>${editing ? `<input type="hidden" name="editing" value="${editing.id}">` : \'\'}')
-replace('maxlength="70" required placeholder="e.g. Lunch"', 'maxlength="70" required placeholder="e.g. Lunch" value="${safe(editing?.label)}"')
-replace('step="1" required placeholder="300000"', 'step="1" required placeholder="300000" value="${editing?.amount || \'\'}"')
-replace("m.id===state.actor?'selected':''", "(editing?.payer || state.actor) === m.id ? 'selected' : ''")
-replace('name="participant" value="${m.id}" checked', 'name="participant" value="${m.id}" ${!editing || editing.participants.includes(m.id) ? \'checked\' : \'\'}')
-replace('<p class="notice">No recipient wallet is needed: the payer is recorded now. USDC recipients are calculated automatically in Final split.</p>',
-        """${t.shared ? '<div id="bill-funding-status" aria-live="polite"></div><p id="bill-reminder-feedback" role="status"></p>' : '<p class="notice">USDC recipients are calculated automatically in Final split.</p>'}""")
-replace('form="bill-form">Save bill</button>`)}', 'form="bill-form">Save bill</button>`);\n    if (t.shared) updateBillFundingForm();\n  }')
+old_add_bill = "function addBill(){const t=state.trip;if(t.settled)return;sheetOpen('Add a bill','Record a payment made outside TripVault.',`<form id=\"bill-form\" class=\"stack\"><label class=\"field\">Bill name<input name=\"label\" maxlength=\"70\" required placeholder=\"e.g. Lunch\"></label><label class=\"field\">Amount paid (VND)<input name=\"amount\" type=\"number\" inputmode=\"numeric\" min=\"1\" max=\"1000000000\" step=\"1\" required placeholder=\"300000\"></label><label class=\"field\">Who paid the merchant?<select name=\"payer\" required>${t.members.map(m=>`<option value=\"${m.id}\" ${m.id===state.actor?'selected':''}>${safe(m.name)}</option>`).join('')}</select></label><fieldset class=\"participant-field\"><legend>Who shares this cost?</legend><div class=\"participants\">${t.members.map(m=>`<label class=\"participant\">${avatar(m)}<span>${safe(m.name)}</span><input type=\"checkbox\" name=\"participant\" value=\"${m.id}\" checked></label>`).join('')}</div></fieldset><p class=\"notice\">No recipient wallet is needed: the payer is recorded now. USDC recipients are calculated automatically in Final split.</p><p id=\"sheet-error\" class=\"form-error\"></p></form>`,`<button class=\"btn full\" type=\"submit\" form=\"bill-form\">Save bill</button>`)}"
+
+new_add_bill = """function addBill(editing = null) {
+  const t = state.trip;
+  if (t.settled || (!editing && t.shared && !roomBillFunding(t).ready)) return;
+  const vi = siteLanguage === 'vi';
+  const custom = editing?.splitType === 'custom';
+  const currentTotal = editing ? editing.amount : '';
+
+  const payerOptions = t.members.map(m =>
+    `<option value="${m.id}" ${(editing?.payer || state.actor) === m.id ? 'selected' : ''}>${userText(m.name)}</option>`
+  ).join('');
+
+  const equalParticipants = t.members.map(m =>
+    `<label class="participant">${avatar(m)}<span>${userText(m.name)}</span><input type="checkbox" name="participant" value="${m.id}" ${!editing || editing.participants.includes(m.id) ? 'checked' : ''}></label>`
+  ).join('');
+
+  const customRows = t.members.map(m => {
+    const val = editing?.customShares?.[m.id] ?? '';
+    return `<div class="custom-split-row">
+      <div class="custom-split-user">
+        ${avatar(m)}
+        <div>
+          <div class="custom-split-name">${userText(m.name)}</div>
+          <span class="custom-share-pct" data-member-pct="${m.id}">0.0% (0 ₫)</span>
+        </div>
+      </div>
+      <div>
+        <input type="number" class="custom-share-input" name="custom_share_${m.id}" data-custom-member="${m.id}" min="0" max="1000000000" step="1" placeholder="0 ₫" value="${val}">
+      </div>
+    </div>`;
+  }).join('');
+
+  sheetOpen(editing ? 'Edit bill' : 'Add a bill', 'Record a payment made outside TripVault.',
+    `<form id="bill-form" class="stack" ${t.shared ? `data-room="${safe(t.id)}" data-editing="${editing?.id || ''}"` : ''}>
+      ${editing ? `<input type="hidden" name="editing" value="${editing.id}">` : ''}
+      <label class="field">Bill name<input name="label" maxlength="70" required placeholder="e.g. Lunch" value="${safe(editing?.label)}"></label>
+      <label class="field">Amount paid (VND)<input name="amount" id="bill-amount-input" type="number" inputmode="numeric" min="1" max="1000000000" step="1" required placeholder="300000" value="${currentTotal}"></label>
+      <label class="field">Who paid the merchant?<select name="payer" required>${payerOptions}</select></label>
+
+      <div class="stack" style="gap:8px;">
+        <span style="font-size:12.5px; font-weight:700; color:var(--muted);">${vi ? 'Phương thức chia:' : 'Split method:'}</span>
+        <div class="split-type-toggle" role="radiogroup">
+          <label class="split-type-option">
+            <input type="radio" name="split_type" value="equal" ${!custom ? 'checked' : ''}>
+            <span>${vi ? 'Chia đều' : 'Equal split'}</span>
+          </label>
+          <label class="split-type-option">
+            <input type="radio" name="split_type" value="custom" ${custom ? 'checked' : ''}>
+            <span>${vi ? 'Chia tùy chỉnh' : 'Custom split'}</span>
+          </label>
+        </div>
+      </div>
+
+      <fieldset class="participant-field equal-split-view" ${custom ? 'style="display:none;"' : ''}>
+        <legend>Who shares this cost?</legend>
+        <div class="participants">${equalParticipants}</div>
+      </fieldset>
+
+      <div class="custom-split-view stack" style="gap:8px; ${!custom ? 'display:none;' : ''}">
+        <span style="font-size:12px; font-weight:700; color:var(--muted);">${vi ? 'Nhập số tiền của từng người:' : 'Enter amount for each person:'}</span>
+        <div class="stack" style="gap:8px;">${customRows}</div>
+        <div class="custom-split-summary">
+          <span class="custom-split-status" id="custom-split-status">Đã chia: 0 ₫ / 0 ₫</span>
+          <button type="button" class="btn soft custom-split-autofill" style="font-size:12px; padding:4px 10px;">${vi ? 'Chia đều số còn lại' : 'Auto-fill remaining'}</button>
+        </div>
+      </div>
+
+      ${t.shared ? '<div id="bill-funding-status" aria-live="polite"></div><p id="bill-reminder-feedback" role="status"></p>' : '<p class="notice">USDC recipients are calculated automatically in Final split.</p>'}
+      <p id="sheet-error" class="form-error" role="status"></p>
+    </form>`,
+    `<button class="btn full" type="submit" form="bill-form">${editing ? 'Save changes' : 'Save bill'}</button>`
+  );
+
+  const form = sheet.querySelector('#bill-form');
+  if (form) {
+    const updateCustomSplitMath = () => {
+      const total = Number(form.querySelector('#bill-amount-input')?.value) || 0;
+      const isCustom = form.querySelector('input[name="split_type"]:checked')?.value === 'custom';
+      const eqView = form.querySelector('.equal-split-view');
+      const csView = form.querySelector('.custom-split-view');
+      if (eqView) eqView.style.display = isCustom ? 'none' : '';
+      if (csView) csView.style.display = isCustom ? '' : 'none';
+
+      if (!isCustom) {
+        if (t.shared) updateBillFundingForm();
+        return;
+      }
+
+      const inputs = form.querySelectorAll('.custom-share-input');
+      let sum = 0;
+      inputs.forEach(inp => {
+        const id = inp.dataset.customMember;
+        const val = Number(inp.value) || 0;
+        sum += val;
+        const pctEl = form.querySelector(`.custom-share-pct[data-member-pct="${id}"]`);
+        if (pctEl) {
+          const pct = total > 0 ? ((val / total) * 100).toFixed(1) : '0.0';
+          pctEl.textContent = `${pct}% (${vnd(val)})`;
+        }
+      });
+
+      const statusEl = form.querySelector('#custom-split-status');
+      if (statusEl) {
+        if (total <= 0) {
+          statusEl.textContent = vi ? 'Nhập tổng hóa đơn trước' : 'Enter bill amount first';
+          statusEl.style.color = 'var(--muted)';
+        } else if (sum === total) {
+          statusEl.textContent = `✅ ${vi ? 'Đã chia đủ:' : 'Matched:'} ${vnd(sum)} (100%)`;
+          statusEl.style.color = 'var(--positive)';
+        } else if (sum < total) {
+          statusEl.textContent = `⚠️ ${vi ? 'Còn thiếu:' : 'Remaining:'} ${vnd(total - sum)}`;
+          statusEl.style.color = 'var(--warning)';
+        } else {
+          statusEl.textContent = `❌ ${vi ? 'Dư:' : 'Excess:'} ${vnd(sum - total)}`;
+          statusEl.style.color = 'var(--danger)';
+        }
+      }
+      if (t.shared) updateBillFundingForm();
+    };
+
+    form.addEventListener('input', updateCustomSplitMath);
+    form.addEventListener('change', updateCustomSplitMath);
+
+    const autofillBtn = form.querySelector('.custom-split-autofill');
+    if (autofillBtn) {
+      autofillBtn.addEventListener('click', () => {
+        const total = Number(form.querySelector('#bill-amount-input')?.value) || 0;
+        if (total <= 0) return;
+        const inputs = Array.from(form.querySelectorAll('.custom-share-input'));
+        const emptyInputs = inputs.filter(inp => !(Number(inp.value) > 0));
+        let filledSum = 0;
+        inputs.forEach(inp => { if (Number(inp.value) > 0) filledSum += Number(inp.value); });
+        const remaining = total - filledSum;
+        const targets = emptyInputs.length > 0 ? emptyInputs : inputs;
+        const base = Math.floor((emptyInputs.length > 0 ? remaining : total) / targets.length);
+        const rem = (emptyInputs.length > 0 ? remaining : total) - base * targets.length;
+        targets.forEach((inp, idx) => {
+          inp.value = Math.max(0, base + (idx < rem ? 1 : 0));
+        });
+        updateCustomSplitMath();
+      });
+    }
+
+    updateCustomSplitMath();
+    if (t.shared) updateBillFundingForm();
+  }
+}"""
+replace(old_add_bill, new_add_bill)
 replace('    app.innerHTML = header();', """    const split = app.querySelector?.('[data-split-trip]');
     const openDetails = new Set(state.view === 'split' && split?.dataset.splitTrip === state.trip?.id
       ? [...split.querySelectorAll('details[data-split-detail][open]')].map(item => item.dataset.splitDetail) : []);
@@ -1270,7 +1848,7 @@ source = source.replace('<h1>Final split</h1><p>${safe(trip.name)}</p>', '<h1>Fi
 source = source.replace('>${safe(b.label)}</span>', '>${userText(b.label)}</span>')
 source = source.replace('>${safe(m.name)}</span>', '>${userText(m.name)}</span>')
 replace("Paid by ${safe(payer?.name||'Unknown')} outside ·", "${siteLanguage === 'vi' ? 'Paid by: ' : 'Paid by '}${userText(payer?.name || 'Unknown')} outside ·")
-replace('>${safe(m.name)}</option>', ' translate="no">${safe(m.name)}</option>')
+source = source.replace('>${safe(m.name)}</option>', ' translate="no">${safe(m.name)}</option>')
 replace("const KEY = 'tripvault-timelocked-external-v8';", """const demoMode = new URLSearchParams(window.location?.search || '').get('demo') === '1';
   const KEY = demoMode ? 'tripvault-judge-demo-v1' : 'tripvault-timelocked-external-v8';""")
 replace("const legacy = readStorage(LEGACY_KEY);", "const legacy = demoMode ? null : readStorage(LEGACY_KEY);")
@@ -1319,13 +1897,25 @@ replace("  function fujiPanel(section = 'wallet', review = null) {\n    const tr
         "  function fujiPanel(section = 'wallet', review = null) {\n    if (demoMode) return '';\n    const trip")
 replace('!rooms.online && window.location?.protocol', '!demoMode && !rooms.online && window.location?.protocol')
 
-(root / 'outputs/TripVault_Rooms_v9.html').write_text(source)
-public_dir = root / 'public'
-public_dir.mkdir(exist_ok=True)
-(public_dir / 'index.html').write_text(source)
-(root / 'work/tripvault-v9.js').write_text(source.split('<script>\n', 1)[1].split('</script>', 1)[0])
 backend = root / 'work/tripvault-room-server/server.js'
-generated = backend.read_text().replace('/*ROOM_CONTRACT*/null', json.dumps({
+generated = backend.read_text(encoding='utf-8').replace('/*ROOM_CONTRACT*/null', json.dumps({
     'runtime': contract['runtime'], 'legacyRuntime': contract['legacyRuntime'], 'deadlineRuntime': contract['deadlineRuntime'],
 }))
-(backend.parent / 'entry.js').write_text(generated)
+
+try:
+    (root / 'outputs/TripVault_Rooms_v9.html').write_text(source, encoding='utf-8')
+    public_dir = root / 'public'
+    public_dir.mkdir(exist_ok=True)
+    (public_dir / 'index.html').write_text(source, encoding='utf-8')
+    (root / 'work/tripvault-v9.js').write_text(source.split('<script>\n', 1)[1].split('</script>', 1)[0], encoding='utf-8')
+    (backend.parent / 'entry.js').write_text(generated, encoding='utf-8')
+    print("Build output written to workspace.")
+except PermissionError:
+    import tempfile
+    tdir = Path(tempfile.gettempdir()) / 'tripvault_build'
+    tdir.mkdir(exist_ok=True)
+    (tdir / 'TripVault_Rooms_v9.html').write_text(source, encoding='utf-8')
+    (tdir / 'index.html').write_text(source, encoding='utf-8')
+    (tdir / 'tripvault-v9.js').write_text(source.split('<script>\n', 1)[1].split('</script>', 1)[0], encoding='utf-8')
+    (tdir / 'entry.js').write_text(generated, encoding='utf-8')
+    print("Build output written to temp:", tdir)

@@ -4,6 +4,7 @@ export function roomFundingShortfalls(trip, funding, draft) {
   for (const bill of bills) {
     if (bill.status === 'rejected') continue;
     const count = bill.participants.length;
+    const isCustom = bill.splitType === 'custom' && bill.customShares && typeof bill.customShares === 'object';
     const share = Math.floor(bill.amount / count);
     const remainder = bill.amount % count;
     const payerShare = bill.participants.indexOf(bill.payer);
@@ -13,7 +14,8 @@ export function roomFundingShortfalls(trip, funding, draft) {
     for (const [index, id] of bill.participants.entries()) {
       // Reserve pending debts without relying on credits that are still unapproved.
       if (bill.status !== 'approved' && index === payerShare) continue;
-      net.set(id, net.get(id) - share - (index < remainder ? 1 : 0));
+      const amountOwed = isCustom ? (Math.round(Number(bill.customShares[id])) || 0) : (share + (index < remainder ? 1 : 0));
+      net.set(id, net.get(id) - amountOwed);
     }
   }
   return trip.members.map((member, index) => {

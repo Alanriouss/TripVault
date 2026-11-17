@@ -100,4 +100,32 @@ console.log('--- Testing @tripvault/core math module ---');
   console.log('PASS: calculateRoomFundingShortfalls correctly calculates deposit deficits');
 }
 
+// Test 5: Custom Split calculateShares & stats
+{
+  const customBill = {
+    amount: 300_000,
+    payer: 'm0',
+    participants: ['m0', 'm1', 'm2'],
+    splitType: 'custom',
+    customShares: { m0: 150_000, m1: 100_000, m2: 50_000 },
+  };
+  const shares = calculateShares(customBill);
+  assert.equal(shares.length, 3);
+  assert.equal(shares.find(s => s.id === 'm0').amount, 150_000);
+  assert.equal(shares.find(s => s.id === 'm1').amount, 100_000);
+  assert.equal(shares.find(s => s.id === 'm2').amount, 50_000);
+
+  const trip = {
+    members: [{ id: 'm0' }, { id: 'm1' }, { id: 'm2' }],
+    bills: [{ ...customBill, id: 'b1', status: 'approved' }],
+  };
+  const stats = calculateMemberStats(trip);
+  assert.equal(stats[0].net, 150_000); // paid 300k, owes 150k -> +150k
+  assert.equal(stats[1].net, -100_000); // paid 0, owes 100k -> -100k
+  assert.equal(stats[2].net, -50_000); // paid 0, owes 50k -> -50k
+  const netSum = stats.reduce((acc, s) => acc + s.net, 0);
+  assert.equal(netSum, 0);
+  console.log('PASS: Custom Split calculateShares & member stats work accurately');
+}
+
 console.log('ALL TESTS PASSED in @tripvault/core!');

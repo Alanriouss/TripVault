@@ -540,10 +540,10 @@
             </div>
           </div>
           <div class="custom-dt-quick-strip">
-            <button type="button" class="custom-dt-quick-btn" data-dt-act="quick-add" data-min="5">+5m</button>
-            <button type="button" class="custom-dt-quick-btn" data-dt-act="quick-add" data-min="15">+15m</button>
-            <button type="button" class="custom-dt-quick-btn" data-dt-act="quick-add" data-min="60">+1h</button>
+            <button type="button" class="custom-dt-quick-btn" data-dt-act="quick-add" data-min="120">+2h</button>
             <button type="button" class="custom-dt-quick-btn" data-dt-act="quick-add" data-min="1440">+1d</button>
+            <button type="button" class="custom-dt-quick-btn" data-dt-act="quick-add" data-min="4320">+3d</button>
+            <button type="button" class="custom-dt-quick-btn" data-dt-act="quick-add" data-min="10080">+7d</button>
             <button type="button" class="custom-dt-quick-btn" data-dt-act="quick-eod">23:59</button>
           </div>
         </div>
@@ -669,20 +669,25 @@
     const wallet = '<p class="notice">Wallet: ' + safe(connected) + '</p>';
     let fields = '';
     if (intent.kind === 'create') {
-      const defaultDeadline = template?.depositDeadline ? safe(template.depositDeadline.slice(0, 16)) : (template ? '' : localDatetimeValue(5));
-      const defaultStart = template?.startTime ? safe(template.startTime.slice(0, 16)) : (template ? '' : localDatetimeValue(6));
-      const defaultEnd = template?.endTime ? safe(template.endTime.slice(0, 16)) : (template ? '' : localDatetimeValue(20));
+      const defaultDeadline = template?.depositDeadline ? safe(template.depositDeadline.slice(0, 16)) : (template ? '' : localDatetimeValue(120));
+      const defaultStart = template?.startTime ? safe(template.startTime.slice(0, 16)) : (template ? '' : localDatetimeValue(125));
+      const defaultEnd = template?.endTime ? safe(template.endTime.slice(0, 16)) : (template ? '' : localDatetimeValue(1440));
+      const vi = siteLanguage === 'vi';
+      const orientationNotice = `<div class="notice app-orientation-notice" style="margin-bottom:14px; font-size:13.5px; border-left:4px solid var(--accent); background:rgba(0,180,216,0.08); padding:12px 14px; border-radius:12px;">
+        <strong>🎯 ${vi ? 'Mục đích sử dụng:' : 'Purpose:'}</strong> ${vi ? 'TripVault chuyên dụng cho các chuyến đi và sự kiện trọn vẹn từ <b>1 ngày trở lên</b> có quỹ ký quỹ bảo chứng (không dùng chia tiền lẻ tức thời).' : 'TripVault is dedicated to multi-day trips and complete group events (<b>≥ 1 day</b>) with locked escrow vaults (not for instant single-bill splits).'}
+      </div>`;
       fields = `${template ? '<p class="notice">Choose a new deposit deadline and trip dates. This creates a room with a new invite code. Invite your group again before setting up the vault.</p>' : ''}
+        ${orientationNotice}
         <label class="field">Trip name<input name="name" required maxlength="70" placeholder="e.g. Da Lat weekend" value="${safe(template?.name)}"></label>
         <label class="field">Destination<input name="location" maxlength="80" value="${safe(template?.location)}"></label>
         ${name}
         <label class="field">Minimum each person adds (test USDC)<input name="minimum" type="number" min="0.000001" step="0.000001" required value="${safe(template?.minimum ?? 5)}"></label>
         <div class="stack" style="gap:6px; margin:4px 0 8px 0;">
-          <span style="font-size:12px; font-weight:700; color:var(--muted);">⚡ Chọn nhanh mốc thời gian:</span>
-          <div class="room-time-presets" role="group" aria-label="Quick test time presets">
-            <button type="button" class="btn soft" aria-pressed="true" data-act="room-preset-time" data-d="5" data-s="6" data-e="20">⚡ 5p / 6p / 20p (Khuyên dùng)</button>
-            <button type="button" class="btn soft" aria-pressed="false" data-act="room-preset-time" data-d="15" data-s="20" data-e="60">🚀 15p / 20p / 1h (Demo)</button>
-            <button type="button" class="btn soft" aria-pressed="false" data-act="room-preset-time" data-d="1440" data-s="1450" data-e="4320">🏖️ 1 ngày / 3 ngày (Thực tế)</button>
+          <span style="font-size:12px; font-weight:700; color:var(--muted);">${vi ? '⚡ Chọn nhanh mốc thời gian:' : '⚡ Quick trip duration presets:'}</span>
+          <div class="room-time-presets" role="group" aria-label="Quick trip presets">
+            <button type="button" class="btn soft" aria-pressed="true" data-act="room-preset-time" data-d="120" data-s="125" data-e="1440">${vi ? '🏖️ 1 ngày (Hạn nạp 2h → Chuyến 1 ngày)' : '🏖️ 1 Day (2h deposit → 1d trip)'}</button>
+            <button type="button" class="btn soft" aria-pressed="false" data-act="room-preset-time" data-d="1440" data-s="1445" data-e="4320">${vi ? '🏕️ 3 ngày (Chuyến đi cuối tuần)' : '🏕️ 3 Days (Weekend trip)'}</button>
+            <button type="button" class="btn soft" aria-pressed="false" data-act="room-preset-time" data-d="1440" data-s="1445" data-e="10080">${vi ? '✈️ 7 ngày (Kỳ nghỉ dài ngày)' : '✈️ 7 Days (Long vacation)'}</button>
           </div>
           <div id="room-time-timeline" class="room-time-timeline" aria-live="polite"></div>
         </div>
@@ -949,6 +954,23 @@
     }).format(timestamp);
   }
 
+  function formatTripTimeSpacious(value) {
+    if (!value) return '';
+    const date = typeof value === 'object' && value instanceof Date ? value : new Date(value);
+    if (isNaN(date.getTime())) return String(value);
+    const pad = n => String(n).padStart(2, '0');
+    const dStr = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+    const tStr = `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+    return `${dStr}\u00A0\u00A0\u00A0\u00A0${tStr}`;
+  }
+
+  function fxRowValue(quote) {
+    if (!quote) return '';
+    const rate = new Intl.NumberFormat('en-US', { maximumFractionDigits: 8 }).format(quote.rate);
+    const details = [quote.source, quote.updated, quote.live || quote.historical ? '' : 'not live'].filter(Boolean).join(' · ');
+    return `<span class="fx-rate-container"><strong class="fx-rate-primary">${safe(rate)} VND / USD</strong><span class="fx-rate-sub">${safe(ui(details))}</span></span>`;
+  }
+
   function isRoomOrganizer(trip) {
     return Boolean(trip?.shared && rooms.token && rooms.account === walletSession.account
       && trip.members.some(member => member.id === trip.owner && member.address === rooms.account));
@@ -1157,16 +1179,18 @@
       ${roomProgressPanel(trip)}
       ${roomInviteCard(trip)}
       ${roomMembers(trip)}
-      <section class="panel"><h2>Trip settings</h2>
+      <section class="panel trip-settings-panel"><h2>Trip settings</h2>
         ${row('Minimum each person adds', money(trip.minimumUnits))}
-        ${trip.depositDeadline ? row('Deposit deadline', safe(formatTripTime(Date.parse(trip.depositDeadline))),
+        ${trip.depositDeadline ? row('Deposit deadline', formatTripTimeSpacious(Date.parse(trip.depositDeadline)),
           'Everyone must add the minimum by this time. Before then, you can take back your own deposit.')
-          + row('Trip start', safe(formatTripTime(start)), 'The trip starts if everyone funded it before the deadline.')
-          : row(end < start ? 'Withdrawals locked early' : 'Deposit deadline and trip start', safe(formatTripTime(deadline)),
+          + row('Trip start', formatTripTimeSpacious(start), 'The trip starts if everyone funded it before the deadline.')
+          : row(end < start ? 'Withdrawals locked early' : 'Deposit deadline and trip start', formatTripTimeSpacious(deadline),
           end < start ? 'The organizer ended the trip before the original deadline.'
             : 'Add the minimum by this time. You can take back your own deposit before the deadline.')}
-        ${row(trip.endedAt ? 'Trip ended early' : 'Trip end', safe(formatTripTime(end)),
+        ${row(trip.endedAt ? 'Trip ended early' : 'Trip end', formatTripTimeSpacious(end),
           'The organizer can share the final amounts for approval after this time.')}
+        ${row('Exchange rate', fxRowValue(trip.reviewQuote || fx))}
+        ${row('Settlement', trip.shared ? 'Avalanche Fuji escrow vault' : 'USDC from vault deposits at trip end')}
         ${isRoomOrganizer(trip) ? `<div class="inline trip-settings-actions">
           ${canRenameTrip(trip) ? btn('Rename trip', 'room-rename', { tone: 'secondary' }) : ''}
           ${canDeleteRoom(trip) ? deleteRoomButton(trip) : ''}
@@ -1199,8 +1223,14 @@
 
   function roomsHome() {
     const trips = availableTrips().slice().reverse();
+    const vi = siteLanguage === 'vi';
+    const orientationBanner = `<div class="notice app-orientation-notice" style="margin-bottom:14px; font-size:14px; border-left:4px solid var(--accent); background:rgba(232, 65, 66, 0.05); padding:14px 16px; border-radius:14px; box-shadow:var(--shadow-sm); line-height:1.6;">
+      <strong>🎯 ${vi ? 'Mục đích sử dụng TripVault:' : 'TripVault Purpose:'}</strong> ${vi ? 'TripVault chuyên phục vụ cho các chuyến đi và sự kiện trọn vẹn từ <b>1 ngày trở lên</b> có quỹ ký quỹ bảo chứng (không dùng để chia bill lẻ tức thời).' : 'TripVault is dedicated to multi-day trips and complete group events (<b>≥ 1 day</b>) with time-locked escrow vaults (not for instant single-bill splits).'}
+    </div>`;
     return `<div class="section-head"><div><h1>Your trips</h1><p>Create a room or join one with your wallet.</p></div></div>
-      <div class="stack"><section class="panel stack">
+      <div class="stack">
+        ${orientationBanner}
+        <section class="panel stack">
         <div class="inline">
           ${btn('Create a room', 'room-create', { symbol: 'plus' })}
           ${btn('Join a room', 'room-join', { tone: 'secondary' })}
