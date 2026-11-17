@@ -961,13 +961,26 @@
     const pad = n => String(n).padStart(2, '0');
     const dStr = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
     const tStr = `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
-    return `${dStr}\u00A0\u00A0\u00A0\u00A0${tStr}`;
+    return `<span class="trip-time-text"><span class="trip-time-date">${dStr}</span><span class="trip-time-time">${tStr}</span></span>`;
+  }
+
+  function formatFxShortTime(raw) {
+    if (!raw) return '';
+    const d = new Date(raw);
+    if (!isNaN(d.getTime())) {
+      const pad = n => String(n).padStart(2, '0');
+      return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+    return String(raw);
   }
 
   function fxRowValue(quote) {
     if (!quote) return '';
     const rate = new Intl.NumberFormat('en-US', { maximumFractionDigits: 8 }).format(quote.rate);
-    const details = [quote.source, quote.updated, quote.live || quote.historical ? '' : 'not live'].filter(Boolean).join(' · ');
+    const shortSource = quote.source ? quote.source.replace(/\s+USD\/VND\s+reference/i, '').replace(/\s+reference/i, '') : '';
+    const shortTime = quote.updated ? formatFxShortTime(quote.updated) : '';
+    const notLiveLabel = quote.live || quote.historical ? '' : 'not live';
+    const details = [shortSource, shortTime, notLiveLabel].filter(Boolean).join(' · ');
     return `<span class="fx-rate-container"><strong class="fx-rate-primary">${safe(rate)} VND / USD</strong><span class="fx-rate-sub">${safe(ui(details))}</span></span>`;
   }
 

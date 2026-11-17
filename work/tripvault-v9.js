@@ -2132,13 +2132,26 @@
     const pad = n => String(n).padStart(2, '0');
     const dStr = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
     const tStr = `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
-    return `${dStr}\u00A0\u00A0\u00A0\u00A0${tStr}`;
+    return `<span class="trip-time-text"><span class="trip-time-date">${dStr}</span><span class="trip-time-time">${tStr}</span></span>`;
+  }
+
+  function formatFxShortTime(raw) {
+    if (!raw) return '';
+    const d = new Date(raw);
+    if (!isNaN(d.getTime())) {
+      const pad = n => String(n).padStart(2, '0');
+      return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+    return String(raw);
   }
 
   function fxRowValue(quote) {
     if (!quote) return '';
     const rate = new Intl.NumberFormat('en-US', { maximumFractionDigits: 8 }).format(quote.rate);
-    const details = [quote.source, quote.updated, quote.live || quote.historical ? '' : 'not live'].filter(Boolean).join(' · ');
+    const shortSource = quote.source ? quote.source.replace(/\s+USD\/VND\s+reference/i, '').replace(/\s+reference/i, '') : '';
+    const shortTime = quote.updated ? formatFxShortTime(quote.updated) : '';
+    const notLiveLabel = quote.live || quote.historical ? '' : 'not live';
+    const details = [shortSource, shortTime, notLiveLabel].filter(Boolean).join(' · ');
     return `<span class="fx-rate-container"><strong class="fx-rate-primary">${safe(rate)} VND / USD</strong><span class="fx-rate-sub">${safe(ui(details))}</span></span>`;
   }
 
@@ -3031,7 +3044,7 @@ function roomFundingShortfalls(trip, funding, draft) {
     const status = ROOM_BILL_STATUS[bill.status] || 'Waiting for approval';
     if (bill.status !== 'pending' && bill.status !== 'disputed') return status;
     const count = bill.participants.filter(id => bill.approvals.includes(id)).length;
-    return status + ' · ' + count + '/' + bill.participants.length + ' approved';
+    return status + ' · ' + count + '/' + bill.participants.length + ' ' + (siteLanguage === 'vi' ? 'đã duyệt' : 'approved');
   }
 
   function showBillReviewError(message) {
@@ -3389,13 +3402,15 @@ function roomFundingShortfalls(trip, funding, draft) {
   function roomBell() {
     if (!rooms.account) return '';
     const seen = seenRoomNotifications();
-    const unread = readRoomNotifications().some(item => !seen.has(item.id));
+    const unreadCount = readRoomNotifications().filter(item => !seen.has(item.id)).length;
+    const unread = unreadCount > 0;
+    const badgeText = unreadCount > 9 ? '9+' : unreadCount;
     return `<button type="button" class="btn secondary trip-bell${unread && notificationAttention ? ' attention' : ''}" data-act="room-notifications"
       aria-label="${unread ? 'Notifications · Unread' : 'Notifications'}" aria-haspopup="dialog">
       <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.8"
         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 12a2 2 0 0 0 4 0"/>
-      </svg>${unread ? '<span class="trip-bell-dot" aria-hidden="true"></span>' : ''}
+      </svg>${unread ? `<span class="trip-bell-badge" aria-hidden="true">${badgeText}</span>` : ''}
     </button>`;
   }
 
@@ -3429,8 +3444,32 @@ function roomFundingShortfalls(trip, funding, draft) {
       <span aria-hidden="true"> · </span><span>${safe(elapsed)}</span></small>`;
   }
 
+  function notificationCategory(item) {
+    if (item.reminder || item.heading === 'Top-up reminder' || item.heading === 'Your top-up') {
+      return 'notif-topup';
+    }
+    if (item.heading === 'Bill change requested' || item.heading === 'Bill needs your approval' || item.heading === 'Bill removal requested' || item.heading === 'Bill cancellation declined') {
+      return 'notif-warning';
+    }
+    if (item.heading === 'Someone agreed with the suggestion' || item.heading === 'Group payments complete' || item.heading === 'Bill removed') {
+      return 'notif-success';
+    }
+    return 'notif-info';
+  }
+
   function roomNotificationsBody(trip, items, seen) {
-    return items.length ? '<div class="inline notification-tools">' +
+    if (!items.length) {
+      return `<div class="empty-notifications">
+        <div class="empty-notif-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 12a2 2 0 0 0 4 0"/>
+          </svg>
+        </div>
+        <h3>No notifications yet</h3>
+        <p class="subtitle">All updates about funding, bills, and approvals will appear here.</p>
+      </div>`;
+    }
+    return '<div class="inline notification-tools">' +
       btn('Clear notifications', 'clear-room-notifications', { tone: 'secondary' }) + '</div>' + items.map(item => {
       const current = trip?.id === item.roomId;
       const [message, action] = item.reminder ? topUpNotificationDetails(current ? trip : null, item.reminder) : [
@@ -3438,14 +3477,21 @@ function roomFundingShortfalls(trip, funding, draft) {
           { tone: 'secondary', data: `data-id="${safe(item.id)}"` }),
       ];
       const context = [item.roomName, item.sender, item.title].filter(Boolean).map(userText).join(' · ');
-      return `<article class="trip-notification${seen.has(item.id) ? '' : ' unread'}">
-        <strong>${item.heading}</strong>
-        ${context ? '<span>' + context + '</span>' : ''}
-        ${notificationTime(item.receivedAt)}
-        ${message ? '<small>' + (item.userMessage ? userText(message) : safe(message)) + '</small>' : ''}
-        ${action ? '<div class="inline">' + action + '</div>' : ''}
+      const category = notificationCategory(item);
+      const isUnread = !seen.has(item.id);
+      return `<article class="trip-notification ${category}${isUnread ? ' unread' : ''}">
+        <div class="notif-header">
+          <span class="notif-title">
+            ${isUnread ? '<span class="notif-dot" aria-hidden="true"></span>' : ''}
+            <strong>${item.heading}</strong>
+          </span>
+          ${notificationTime(item.receivedAt)}
+        </div>
+        ${context ? '<span class="notif-context">' + context + '</span>' : ''}
+        ${message ? '<small class="notif-message">' + (item.userMessage ? userText(message) : safe(message)) + '</small>' : ''}
+        ${action ? '<div class="inline notif-actions">' + action + '</div>' : ''}
       </article>`;
-    }).join('') : '<p class="notice">You have no trip notifications.</p>';
+    }).join('');
   }
 
   function openRoomNotifications() {
@@ -3871,6 +3917,8 @@ function roomFundingShortfalls(trip, funding, draft) {
     ['Top-up reminder', 'Nhắc nạp thêm'],
     ['The vault uses the member list saved at setup. Invitations are closed.', 'Quỹ dùng danh sách ví đã chốt khi tạo quỹ. Phòng đã ngừng nhận thành viên mới.'],
     ['You have no trip notifications.', 'Chuyến đi chưa có thông báo.'],
+    ['No notifications yet', 'Chưa có thông báo nào'],
+    ['All updates about funding, bills, and approvals will appear here.', 'Mọi cập nhật về nạp quỹ, hóa đơn và xét duyệt sẽ xuất hiện tại đây.'],
     ['Refresh balances', 'Cập nhật số dư'],
     ['Check transaction', 'Kiểm tra giao dịch'],
     ['Deploy Fuji vault', 'Tạo quỹ chuyến đi'],
@@ -3984,6 +4032,11 @@ function roomFundingShortfalls(trip, funding, draft) {
     ['Quick timeline presets:', 'Chọn nhanh mốc thời gian:'],
     ['Quick presets:', 'Chọn nhanh mốc:'],
     ['ExchangeRate-API USD/VND reference', 'Tỷ giá tham chiếu ExchangeRate-API USD/VND'],
+    ['ExchangeRate-API', 'ExchangeRate-API'],
+    ['Settlement', 'Quyết toán'],
+    ['Avalanche Fuji escrow vault', 'Quỹ ký quỹ bảo chứng Avalanche Fuji'],
+    ['USDC from vault deposits at trip end', 'USDC từ số dư ký quỹ khi kết thúc'],
+    ['Timestamp unavailable', 'Chưa có thông tin thời gian'],
     ['Early withdrawals use only your own balance. You remain a trip member after withdrawing all. After start, deposits are locked until final settlement; top-ups are allowed.', 'Lưu ý rút tiền sớm: Bạn chỉ có thể rút phần tiền mình đã nạp trước giờ bắt đầu. Sau khi bắt đầu, tiền nạp sẽ bị khóa bảo chứng cho tới khi quyết toán; bạn chỉ có thể nạp thêm.'],
   ]);
 
@@ -3997,6 +4050,7 @@ function roomFundingShortfalls(trip, funding, draft) {
     [/^(Waiting for approval|Changes requested) · (\d+\/\d+) approved$/, (_, status, count) => ui(status) + ' · ' + count + ' đã duyệt'],
     [/^outside · (\d+) people · (.+)$/, (_, count, status) => 'đã trả bên ngoài · ' + count + ' người · ' + ui(status)],
     [/^(Historical rate|Locked for approval|Estimate) · (.+)$/, (_, status, rate) => ui(status) + ' · ' + rate],
+    [/^([\d.,]+) VND \/ USD · (.+)$/, (_, rate, details) => rate + ' VND / USD · ' + ui(details)],
     [/^Paid ([\d.]+ ₫) · Owes ([\d.]+ ₫) · Deposited ([\d.,]+ USDC)(?: · (.+))?$/, (_, paid, owed, dep, status) => 'Đã ứng ' + paid + ' · Cần trả ' + owed + ' · Đã nạp ' + dep + (status ? ' · ' + ui(status) : '')],
     [/^Paid ([\d.]+ ₫) · Owes ([\d.]+ ₫)(?: · (.+))?$/, (_, paid, owed, status) => 'Đã ứng ' + paid + ' · Cần trả ' + owed + (status ? ' · ' + ui(status) : '')],
     [/^Deposited ([\d.,]+ USDC)$/, (_, amount) => 'Đã nạp ' + amount],
@@ -4190,10 +4244,22 @@ function roomFundingShortfalls(trip, funding, draft) {
     applyMarketQuote(await marketQuote());
   }
 
+  function formatFxShortTime(raw) {
+    if (!raw) return '';
+    const d = new Date(raw);
+    if (!isNaN(d.getTime())) {
+      const pad = n => String(n).padStart(2, '0');
+      return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+    return String(raw);
+  }
+
   function fxLabel(quote) {
     const rate = new Intl.NumberFormat('en-US', { maximumFractionDigits: 8 }).format(quote.rate);
-    return [rate + ' VND / USD', quote.source, quote.updated,
-      quote.live || quote.historical ? '' : 'not live'].filter(Boolean).join(' · ');
+    const shortSource = quote.source ? quote.source.replace(/\s+USD\/VND\s+reference/i, '').replace(/\s+reference/i, '') : '';
+    const shortTime = quote.updated ? formatFxShortTime(quote.updated) : '';
+    const notLiveLabel = quote.live || quote.historical ? '' : 'not live';
+    return [rate + ' VND / USD', shortSource, shortTime, notLiveLabel].filter(Boolean).join(' · ');
   }
 
   function phase() {
@@ -4761,7 +4827,7 @@ function roomFundingShortfalls(trip, funding, draft) {
         </section>
       </div>`;
   }
-  function billItem(b){const payer=member(b.payer);return `<button type="button" class="bill-row" data-act="bill-detail" data-id="${b.id}"><span class="row-label"><span class="bill-badge">${icon('bill')}</span><span><span class="bill-name">${userText(b.label)}</span><span class="bill-sub">${siteLanguage === 'vi' ? 'Paid by: ' : 'Paid by '}${userText(payer?.name || 'Unknown')} outside · ${b.participants.length} people · ${state.trip.shared ? roomBillStatus(b) : b.status==='approved'?'Approved':'Pending approval'}</span></span></span><span class="row-value">${vnd(b.amount)}</span></button>`}
+  function billItem(b){const payer=member(b.payer);return `<button type="button" class="bill-row is-${safe(b.status)}" data-act="bill-detail" data-id="${b.id}"><span class="row-label"><span class="bill-badge status-${safe(b.status)}">${icon(b.status === 'approved' ? 'check' : b.status === 'rejected' ? 'close' : 'bill')}</span><span><span class="bill-name">${userText(b.label)}</span><span class="bill-sub">${siteLanguage === 'vi' ? 'Paid by: ' : 'Paid by '}${userText(payer?.name || 'Unknown')} outside · ${b.participants.length} people · ${state.trip.shared ? roomBillStatus(b) : b.status==='approved'?'Approved':'Pending approval'}</span></span></span><span class="row-value">${vnd(b.amount)}</span></button>`}
   function overview(){const t=state.trip,ss=stats(),me=ss.find(m=>m.id===state.actor),approved=t.bills.filter(b=>b.status==='approved'),total=approved.reduce((a,b)=>a+b.amount,0);return `<section class="hero"><span class="chip">${phase()} · Time-locked USDC vault</span><div><h1>${safe(t.name)}</h1><div class="hero-meta"><span class="avatar-stack">${t.members.slice(0,4).map(avatar).join('')}</span><span>${t.members.length} travelers · ${safe(t.location)}</span></div></div></section><section class="metrics"><div class="metric"><span class="metric-name">${icon('wallet')}Vault deposits</span><strong>${fmt(Object.values(t.depositUnits).reduce((a,b)=>a+b,0) / USDC_SCALE)} USDC</strong></div><div class="metric"><span class="metric-name">${icon('bill')}Approved expenses</span><strong>${vnd(total)}</strong></div><div class="metric"><span class="metric-name">${icon('wallet')}You paid</span><strong>${vnd(me.paid)}</strong></div><div class="metric"><span class="metric-name">${icon('split')}Your net</span><strong>${vnd(me.net)}</strong></div></section><div class="overview-grid"><section class="panel"><div class="panel-head"><h2>Recent bills</h2>${btn('View all','navigate',{tone:'ghost',data:'data-view="bills"'})}</div>${t.bills.length?t.bills.slice(-3).reverse().map(billItem).join(''):'<p class="empty">No bills yet.</p>'}</section><section class="panel next-card"><span class="next-mark">${icon('bill')}</span><h2>Record a payment</h2><p>Paid for something in VND? Add it here. No USDC is moved when recording a bill.</p>${btn('Add a bill','new-bill',{symbol:'plus',disabled:t.settled})}</section></div><section class="panel trip-settings-panel"><div class="panel-head"><h2>Trip settings</h2></div>${row('Bill approval',t.approvalMode==='everyone'?'All members':'Organizer only')}${row('Minimum deposit',money(t.minimumUnits))}${row('Starts',formatTripTimeSpacious(t.startTime))}${row('Ends',formatTripTimeSpacious(t.endTime))}${row('Exchange rate',fxRowValue(t.reviewQuote || fx))}${row('Settlement','USDC from vault deposits at trip end')}<p class="notice">Final split locks a USD/VND reference before approval. Deposits and payouts are simulated.</p></section>`}
   function people(){const t=state.trip;return `<div class="section-head"><div><h1>People</h1><p>Who paid, who owes, and each member's net position.</p></div></div><section class="panel"><div class="panel-head"><h2>Travelers</h2><span class="chip">${t.members.length} members</span></div>${stats().map(m=>`<div class="row"><div class="row-label">${avatar(member(m.id))}<span><span class="row-name">${safe(m.name)}${m.id===state.actor?' · You':''}</span><span class="row-sub traveler-details">Paid ${vnd(m.paid)} · Owes ${vnd(m.owed)} · Deposited ${fmt(depositOf(m.id))} USDC</span></span></div><span class="row-value ${m.net>=0?'money-positive':'money-negative'}">${vnd(m.net)}<small>Net balance</small></span></div>`).join('')}</section>`}
   function bills(){const t=state.trip;return `<div class="section-head"><div><h1>Bills</h1><p>${t.bills.length} recorded · Paid outside the app</p></div>${btn('Add bill','new-bill',{symbol:'plus',disabled:t.shared ? !roomBillFunding(t).ready : !!t.settled})}</div>${t.shared ? roomFundingPanel(t) : ''}<section class="panel"><div class="panel-head"><h2>Trip expenses</h2></div>${t.bills.length?t.bills.slice().reverse().map(billItem).join(''):'<p class="empty">No bills yet. Record who paid outside the app.</p>'}</section><p class="notice">Bills are records of real-world payments, not payments from a shared crypto vault.</p>`}

@@ -23,7 +23,7 @@
     const status = ROOM_BILL_STATUS[bill.status] || 'Waiting for approval';
     if (bill.status !== 'pending' && bill.status !== 'disputed') return status;
     const count = bill.participants.filter(id => bill.approvals.includes(id)).length;
-    return status + ' · ' + count + '/' + bill.participants.length + ' approved';
+    return status + ' · ' + count + '/' + bill.participants.length + ' ' + (siteLanguage === 'vi' ? 'đã duyệt' : 'approved');
   }
 
   function showBillReviewError(message) {

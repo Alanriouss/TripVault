@@ -440,9 +440,28 @@ dialog::backdrop {
 .bill-suggestion .inline { margin-top: 4px; }
 .notification-tools { justify-content: flex-end; }
 .btn.trip-bell { position: relative; padding: 0; width: 44px; flex: 0 0 44px; color: var(--accent-dark); }
-.trip-bell-dot { position: absolute; top: 7px; inset-inline-end: 7px; width: 10px; height: 10px; border: 2px solid white; border-radius: 50%; background: var(--danger); }
+.trip-bell-dot, .trip-bell-badge {
+  position: absolute;
+  top: 4px;
+  inset-inline-end: 4px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border: 2px solid white;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 750;
+  line-height: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  pointer-events: none;
+}
 .trip-bell.attention svg { transform-origin: 50% 20%; animation: notification-ring 550ms ease-in-out 3; }
-.trip-bell.attention .trip-bell-dot { animation: notification-pulse 550ms ease-in-out 3; }
+.trip-bell.attention .trip-bell-dot, .trip-bell.attention .trip-bell-badge { animation: notification-pulse 550ms ease-in-out 3; }
 @keyframes notification-ring {
   0%, 100% { transform: rotate(0); }
   25% { transform: rotate(16deg); }
@@ -452,13 +471,121 @@ dialog::backdrop {
   50% { box-shadow: 0 0 0 4px var(--tint); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .trip-bell.attention svg, .trip-bell.attention .trip-bell-dot { animation: none; }
+  .trip-bell.attention svg, .trip-bell.attention .trip-bell-dot, .trip-bell.attention .trip-bell-badge { animation: none; }
 }
-.trip-notification { width: 100%; display: grid; gap: 4px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); color: var(--ink); text-align: start; overflow-wrap: anywhere; }
-.trip-notification.unread { background: var(--tint); }
+.trip-notification {
+  position: relative;
+  width: 100%;
+  display: grid;
+  gap: 6px;
+  padding: 13px 15px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--line-strong);
+  border-radius: 14px;
+  background: var(--paper);
+  color: var(--ink);
+  text-align: start;
+  overflow-wrap: anywhere;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.trip-notification:hover { box-shadow: var(--shadow-sm); }
+.trip-notification.unread {
+  background: #fffbfa;
+  border-color: #fecaca;
+  box-shadow: 0 1px 4px rgba(220, 38, 38, 0.05);
+}
+.trip-notification.notif-topup { border-left-color: var(--danger); }
+.trip-notification.notif-warning { border-left-color: var(--warning); }
+.trip-notification.notif-success { border-left-color: var(--positive); }
+.trip-notification.notif-info { border-left-color: var(--accent); }
+.trip-notification .notif-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.trip-notification .notif-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1.35;
+}
+.trip-notification .notif-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--danger);
+  flex-shrink: 0;
+  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.2);
+}
+.trip-notification .notif-context {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--subtle);
+}
+.trip-notification .notif-message {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--muted);
+}
 .trip-notification small { color: var(--muted); }
-.trip-notification .notification-time { font-size: 12px; font-variant-numeric: tabular-nums; }
-.trip-notification .inline { margin-top: 4px; }
+.trip-notification .notification-time {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--subtle);
+  white-space: nowrap;
+}
+.trip-notification .inline {
+  margin-top: 4px;
+  gap: 8px;
+}
+.trip-notification .inline .btn {
+  min-height: 40px;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 10px;
+}
+.empty-notifications {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 38px 20px;
+  background: var(--paper);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius);
+  color: var(--muted);
+  gap: 8px;
+}
+.empty-notifications .empty-notif-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--tint);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 2px;
+}
+.empty-notifications h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.empty-notifications .subtitle {
+  margin: 0;
+  font-size: 13px;
+  color: var(--subtle);
+  max-width: 290px;
+  line-height: 1.45;
+}
 .fund-summary { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 20px; background: linear-gradient(135deg, #ffffff 0%, #fef8f8 100%); border: 1px solid #fee2e2; border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px 20px; }
 .fund-summary > strong { color: var(--accent); font-size: clamp(1.4rem, 4vw, 1.85rem); font-weight: 850; font-variant-numeric: tabular-nums; letter-spacing: -0.03em; overflow-wrap: anywhere; }
 @media (max-width: 420px) {
@@ -886,12 +1013,84 @@ dialog::backdrop {
 .custom-dt-footer .btn {
   flex: 1;
 }
-/* Trip Settings unbolded & FX rate */
+/* Trip Settings responsive & unbolded & FX rate */
+.trip-settings-panel .row {
+  align-items: flex-start !important;
+  flex-wrap: wrap !important;
+  gap: 8px 12px !important;
+}
+.trip-settings-panel .row > .row-label {
+  flex: 1 1 200px !important;
+  min-width: 160px !important;
+}
 .trip-settings-panel .row > strong {
   font-weight: 400 !important;
   user-select: text;
   -webkit-user-select: text;
   text-align: right;
+  flex: 0 1 auto !important;
+  max-width: 100% !important;
+  overflow-wrap: anywhere !important;
+}
+.trip-time-text {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 8px;
+  text-align: right;
+  max-width: 100%;
+}
+.trip-time-date {
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+.trip-time-time {
+  font-weight: 500;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+@media (max-width: 480px) {
+  .trip-settings-panel .row {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+  }
+  .trip-settings-panel .row > strong {
+    text-align: left !important;
+    width: 100% !important;
+  }
+  .trip-time-text {
+    justify-content: flex-start !important;
+    text-align: left !important;
+  }
+  .fx-rate-container {
+    align-items: flex-start !important;
+    text-align: left !important;
+  }
+}
+
+/* Bill status badge styles (semantic color coding for approve / rejected / disputed) */
+.bill-badge.status-approved,
+.bill-row.is-approved .bill-badge {
+  background: var(--positive-bg) !important;
+  color: var(--positive) !important;
+}
+.bill-badge.status-rejected,
+.bill-row.is-rejected .bill-badge {
+  background: var(--danger-bg) !important;
+  color: var(--danger) !important;
+}
+.bill-badge.status-disputed,
+.bill-row.is-disputed .bill-badge {
+  background: var(--warning-bg) !important;
+  color: var(--warning) !important;
+}
+.bill-badge.status-pending,
+.bill-row.is-pending .bill-badge {
+  background: var(--tint) !important;
+  color: var(--accent-dark) !important;
 }
 .fx-rate-container {
   display: flex;
@@ -1011,6 +1210,14 @@ dialog::backdrop {
     height: 38px !important;
     min-height: 38px !important;
     flex: 0 0 38px !important;
+  }
+  .trip-bell-dot, .trip-bell-badge {
+    top: 2px !important;
+    inset-inline-end: 2px !important;
+    min-width: 15px !important;
+    height: 15px !important;
+    font-size: 9px !important;
+    padding: 0 3px !important;
   }
   .header .btn {
     min-height: 38px !important;
@@ -1384,6 +1591,7 @@ replace('<section class="panel"><div class="panel-head"><h2>Trip settings</h2>',
 replace("row('Starts',safe(t.startTime.replace('T',' ')))", "row('Starts',formatTripTimeSpacious(t.startTime))")
 replace("row('Ends',safe(t.endTime.replace('T',' ')))", "row('Ends',formatTripTimeSpacious(t.endTime))")
 replace("row('Exchange rate',safe(fxLabel(t.reviewQuote || fx)))", "row('Exchange rate',fxRowValue(t.reviewQuote || fx))")
+replace("  function fxLabel(quote) {\n    const rate = new Intl.NumberFormat('en-US', { maximumFractionDigits: 8 }).format(quote.rate);\n    return [rate + ' VND / USD', quote.source, quote.updated,\n      quote.live || quote.historical ? '' : 'not live'].filter(Boolean).join(' · ');\n  }", "  function formatFxShortTime(raw) {\n    if (!raw) return '';\n    const d = new Date(raw);\n    if (!isNaN(d.getTime())) {\n      const pad = n => String(n).padStart(2, '0');\n      return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;\n    }\n    return String(raw);\n  }\n\n  function fxLabel(quote) {\n    const rate = new Intl.NumberFormat('en-US', { maximumFractionDigits: 8 }).format(quote.rate);\n    const shortSource = quote.source ? quote.source.replace(/\\s+USD\\/VND\\s+reference/i, '').replace(/\\s+reference/i, '') : '';\n    const shortTime = quote.updated ? formatFxShortTime(quote.updated) : '';\n    const notLiveLabel = quote.live || quote.historical ? '' : 'not live';\n    return [rate + ' VND / USD', shortSource, shortTime, notLiveLabel].filter(Boolean).join(' · ');\n  }")
 
 # Warning notice prominent
 replace('<p class="notice">Early withdrawals use only your own balance. You remain a trip member after withdrawing all. After start, deposits are locked until final settlement; top-ups are allowed.</p>',
@@ -1845,6 +2053,9 @@ source = source.replace('safe(trip.members[index].name), fujiPaymentAmount(units
 source = source.replace('row(safe(member(item.id).name),', 'row(userText(member(item.id).name),')
 source = source.replace('row(safe(item.name), vnd(item.net),', 'row(userText(item.name), vnd(item.net),')
 source = source.replace('<h1>Final split</h1><p>${safe(trip.name)}</p>', '<h1>Final split</h1><p>${userText(trip.name)}</p>')
+source = source.replace(".bill-row:nth-child(even) .bill-badge { background: #e4f2ea; color: #22644b; }", "/* nth-child bill-badge alternate removed in favor of status-based color */")
+source = source.replace('<button type="button" class="bill-row" data-act="bill-detail" data-id="${b.id}">', '<button type="button" class="bill-row is-${safe(b.status)}" data-act="bill-detail" data-id="${b.id}">')
+source = source.replace('<span class="bill-badge">${icon(\'bill\')}</span>', '<span class="bill-badge status-${safe(b.status)}">${icon(b.status === \'approved\' ? \'check\' : b.status === \'rejected\' ? \'close\' : \'bill\')}</span>')
 source = source.replace('>${safe(b.label)}</span>', '>${userText(b.label)}</span>')
 source = source.replace('>${safe(m.name)}</span>', '>${userText(m.name)}</span>')
 replace("Paid by ${safe(payer?.name||'Unknown')} outside ·", "${siteLanguage === 'vi' ? 'Paid by: ' : 'Paid by '}${userText(payer?.name || 'Unknown')} outside ·")

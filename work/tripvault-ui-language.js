@@ -347,6 +347,8 @@
     ['Top-up reminder', 'Nhắc nạp thêm'],
     ['The vault uses the member list saved at setup. Invitations are closed.', 'Quỹ dùng danh sách ví đã chốt khi tạo quỹ. Phòng đã ngừng nhận thành viên mới.'],
     ['You have no trip notifications.', 'Chuyến đi chưa có thông báo.'],
+    ['No notifications yet', 'Chưa có thông báo nào'],
+    ['All updates about funding, bills, and approvals will appear here.', 'Mọi cập nhật về nạp quỹ, hóa đơn và xét duyệt sẽ xuất hiện tại đây.'],
     ['Refresh balances', 'Cập nhật số dư'],
     ['Check transaction', 'Kiểm tra giao dịch'],
     ['Deploy Fuji vault', 'Tạo quỹ chuyến đi'],
@@ -460,6 +462,11 @@
     ['Quick timeline presets:', 'Chọn nhanh mốc thời gian:'],
     ['Quick presets:', 'Chọn nhanh mốc:'],
     ['ExchangeRate-API USD/VND reference', 'Tỷ giá tham chiếu ExchangeRate-API USD/VND'],
+    ['ExchangeRate-API', 'ExchangeRate-API'],
+    ['Settlement', 'Quyết toán'],
+    ['Avalanche Fuji escrow vault', 'Quỹ ký quỹ bảo chứng Avalanche Fuji'],
+    ['USDC from vault deposits at trip end', 'USDC từ số dư ký quỹ khi kết thúc'],
+    ['Timestamp unavailable', 'Chưa có thông tin thời gian'],
     ['Early withdrawals use only your own balance. You remain a trip member after withdrawing all. After start, deposits are locked until final settlement; top-ups are allowed.', 'Lưu ý rút tiền sớm: Bạn chỉ có thể rút phần tiền mình đã nạp trước giờ bắt đầu. Sau khi bắt đầu, tiền nạp sẽ bị khóa bảo chứng cho tới khi quyết toán; bạn chỉ có thể nạp thêm.'],
   ]);
 
@@ -473,6 +480,7 @@
     [/^(Waiting for approval|Changes requested) · (\d+\/\d+) approved$/, (_, status, count) => ui(status) + ' · ' + count + ' đã duyệt'],
     [/^outside · (\d+) people · (.+)$/, (_, count, status) => 'đã trả bên ngoài · ' + count + ' người · ' + ui(status)],
     [/^(Historical rate|Locked for approval|Estimate) · (.+)$/, (_, status, rate) => ui(status) + ' · ' + rate],
+    [/^([\d.,]+) VND \/ USD · (.+)$/, (_, rate, details) => rate + ' VND / USD · ' + ui(details)],
     [/^Paid ([\d.]+ ₫) · Owes ([\d.]+ ₫) · Deposited ([\d.,]+ USDC)(?: · (.+))?$/, (_, paid, owed, dep, status) => 'Đã ứng ' + paid + ' · Cần trả ' + owed + ' · Đã nạp ' + dep + (status ? ' · ' + ui(status) : '')],
     [/^Paid ([\d.]+ ₫) · Owes ([\d.]+ ₫)(?: · (.+))?$/, (_, paid, owed, status) => 'Đã ứng ' + paid + ' · Cần trả ' + owed + (status ? ' · ' + ui(status) : '')],
     [/^Deposited ([\d.,]+ USDC)$/, (_, amount) => 'Đã nạp ' + amount],

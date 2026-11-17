@@ -187,13 +187,15 @@
   function roomBell() {
     if (!rooms.account) return '';
     const seen = seenRoomNotifications();
-    const unread = readRoomNotifications().some(item => !seen.has(item.id));
+    const unreadCount = readRoomNotifications().filter(item => !seen.has(item.id)).length;
+    const unread = unreadCount > 0;
+    const badgeText = unreadCount > 9 ? '9+' : unreadCount;
     return `<button type="button" class="btn secondary trip-bell${unread && notificationAttention ? ' attention' : ''}" data-act="room-notifications"
       aria-label="${unread ? 'Notifications · Unread' : 'Notifications'}" aria-haspopup="dialog">
       <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.8"
         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 12a2 2 0 0 0 4 0"/>
-      </svg>${unread ? '<span class="trip-bell-dot" aria-hidden="true"></span>' : ''}
+      </svg>${unread ? `<span class="trip-bell-badge" aria-hidden="true">${badgeText}</span>` : ''}
     </button>`;
   }
 
@@ -227,8 +229,32 @@
       <span aria-hidden="true"> · </span><span>${safe(elapsed)}</span></small>`;
   }
 
+  function notificationCategory(item) {
+    if (item.reminder || item.heading === 'Top-up reminder' || item.heading === 'Your top-up') {
+      return 'notif-topup';
+    }
+    if (item.heading === 'Bill change requested' || item.heading === 'Bill needs your approval' || item.heading === 'Bill removal requested' || item.heading === 'Bill cancellation declined') {
+      return 'notif-warning';
+    }
+    if (item.heading === 'Someone agreed with the suggestion' || item.heading === 'Group payments complete' || item.heading === 'Bill removed') {
+      return 'notif-success';
+    }
+    return 'notif-info';
+  }
+
   function roomNotificationsBody(trip, items, seen) {
-    return items.length ? '<div class="inline notification-tools">' +
+    if (!items.length) {
+      return `<div class="empty-notifications">
+        <div class="empty-notif-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 12a2 2 0 0 0 4 0"/>
+          </svg>
+        </div>
+        <h3>No notifications yet</h3>
+        <p class="subtitle">All updates about funding, bills, and approvals will appear here.</p>
+      </div>`;
+    }
+    return '<div class="inline notification-tools">' +
       btn('Clear notifications', 'clear-room-notifications', { tone: 'secondary' }) + '</div>' + items.map(item => {
       const current = trip?.id === item.roomId;
       const [message, action] = item.reminder ? topUpNotificationDetails(current ? trip : null, item.reminder) : [
@@ -236,14 +262,21 @@
           { tone: 'secondary', data: `data-id="${safe(item.id)}"` }),
       ];
       const context = [item.roomName, item.sender, item.title].filter(Boolean).map(userText).join(' · ');
-      return `<article class="trip-notification${seen.has(item.id) ? '' : ' unread'}">
-        <strong>${item.heading}</strong>
-        ${context ? '<span>' + context + '</span>' : ''}
-        ${notificationTime(item.receivedAt)}
-        ${message ? '<small>' + (item.userMessage ? userText(message) : safe(message)) + '</small>' : ''}
-        ${action ? '<div class="inline">' + action + '</div>' : ''}
+      const category = notificationCategory(item);
+      const isUnread = !seen.has(item.id);
+      return `<article class="trip-notification ${category}${isUnread ? ' unread' : ''}">
+        <div class="notif-header">
+          <span class="notif-title">
+            ${isUnread ? '<span class="notif-dot" aria-hidden="true"></span>' : ''}
+            <strong>${item.heading}</strong>
+          </span>
+          ${notificationTime(item.receivedAt)}
+        </div>
+        ${context ? '<span class="notif-context">' + context + '</span>' : ''}
+        ${message ? '<small class="notif-message">' + (item.userMessage ? userText(message) : safe(message)) + '</small>' : ''}
+        ${action ? '<div class="inline notif-actions">' + action + '</div>' : ''}
       </article>`;
-    }).join('') : '<p class="notice">You have no trip notifications.</p>';
+    }).join('');
   }
 
   function openRoomNotifications() {
