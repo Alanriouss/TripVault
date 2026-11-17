@@ -1279,20 +1279,22 @@ dialog::backdrop {
 }
 /* Trip Settings responsive & unbolded & FX rate */
 .trip-settings-panel .row {
+  display: flex !important;
   align-items: flex-start !important;
+  justify-content: space-between !important;
   flex-wrap: wrap !important;
-  gap: 8px 12px !important;
+  gap: 8px 16px !important;
 }
 .trip-settings-panel .row > .row-label {
-  flex: 1 1 200px !important;
-  min-width: 160px !important;
+  flex: 1 1 240px !important;
+  min-width: 180px !important;
 }
 .trip-settings-panel .row > strong {
   font-weight: 400 !important;
   user-select: text;
   -webkit-user-select: text;
   text-align: right;
-  flex: 0 1 auto !important;
+  flex: 0 0 auto !important;
   max-width: 100% !important;
   overflow-wrap: anywhere !important;
 }
@@ -1301,7 +1303,7 @@ dialog::backdrop {
   flex-wrap: wrap;
   align-items: baseline;
   justify-content: flex-end;
-  gap: 8px;
+  gap: 6px;
   text-align: right;
   max-width: 100%;
 }
@@ -1316,14 +1318,23 @@ dialog::backdrop {
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
 }
-@media (max-width: 480px) {
+@media (max-width: 560px) {
   .trip-settings-panel .row {
     flex-direction: column !important;
     align-items: flex-start !important;
+    justify-content: flex-start !important;
+    gap: 4px !important;
+  }
+  .trip-settings-panel .row > .row-label {
+    flex: 0 0 auto !important;
+    width: 100% !important;
+    min-width: 0 !important;
   }
   .trip-settings-panel .row > strong {
+    flex: 0 0 auto !important;
     text-align: left !important;
     width: 100% !important;
+    margin-top: 2px !important;
   }
   .trip-time-text {
     justify-content: flex-start !important;
