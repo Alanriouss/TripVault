@@ -959,9 +959,11 @@
     const date = typeof value === 'object' && value instanceof Date ? value : new Date(value);
     if (isNaN(date.getTime())) return String(value);
     const pad = n => String(n).padStart(2, '0');
-    const dStr = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-    const tStr = `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
-    return `<span class="trip-time-text"><span class="trip-time-date">${dStr}</span><span class="trip-time-time">${tStr}</span></span>`;
+    return `${pad(date.getDate())}/${pad(date.getMonth() + 1)} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  }
+
+  function formatShortDateTime(value) {
+    return formatTripTimeSpacious(value);
   }
 
   function formatFxShortTime(raw) {
@@ -1238,16 +1240,16 @@
     const trips = availableTrips().slice().reverse();
     const vi = siteLanguage === 'vi';
     const orientationBanner = `<div class="notice app-orientation-notice" style="margin-bottom:14px; font-size:14px; border-left:4px solid var(--accent); background:rgba(232, 65, 66, 0.05); padding:14px 16px; border-radius:14px; box-shadow:var(--shadow-sm); line-height:1.6;">
-      <strong>🎯 ${vi ? 'Mục đích sử dụng TripVault:' : 'TripVault Purpose:'}</strong> ${vi ? 'TripVault chuyên phục vụ cho các chuyến đi và sự kiện trọn vẹn từ <b>1 ngày trở lên</b> có quỹ ký quỹ bảo chứng (không dùng để chia bill lẻ tức thời).' : 'TripVault is dedicated to multi-day trips and complete group events (<b>≥ 1 day</b>) with time-locked escrow vaults (not for instant single-bill splits).'}
+      <strong>🎯 ${vi ? 'Mục đích của TripVault:' : 'TripVault Purpose:'}</strong> ${vi ? 'Quỹ chung cho các chuyến đi nhiều ngày: nạp tiền trước, ghi hóa đơn trong chuyến đi, và tất toán một lần khi kết thúc.' : 'Shared trip fund: everyone deposits first, you log bills as you go, and the app settles once at the end.'}
     </div>`;
-    return `<div class="section-head"><div><h1>Your trips</h1><p>Create a room or join one with your wallet.</p></div></div>
+    return `<div class="section-head"><div><h1>Your trips</h1><p>Create a trip or join one with your wallet.</p></div></div>
       <div class="stack">
         ${orientationBanner}
         <section class="panel stack">
         <div class="inline">
-          ${btn('Create a room', 'room-create', { symbol: 'plus' })}
-          ${btn('Join a room', 'room-join', { tone: 'secondary' })}
-          ${!rooms.token ? btn('Sign in to rooms', 'room-sign-in', { tone: 'ghost' }) : ''}
+          ${btn('Create a trip', 'room-create', { symbol: 'plus' })}
+          ${btn('Join a trip', 'room-join', { tone: 'secondary' })}
+          ${!rooms.token ? btn('Sign in', 'room-sign-in', { tone: 'ghost' }) : ''}
         </div>
         ${btn('Try a local demo', 'local-demo', { tone: 'ghost' })}
       </section>

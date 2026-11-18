@@ -7,15 +7,14 @@
       progress: (step, total) => `Bước ${step} / ${total}`,
       steps: [
         {
-          title: 'Bước 1 · Tạo phòng mới (Your trips → Create a room)',
-          copy: `<p>Mở màn hình <b>Chuyến đi của bạn</b> và chọn <b>Tạo phòng</b>.</p>
+          title: 'Bước 1 · Tạo chuyến đi mới',
+          copy: `<p>Mở màn hình <b>Chuyến đi của bạn</b> và chọn <b>Tạo chuyến đi</b>.</p>
                  <div class="guide-step-card">
-                   <div class="guide-card-tag">💡 Định hướng sử dụng</div>
-                   <p>TripVault phục vụ cho các chuyến đi và sự kiện <b>trọn vẹn từ 1 ngày trở lên</b> có quỹ chung ký quỹ (không phù hợp chia bill lẻ tức thời).</p>
+                   <div class="guide-card-tag">💡 Mục đích của TripVault</div>
+                   <p><b>Quỹ chung cho các chuyến đi nhiều ngày.</b></p>
                    <ul style="margin: 6px 0 0 18px; padding: 0; line-height: 1.6;">
-                     <li><b>Tên chuyến đi</b>: Điền tên sự kiện (ví dụ: <i>Đà Lạt weekend</i>, <i>Phú Quốc tour</i>).</li>
-                     <li><b>Mức nạp tối thiểu (USDC)</b>: Số tiền bảo chứng mỗi người nạp vào quỹ.</li>
-                     <li><b>3 mốc thời gian</b>: Chọn lần lượt <b>hạn nạp quỹ → Giờ bắt đầu → Giờ kết thúc</b>.</li>
+                     <li>Đặt tên chuyến đi và mức tiền nạp tối thiểu.</li>
+                     <li>Chọn 3 mốc thời gian: hạn nạp quỹ, bắt đầu, kết thúc.</li>
                    </ul>
                  </div>`,
           alt: 'Màn hình Your trips và giao diện tạo phòng với các trường tên chuyến, mức nạp và 3 mốc thời gian.',
@@ -69,15 +68,14 @@
       progress: (step, total) => `Step ${step} of ${total}`,
       steps: [
         {
-          title: 'Step 1 · Create a room (Your trips → Create a room)',
-          copy: `<p>Open <b>Your trips</b> and click <b>Create a room</b>.</p>
+          title: 'Step 1 · Create a trip',
+          copy: `<p>Open <b>Your trips</b> and click <b>Create a trip</b>.</p>
                  <div class="guide-step-card">
                    <div class="guide-card-tag">💡 Purpose of TripVault</div>
-                   <p>TripVault is dedicated to multi-day trips and complete group events (<b>1+ days</b>) with an escrowed vault (not for instant single-bill splits).</p>
+                   <p><b>A shared fund for multi-day trips.</b></p>
                    <ul style="margin: 6px 0 0 18px; padding: 0; line-height: 1.6;">
-                     <li><b>Trip name</b>: e.g. <i>Da Lat weekend</i> or <i>Phu Quoc tour</i>.</li>
-                     <li><b>Minimum deposit (USDC)</b>: Escrow amount each person funds upfront.</li>
-                     <li><b>3 milestones</b>: Set <b>Deposit deadline → Trip start → Trip end</b> in that order.</li>
+                     <li>Name the trip and set the minimum deposit.</li>
+                     <li>Pick 3 dates: deposit deadline, start, end.</li>
                    </ul>
                  </div>`,
           alt: 'Your trips view with Create a room button and the form showing name, deposit and times.',

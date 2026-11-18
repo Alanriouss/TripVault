@@ -5,8 +5,8 @@
 <meta charset="utf-8"/>
 <meta content="width=device-width,initial-scale=1" name="viewport"/>
 <meta content="#f7f7fb" name="theme-color"/>
-<meta content="TripVault mobile prototype for shared trip expenses." name="description"/>
-<title>TripVault · Rooms</title>
+<meta content="Shared trip fund for groups: deposit USDC upfront, log bills as you go, and settle everyone in one step." name="description"/>
+<title>TripVault · Shared Trip Fund</title>
 <style>:root {
   --page: #f7f7fb;
   --paper: #fff;
@@ -657,8 +657,10 @@ dialog::backdrop {
 #bill-reminder-feedback:empty { display: none; }
 .btn.danger.cancel-approval { border-color: #fecaca; background: #fef2f2; }
 .btn.danger.cancel-approval:hover:not(:disabled) { background: #fee2e2; }
-.judge-demo-actions { margin-bottom: 16px; }
-.judge-demo-actions a { color: var(--accent-dark); font-weight: 650; }
+.subtle-link { font-weight: 500; color: var(--ink); text-decoration: none; }
+.subtle-link:hover { text-decoration: underline !important; }
+.empty-split-card { padding: 24px; text-align: center; margin-bottom: 20px; background: var(--paper); border: 1px dashed var(--line-strong); border-radius: var(--radius); }
+.demo-landing-card { border-radius: var(--radius); border: 1px solid var(--line); box-shadow: var(--shadow-sm); }
 .trip-return { display: flex; justify-content: space-between; align-items: center; gap: 8px 16px; flex-wrap: wrap; margin-bottom: 14px; }
 .trip-profile { display: flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; margin-inline-start: auto; }
 .trip-profile-name { min-width: 0; color: var(--muted); font-size: 13px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1615,6 +1617,8 @@ dialog.guide-modal .sheet-footer {
   background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
   border: 1px solid var(--line);
   box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
+  flex-shrink: 0;
+  min-height: 180px;
 }
 .guide-illustration img {
   display: block;
@@ -1833,7 +1837,7 @@ dialog.guide-modal .sheet-footer {
   const LEGACY_KEY = 'tripvault-timelocked-external-v7';
   const USDC_SCALE = 1_000_000;
   const FALLBACK_RATE = {
-    rate: 25640.2, source: 'Xe reference', updated: '2026-11-11', live: false,
+    rate: 25640.2, source: 'Xe', updated: '11/11 07:00', live: false,
   };
   const app = document.getElementById('app');
   const sheet = document.getElementById('sheet');
@@ -3955,9 +3959,11 @@ dialog.guide-modal .sheet-footer {
     const date = typeof value === 'object' && value instanceof Date ? value : new Date(value);
     if (isNaN(date.getTime())) return String(value);
     const pad = n => String(n).padStart(2, '0');
-    const dStr = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-    const tStr = `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
-    return `<span class="trip-time-text"><span class="trip-time-date">${dStr}</span><span class="trip-time-time">${tStr}</span></span>`;
+    return `${pad(date.getDate())}/${pad(date.getMonth() + 1)} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  }
+
+  function formatShortDateTime(value) {
+    return formatTripTimeSpacious(value);
   }
 
   function formatFxShortTime(raw) {
@@ -4234,16 +4240,16 @@ dialog.guide-modal .sheet-footer {
     const trips = availableTrips().slice().reverse();
     const vi = siteLanguage === 'vi';
     const orientationBanner = `<div class="notice app-orientation-notice" style="margin-bottom:14px; font-size:14px; border-left:4px solid var(--accent); background:rgba(232, 65, 66, 0.05); padding:14px 16px; border-radius:14px; box-shadow:var(--shadow-sm); line-height:1.6;">
-      <strong>🎯 ${vi ? 'Mục đích sử dụng TripVault:' : 'TripVault Purpose:'}</strong> ${vi ? 'TripVault chuyên phục vụ cho các chuyến đi và sự kiện trọn vẹn từ <b>1 ngày trở lên</b> có quỹ ký quỹ bảo chứng (không dùng để chia bill lẻ tức thời).' : 'TripVault is dedicated to multi-day trips and complete group events (<b>≥ 1 day</b>) with time-locked escrow vaults (not for instant single-bill splits).'}
+      <strong>🎯 ${vi ? 'Mục đích của TripVault:' : 'TripVault Purpose:'}</strong> ${vi ? 'Quỹ chung cho các chuyến đi nhiều ngày: nạp tiền trước, ghi hóa đơn trong chuyến đi, và tất toán một lần khi kết thúc.' : 'Shared trip fund: everyone deposits first, you log bills as you go, and the app settles once at the end.'}
     </div>`;
-    return `<div class="section-head"><div><h1>Your trips</h1><p>Create a room or join one with your wallet.</p></div></div>
+    return `<div class="section-head"><div><h1>Your trips</h1><p>Create a trip or join one with your wallet.</p></div></div>
       <div class="stack">
         ${orientationBanner}
         <section class="panel stack">
         <div class="inline">
-          ${btn('Create a room', 'room-create', { symbol: 'plus' })}
-          ${btn('Join a room', 'room-join', { tone: 'secondary' })}
-          ${!rooms.token ? btn('Sign in to rooms', 'room-sign-in', { tone: 'ghost' }) : ''}
+          ${btn('Create a trip', 'room-create', { symbol: 'plus' })}
+          ${btn('Join a trip', 'room-join', { tone: 'secondary' })}
+          ${!rooms.token ? btn('Sign in', 'room-sign-in', { tone: 'ghost' }) : ''}
         </div>
         ${btn('Explore demo trip', 'judge-demo-sample', { tone: 'secondary' })}
       </section>
@@ -6306,15 +6312,14 @@ function roomFundingShortfalls(trip, funding, draft) {
       progress: (step, total) => `Bước ${step} / ${total}`,
       steps: [
         {
-          title: 'Bước 1 · Tạo phòng mới (Your trips → Create a room)',
-          copy: `<p>Mở màn hình <b>Chuyến đi của bạn</b> và chọn <b>Tạo phòng</b>.</p>
+          title: 'Bước 1 · Tạo chuyến đi mới',
+          copy: `<p>Mở màn hình <b>Chuyến đi của bạn</b> và chọn <b>Tạo chuyến đi</b>.</p>
                  <div class="guide-step-card">
-                   <div class="guide-card-tag">💡 Định hướng sử dụng</div>
-                   <p>TripVault phục vụ cho các chuyến đi và sự kiện <b>trọn vẹn từ 1 ngày trở lên</b> có quỹ chung ký quỹ (không phù hợp chia bill lẻ tức thời).</p>
+                   <div class="guide-card-tag">💡 Mục đích của TripVault</div>
+                   <p><b>Quỹ chung cho các chuyến đi nhiều ngày.</b></p>
                    <ul style="margin: 6px 0 0 18px; padding: 0; line-height: 1.6;">
-                     <li><b>Tên chuyến đi</b>: Điền tên sự kiện (ví dụ: <i>Đà Lạt weekend</i>, <i>Phú Quốc tour</i>).</li>
-                     <li><b>Mức nạp tối thiểu (USDC)</b>: Số tiền bảo chứng mỗi người nạp vào quỹ.</li>
-                     <li><b>3 mốc thời gian</b>: Chọn lần lượt <b>hạn nạp quỹ → Giờ bắt đầu → Giờ kết thúc</b>.</li>
+                     <li>Đặt tên chuyến đi và mức tiền nạp tối thiểu.</li>
+                     <li>Chọn 3 mốc thời gian: hạn nạp quỹ, bắt đầu, kết thúc.</li>
                    </ul>
                  </div>`,
           alt: 'Màn hình Your trips và giao diện tạo phòng với các trường tên chuyến, mức nạp và 3 mốc thời gian.',
@@ -6368,15 +6373,14 @@ function roomFundingShortfalls(trip, funding, draft) {
       progress: (step, total) => `Step ${step} of ${total}`,
       steps: [
         {
-          title: 'Step 1 · Create a room (Your trips → Create a room)',
-          copy: `<p>Open <b>Your trips</b> and click <b>Create a room</b>.</p>
+          title: 'Step 1 · Create a trip',
+          copy: `<p>Open <b>Your trips</b> and click <b>Create a trip</b>.</p>
                  <div class="guide-step-card">
                    <div class="guide-card-tag">💡 Purpose of TripVault</div>
-                   <p>TripVault is dedicated to multi-day trips and complete group events (<b>1+ days</b>) with an escrowed vault (not for instant single-bill splits).</p>
+                   <p><b>A shared fund for multi-day trips.</b></p>
                    <ul style="margin: 6px 0 0 18px; padding: 0; line-height: 1.6;">
-                     <li><b>Trip name</b>: e.g. <i>Da Lat weekend</i> or <i>Phu Quoc tour</i>.</li>
-                     <li><b>Minimum deposit (USDC)</b>: Escrow amount each person funds upfront.</li>
-                     <li><b>3 milestones</b>: Set <b>Deposit deadline → Trip start → Trip end</b> in that order.</li>
+                     <li>Name the trip and set the minimum deposit.</li>
+                     <li>Pick 3 dates: deposit deadline, start, end.</li>
                    </ul>
                  </div>`,
           alt: 'Your trips view with Create a room button and the form showing name, deposit and times.',
@@ -6541,8 +6545,8 @@ function roomFundingShortfalls(trip, funding, draft) {
     const avatarButton = trip && !trip.shared
       ? `<button type="button" class="avatar-button" data-act="switch-member" aria-label="Switch demo member">${avatar(member(state.actor) || trip.members[0])}</button>`
       : '';
-    const content = trip ? screen() : demoMode && !state.trips.length
-      ? '<div class="section-head"><div><h1>TripVault demo</h1><p>Try a local simulation with two sample members. No wallet or network fees.</p></div></div>'
+    const content = trip ? screen() : demoMode
+      ? demoLandingScreen()
       : rooms.online ? roomsHome()
       : state.trips.length ? tripsScreen() : empty() + '<div class="stack" style="margin-top:13px">' + fujiPanel() + '</div>';
     return `
@@ -6565,8 +6569,6 @@ function roomFundingShortfalls(trip, funding, draft) {
             ${!demoMode && !rooms.online && window.location?.protocol === 'file:' ? '<p class="notice warn">Open the TripVault Rooms launcher for invite links and room codes.</p>' : ''}
             ${trip?.shared ? roomTripToolbar(trip) : ''}
             ${trip?.shared && !rooms.token ? '<p class="notice warn">Your room sign-in expired. ' + btn('Sign in again', 'room-reauthenticate', { tone: 'secondary' }) + '</p>' : ''}
-            ${demoMode ? '<div class="inline judge-demo-actions">' + btn('Start a fresh sample', 'judge-demo-sample') +
-              '<a href="/">Open shared-room mode</a></div>' : ''}
             ${content}
           </main>
         </div>
@@ -6626,13 +6628,25 @@ function roomFundingShortfalls(trip, funding, draft) {
     return `
       <div class="section-head">
         <div><h1>Final split</h1><p>${userText(trip.name)}</p></div>
-        <span class="chip violet">${settled ? 'Settled' : quote ? 'In review' : 'Draft'}</span>
+        <span class="chip violet">${settled ? 'Settled' : quote ? 'In review' : 'Draft · Pending approvals'}</span>
       </div>
       <div class="stack">
+        ${(() => {
+          const approved = (trip.bills || []).filter(b => b.status === 'approved');
+          return approved.length === 0 ? `
+            <div class="card empty-split-card">
+              <div style="font-size:28px; margin-bottom:8px;">🧾</div>
+              <h3 style="margin:0 0 6px 0; font-size:17px; font-weight:600; color:var(--ink);">Nothing to split yet</h3>
+              <p class="subtle" style="margin:0 0 16px 0; font-size:13.5px; line-height:1.5;">
+                Add your first bill in the Bills tab. Balances and transfers appear here once bills are approved.
+              </p>
+              <button type="button" class="btn secondary sm" data-act="navigate" data-view="bills">Go to Bills</button>
+            </div>` : '';
+        })()}
         ${trip.shared || isAddress(trip.fuji?.address) ? fujiPanel('split') : ''}
         <section class="panel">
           <h2>${trip.shared ? 'Review trip expenses' : isAddress(trip.fuji?.address) ? 'Demo split review' : 'Review the balances'}</h2>
-          <p class="subtitle">${trip.shared ? 'Everyone reviews their amount before the organizer makes the group payments.' : trip.splitApprovals.length + ' of ' + trip.members.length + ' approved · Revision ' + trip.revision}</p>
+          <p class="subtitle">${trip.shared ? 'Everyone reviews their amount before the organizer makes the group payments.' : trip.splitApprovals.length + ' of ' + trip.members.length + ' approved · Settlement draft (v' + trip.revision + ')'}</p>
           ${reviewActions ? '<div class="inline" style="margin-top:22px">' + reviewActions + '</div>' : ''}
           ${pending ? '<p class="notice warn">' + (trip.shared ? 'Finish open bill reviews before making final payments.'
           : 'Approve all pending bills before the final split.') + '</p>' : ''}
@@ -6641,25 +6655,25 @@ function roomFundingShortfalls(trip, funding, draft) {
           ${!settled && plan.invalid ? '<p class="notice warn">The current transfers cannot be represented in USDC. Reopen the split and check the rate before settling.</p>' : ''}
           ${!ended ? '<p class="notice">Group payments can start after the trip ends.</p>' : ''}
         </section>
-        <section class="panel">
+        <section class="panel" style="${(trip.bills || []).filter(b => b.status === 'approved').length === 0 ? 'opacity: 0.55; pointer-events: none;' : ''}">
           <h2>${trip.shared ? 'What each person owes or gets back' : 'Net balances'}</h2>
           ${stats(trip).map(item => row(userText(item.name), vnd(item.net),
             'Paid ' + vnd(item.paid) + ' · Owes ' + vnd(item.owed)
             + (trip.shared ? '' : ' · ' + (trip.splitApprovals.includes(item.id) ? 'Approved' : 'Awaiting approval')))).join('')}
         </section>
-        <section class="panel">
+        <section class="panel" style="${(trip.bills || []).filter(b => b.status === 'approved').length === 0 ? 'opacity: 0.55; pointer-events: none;' : ''}">
           <h2>${trip.shared ? 'Who pays whom' : 'USDC transfers to settle'}</h2>
-          <p class="notice${(quote || fx).live || quote?.historical ? '' : ' warn'}">${quoteStatus} · ${safe(fxLabel(quote || fx))}</p>
+          <p class="notice">${formatFxReference(quote || fx)}</p>
           ${transfers || '<p class="empty">No transfers needed yet.</p>'}
           <p class="notice">${trip.shared ? 'These amounts are estimates until the split is published and settled on Fuji.' : 'Demo settlement moves balances within the simulated vault. Each member can claim their balance in Wallet.'}</p>
         </section>
       </div>`;
   }
   function billItem(b){const payer=member(b.payer);return `<button type="button" class="bill-row is-${safe(b.status)}" data-act="bill-detail" data-id="${b.id}"><span class="row-label"><span class="bill-badge status-${safe(b.status)}">${icon(b.status === 'approved' ? 'check' : b.status === 'rejected' ? 'close' : 'bill')}</span><span><span class="bill-name">${userText(b.label)}</span><span class="bill-sub">${siteLanguage === 'vi' ? 'Paid by: ' : 'Paid by '}${userText(payer?.name || 'Unknown')} outside · ${b.participants.length} people · ${state.trip.shared ? roomBillStatus(b) : b.status==='approved'?'Approved':'Pending approval'}</span></span></span><span class="row-value">${vnd(b.amount)}</span></button>`}
-  function overview(){const t=state.trip,ss=stats(),me=ss.find(m=>m.id===state.actor),approved=t.bills.filter(b=>b.status==='approved'),total=approved.reduce((a,b)=>a+b.amount,0);return `<section class="hero"><span class="chip">${phase()} · Time-locked USDC vault</span><div><h1>${safe(t.name)}</h1><div class="hero-meta"><span class="avatar-stack">${t.members.slice(0,4).map(avatar).join('')}</span><span>${t.members.length} travelers · ${safe(t.location)}</span></div></div></section><section class="metrics"><div class="metric"><span class="metric-name">${icon('wallet')}Vault deposits</span><strong>${fmt(Object.values(t.depositUnits).reduce((a,b)=>a+b,0) / USDC_SCALE)} USDC</strong></div><div class="metric"><span class="metric-name">${icon('bill')}Approved expenses</span><strong>${vnd(total)}</strong></div><div class="metric"><span class="metric-name">${icon('wallet')}You paid</span><strong>${vnd(me.paid)}</strong></div><div class="metric"><span class="metric-name">${icon('split')}Your net</span><strong>${vnd(me.net)}</strong></div></section><div class="overview-grid"><section class="panel"><div class="panel-head"><h2>Recent bills</h2>${btn('View all','navigate',{tone:'ghost',data:'data-view="bills"'})}</div>${t.bills.length?t.bills.slice(-3).reverse().map(billItem).join(''):'<p class="empty">No bills yet.</p>'}</section><section class="panel next-card"><span class="next-mark">${icon('bill')}</span><h2>Record a payment</h2><p>Paid for something in VND? Add it here. No USDC is moved when recording a bill.</p>${btn('Add a bill','new-bill',{symbol:'plus',disabled:t.settled})}</section></div><section class="panel trip-settings-panel"><div class="panel-head"><h2>Trip settings</h2></div>${row('Bill approval',t.approvalMode==='everyone'?'All members':'Organizer only')}${row('Minimum deposit',money(t.minimumUnits))}${row('Starts',formatTripTimeSpacious(t.startTime))}${row('Ends',formatTripTimeSpacious(t.endTime))}${row('Exchange rate',fxRowValue(t.reviewQuote || fx))}${row('Settlement','USDC from vault deposits at trip end')}<p class="notice">Final split locks a USD/VND reference before approval. Deposits and payouts are simulated.</p></section>`}
+  function overview(){const t=state.trip,ss=stats(),me=ss.find(m=>m.id===state.actor),approved=t.bills.filter(b=>b.status==='approved'),total=approved.reduce((a,b)=>a+b.amount,0);return `<section class="hero"><span class="chip">${phase() === 'Closing' ? 'Trip ended · Ready to settle' : phase()} · Time-locked USDC vault</span><div><h1>${safe(t.name)}</h1><div class="hero-meta"><span class="avatar-stack">${t.members.slice(0,4).map(avatar).join('')}</span><span>${t.members.length} travelers · ${safe(t.location)}</span></div></div></section><section class="metrics"><div class="metric"><span class="metric-name">${icon('wallet')}Vault deposits</span><strong>${fmt(Object.values(t.depositUnits).reduce((a,b)=>a+b,0) / USDC_SCALE)} USDC</strong></div><div class="metric"><span class="metric-name">${icon('bill')}Approved expenses</span><strong>${vnd(total)}</strong></div><div class="metric"><span class="metric-name">${icon('wallet')}You paid</span><strong>${vnd(me.paid)}</strong></div><div class="metric"><span class="metric-name">${icon('split')}Your net</span><strong>${vnd(me.net)}</strong></div></section><div class="overview-grid"><section class="panel"><div class="panel-head"><h2>Recent bills</h2>${btn('View all','navigate',{tone:'ghost',data:'data-view="bills"'})}</div>${t.bills.length?t.bills.slice(-3).reverse().map(billItem).join(''):'<p class="empty">No bills yet.</p>'}</section><section class="panel next-card"><span class="next-mark">${icon('bill')}</span><h2>Record a payment</h2><p>Paid for something in VND? Add it here. No USDC is moved when recording a bill.</p>${btn('Add a bill','new-bill',{symbol:'plus',disabled:t.settled})}</section></div><section class="panel trip-settings-panel"><div class="panel-head"><h2>Trip settings</h2></div>${row('Bill approval',t.approvalMode==='everyone'?'All members':'Organizer only')}${row('Minimum deposit',money(t.minimumUnits))}${row('Starts',formatTripTimeSpacious(t.startTime))}${row('Ends',formatTripTimeSpacious(t.endTime))}${row('Exchange rate',fxRowValue(t.reviewQuote || fx))}${row('Settlement','USDC from vault deposits at trip end')}<p class="notice">Final split locks a USD/VND reference before approval. Deposits and payouts are simulated.</p></section>`}
   function people(){const t=state.trip;return `<div class="section-head"><div><h1>People</h1><p>Who paid, who owes, and each member's net position.</p></div></div><section class="panel"><div class="panel-head"><h2>Travelers</h2><span class="chip">${t.members.length} members</span></div>${stats().map(m=>`<div class="row"><div class="row-label">${avatar(member(m.id))}<span><span class="row-name">${safe(m.name)}${m.id===state.actor?' · You':''}</span><span class="row-sub traveler-details">Paid ${vnd(m.paid)} · Owes ${vnd(m.owed)} · Deposited ${fmt(depositOf(m.id))} USDC</span></span></div><span class="row-value ${m.net>=0?'money-positive':'money-negative'}">${vnd(m.net)}<small>Net balance</small></span></div>`).join('')}</section>`}
   function bills(){const t=state.trip;return `<div class="section-head"><div><h1>Bills</h1><p>${t.bills.length} recorded · Paid outside the app</p></div>${btn('Add bill','new-bill',{symbol:'plus',disabled:t.shared ? !roomBillFunding(t).ready : !!t.settled})}</div>${t.shared ? roomFundingPanel(t) : ''}<section class="panel"><div class="panel-head"><h2>Trip expenses</h2></div>${t.bills.length?t.bills.slice().reverse().map(billItem).join(''):'<p class="empty">No bills yet. Record who paid outside the app.</p>'}</section><p class="notice">Bills are records of real-world payments, not payments from a shared crypto vault.</p>`}
-  function wallet(){const t=state.trip,p=phase(),my=depositOf(state.actor),total=Object.values(t.depositUnits).reduce((a,b)=>a+b,0) / USDC_SCALE;return `<div class="section-head"><div><h1>Wallet & vault</h1><p>Fuji testnet and local demo</p></div><span class="chip violet">${p}</span></div><div class="stack">${fujiPanel()}<section class="panel"><h2>Demo vault</h2>${row('Total deposited',fmt(total)+' USDC')}${row('Your deposited balance',fmt(my)+' USDC')}${row('Minimum per member',money(t.minimumUnits))}${row('Start',safe(t.startTime.replace('T',' ')))}${row('End',safe(t.endTime.replace('T',' ')))}${row('Status',p)}<div class="inline" style="margin-top:16px">${btn('Deposit USDC','deposit',{disabled:t.settled})}${btn('Early withdrawal','withdraw',{tone:'secondary',disabled:p!=='Funding'||my<=0})}${t.settled?btn('Claim refund','claim',{tone:'secondary',disabled:my<=0}):''}</div><p class="notice warn notice-prominent">Early withdrawals use only your own balance. You remain a trip member after withdrawing all. After start, deposits are locked until final settlement; top-ups are allowed.</p></section><section class="panel"><h2>Funding progress</h2>${t.members.map(m=>row(safe(m.name),fmt(depositOf(m.id))+' USDC',depositUnits(t,m.id)>=t.minimumUnits?'Minimum reached':'Below minimum')).join('')}</section><section class="panel"><h2>Demo member</h2>${row('Previewing as',safe(member(state.actor).name))}${btn('Switch demo member','switch-member',{tone:'secondary'})}<p class="notice">These are simulated member balances, not real connected wallets.</p></section><section class="panel"><h2>Exchange rate</h2><p id="fx-status" class="notice">${safe(fxLabel(fx))}</p>${btn('Refresh market reference','refresh-fx',{tone:'secondary'})}</section></div>`}
+  function wallet(){const t=state.trip,p=phase(),my=depositOf(state.actor),total=Object.values(t.depositUnits).reduce((a,b)=>a+b,0) / USDC_SCALE;return `<div class="section-head"><div><h1>Wallet & vault</h1><p>Fuji testnet and local demo</p></div><span class="${p === 'Closing' ? 'chip warn' : 'chip violet'}">${p === 'Closing' ? 'Trip ended · Ready to settle' : p}</span></div><div class="stack">${fujiPanel()}<section class="panel"><h2>Demo vault</h2>${row('Total deposited',fmt(total)+' USDC')}${row('Your deposited balance',fmt(my)+' USDC')}${row('Minimum per member',money(t.minimumUnits))}${row('Start',safe(formatShortDateTime(t.startTime)))}${row('End',safe(formatShortDateTime(t.endTime)))}${row('Status',p === 'Closing' ? 'Trip ended · Ready to settle' : p)}<div class="inline" style="margin-top:16px">${btn('Deposit USDC','deposit',{disabled:t.settled})}${btn('Early withdrawal','withdraw',{tone:'secondary',disabled:p!=='Funding'||my<=0})}${t.settled?btn('Claim refund','claim',{tone:'secondary',disabled:my<=0}):''}</div><p class="notice">Deposits lock after the start time. You can still top up. Early withdrawal is only possible before the start.</p></section><section class="panel"><h2>Funding progress</h2>${t.members.map(m=>row(safe(m.name),fmt(depositOf(m.id))+' USDC',depositUnits(t,m.id)>=t.minimumUnits?'Minimum reached':'Below minimum')).join('')}</section><section class="panel"><h2>Demo member</h2>${row('Previewing as',safe(member(state.actor).name))}${btn('Switch demo member','switch-member',{tone:'secondary'})}<p class="notice">These are simulated member balances, not real connected wallets.</p></section><section class="panel"><h2>Exchange rate</h2><p id="fx-status" class="notice">${safe(fxLabel(fx))}</p>${btn('Refresh market reference','refresh-fx',{tone:'secondary'})}</section>${demoMode ? '<div style="margin-top:24px; text-align:center;"><button type="button" class="btn secondary sm" data-act="judge-demo-sample">Reset demo</button></div>' : ''}</div>`}
   function fundsForm(kind){const p=phase(),my=depositOf(state.actor);if(state.trip.settled||(kind==='withdraw'&&p!=='Funding'))return;sheetOpen(kind==='deposit'?'Deposit USDC':'Early withdrawal',kind==='deposit'?'Add USDC to your personal locked balance.':'Withdraw only your own funds before the trip begins.',`<form id="fund-form" class="stack"><label class="field">Amount (USDC)<input name="amount" type="number" min="0.000001" step="0.000001" required placeholder="100"></label><p class="notice">Your deposit: ${fmt(my)} USDC · Minimum: ${money(state.trip.minimumUnits)} · ${p}</p><input type="hidden" name="kind" value="${kind}"><p id="sheet-error" class="form-error"></p></form>`,`<button class="btn full" type="submit" form="fund-form">Confirm demo ${kind}</button>`)}
   function screen() {
     if (state.trip.shared) {
@@ -6851,6 +6865,83 @@ function roomFundingShortfalls(trip, funding, draft) {
     if (message) notice(persisted ? message : message + ' Changes are only in this tab.');
   }
 
+  function formatShortDateTime(iso) {
+    if (!iso) return '';
+    try {
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return String(iso).replace('T', ' ');
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const hours = String(d.getHours()).padStart(2, '0');
+      const mins = String(d.getMinutes()).padStart(2, '0');
+      return `${day}/${month} ${hours}:${mins}`;
+    } catch {
+      return String(iso).replace('T', ' ');
+    }
+  }
+
+  function formatFxReference(quote) {
+    if (!quote || !quote.rate) return 'Reference rate: Unavailable';
+    const rounded = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(Math.round(quote.rate));
+    let src = 'Xe';
+    if (quote.source) {
+      if (quote.source.includes('Fixed demo')) src = 'Demo';
+      else if (quote.source.includes('ExchangeRate-API')) src = 'ExchangeRate-API';
+      else if (quote.source.includes('Xe')) src = 'Xe';
+      else src = quote.source;
+    }
+    let timeStr = '11/11 07:00';
+    if (quote.updated) {
+      const d = new Date(quote.updated);
+      if (!isNaN(d.getTime())) {
+        const day = String(d.getDate()).padStart(2, '0');
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const hours = String(d.getHours()).padStart(2, '0');
+        const mins = String(d.getMinutes()).padStart(2, '0');
+        timeStr = `${day}/${month} ${hours}:${mins}`;
+      } else {
+        const cleaned = String(quote.updated).replace(/20\d\d[-/]?\s*/, '').trim();
+        if (cleaned) timeStr = cleaned;
+      }
+    }
+    return `Reference rate: ${rounded} VND per USD (${src}, ${timeStr})`;
+  }
+
+  function demoLandingScreen() {
+    const exitDemoUrl = (() => {
+      try {
+        const u = new URL(window.location.href);
+        u.searchParams.delete('demo');
+        return (u.pathname || '/') + (u.search ? u.search : '') + (u.hash || '');
+      } catch {
+        return window.location.pathname || '/';
+      }
+    })();
+    const card = `
+      <div class="card demo-landing-card" style="padding: 24px; margin-bottom: 20px;">
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+          <span class="brand-mark">TV</span>
+          <h1 style="margin:0; font-size:22px; font-weight:700;">TripVault</h1>
+        </div>
+        <p class="subtle" style="font-size:14px; margin:0 0 16px 0; line-height:1.5;">
+          Shared trip fund: everyone deposits first, you log bills as you go, and the app settles once at the end.
+        </p>
+        <ol class="demo-steps" style="margin:0 0 20px 0; padding-left:20px; font-size:14px; line-height:1.8; color:var(--ink);">
+          <li>Deposit USDC into the fund</li>
+          <li>Log bills and approve them</li>
+          <li>Settle everyone in one step</li>
+        </ol>
+        <button type="button" class="btn full" data-act="judge-demo-sample" style="width:100%; justify-content:center; padding:12px; font-size:15px; font-weight:600;">
+          Start a fresh sample
+        </button>
+        <div style="text-align:center; margin-top:12px; font-size:13px; color:var(--subtle);">
+          Using a real wallet? <a href="${exitDemoUrl}" class="subtle-link">Open shared-trip mode</a>
+        </div>
+      </div>`;
+    const existing = state.trips.length ? tripsScreen() : '';
+    return card + existing;
+  }
+
   function startJudgeSample() {
     const members = [{ id: 'm0', name: 'An' }, { id: 'm1', name: 'Bình' }];
     const now = Date.now();
@@ -6871,6 +6962,7 @@ function roomFundingShortfalls(trip, funding, draft) {
   }
 
   function selectTrip(trip) {
+
     if (sheet.open) sheet.close();
     if (trip?.shared) return keepRoom(trip, true);
     fallbackReview = null;

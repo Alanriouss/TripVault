@@ -17,7 +17,8 @@ def replace(old, new):
     assert source.count(old) == 1, (source.count(old), old[:150])
     source = source.replace(old, new, 1)
 
-replace('<title>TripVault · Trip workspace</title>', '<title>TripVault · Rooms</title>')
+replace('<meta content="TripVault mobile prototype for shared trip expenses." name="description"/>\n<title>TripVault · Trip workspace</title>',
+        '<meta content="Shared trip fund for groups: deposit USDC upfront, log bills as you go, and settle everyone in one step." name="description"/>\n<title>TripVault · Shared Trip Fund</title>')
 replace('</head>', '''<style>
 :root {
   --page: #f8fafc;
@@ -1351,6 +1352,8 @@ dialog.guide-modal .sheet-footer {
   background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
   border: 1px solid var(--line);
   box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
+  flex-shrink: 0;
+  min-height: 180px;
 }
 .guide-illustration img {
   display: block;
@@ -2164,20 +2167,94 @@ replace("const KEY = 'tripvault-timelocked-external-v8';", """const demoMode = n
   const KEY = demoMode ? 'tripvault-judge-demo-v1' : 'tripvault-timelocked-external-v8';""")
 replace("const legacy = readStorage(LEGACY_KEY);", "const legacy = demoMode ? null : readStorage(LEGACY_KEY);")
 replace("  enableRooms();", "  if (!demoMode) enableRooms();")
-replace("""            ${content}
-          </main>""", """            ${demoMode ? '<div class="inline judge-demo-actions">' + btn('Start a fresh sample', 'judge-demo-sample') +
-              '<a href="/">Open shared-room mode</a></div>' : ''}
-            ${content}
-          </main>""")
-replace('.trip-return { display:', """.judge-demo-actions { margin-bottom: 16px; }
-.judge-demo-actions a { color: var(--accent-dark); font-weight: 650; }
+replace('.trip-return { display:', """.subtle-link { font-weight: 500; color: var(--ink); text-decoration: none; }
+.subtle-link:hover { text-decoration: underline !important; }
+.empty-split-card { padding: 24px; text-align: center; margin-bottom: 20px; background: var(--paper); border: 1px dashed var(--line-strong); border-radius: var(--radius); }
+.demo-landing-card { border-radius: var(--radius); border: 1px solid var(--line); box-shadow: var(--shadow-sm); }
 .trip-return { display:""")
-replace("""    const content = trip ? screen() : rooms.online ? roomsHome()""", """    const content = trip ? screen() : demoMode && !state.trips.length
-      ? '<div class="section-head"><div><h1>TripVault demo</h1><p>Try a local simulation with two sample members. No wallet or network fees.</p></div></div>'
+replace("""    const content = trip ? screen() : rooms.online ? roomsHome()""", """    const content = trip ? screen() : demoMode
+      ? demoLandingScreen()
       : rooms.online ? roomsHome()""")
 replace("    if (act === 'room-create')", """    if (act === 'judge-demo-sample') return startJudgeSample();
     if (act === 'room-create')""")
-replace("  function selectTrip(trip) {", """  function startJudgeSample() {
+replace("  function selectTrip(trip) {", """  function formatShortDateTime(iso) {
+    if (!iso) return '';
+    try {
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return String(iso).replace('T', ' ');
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const hours = String(d.getHours()).padStart(2, '0');
+      const mins = String(d.getMinutes()).padStart(2, '0');
+      return `${day}/${month} ${hours}:${mins}`;
+    } catch {
+      return String(iso).replace('T', ' ');
+    }
+  }
+
+  function formatFxReference(quote) {
+    if (!quote || !quote.rate) return 'Reference rate: Unavailable';
+    const rounded = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(Math.round(quote.rate));
+    let src = 'Xe';
+    if (quote.source) {
+      if (quote.source.includes('Fixed demo')) src = 'Demo';
+      else if (quote.source.includes('ExchangeRate-API')) src = 'ExchangeRate-API';
+      else if (quote.source.includes('Xe')) src = 'Xe';
+      else src = quote.source;
+    }
+    let timeStr = '11/11 07:00';
+    if (quote.updated) {
+      const d = new Date(quote.updated);
+      if (!isNaN(d.getTime())) {
+        const day = String(d.getDate()).padStart(2, '0');
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const hours = String(d.getHours()).padStart(2, '0');
+        const mins = String(d.getMinutes()).padStart(2, '0');
+        timeStr = `${day}/${month} ${hours}:${mins}`;
+      } else {
+        const cleaned = String(quote.updated).replace(/20\\d\\d[-/]?\\s*/, '').trim();
+        if (cleaned) timeStr = cleaned;
+      }
+    }
+    return `Reference rate: ${rounded} VND per USD (${src}, ${timeStr})`;
+  }
+
+  function demoLandingScreen() {
+    const exitDemoUrl = (() => {
+      try {
+        const u = new URL(window.location.href);
+        u.searchParams.delete('demo');
+        return (u.pathname || '/') + (u.search ? u.search : '') + (u.hash || '');
+      } catch {
+        return window.location.pathname || '/';
+      }
+    })();
+    const card = `
+      <div class="card demo-landing-card" style="padding: 24px; margin-bottom: 20px;">
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+          <span class="brand-mark">TV</span>
+          <h1 style="margin:0; font-size:22px; font-weight:700;">TripVault</h1>
+        </div>
+        <p class="subtle" style="font-size:14px; margin:0 0 16px 0; line-height:1.5;">
+          Shared trip fund: everyone deposits first, you log bills as you go, and the app settles once at the end.
+        </p>
+        <ol class="demo-steps" style="margin:0 0 20px 0; padding-left:20px; font-size:14px; line-height:1.8; color:var(--ink);">
+          <li>Deposit USDC into the fund</li>
+          <li>Log bills and approve them</li>
+          <li>Settle everyone in one step</li>
+        </ol>
+        <button type="button" class="btn full" data-act="judge-demo-sample" style="width:100%; justify-content:center; padding:12px; font-size:15px; font-weight:600;">
+          Start a fresh sample
+        </button>
+        <div style="text-align:center; margin-top:12px; font-size:13px; color:var(--subtle);">
+          Using a real wallet? <a href="${exitDemoUrl}" class="subtle-link">Open shared-trip mode</a>
+        </div>
+      </div>`;
+    const existing = state.trips.length ? tripsScreen() : '';
+    return card + existing;
+  }
+
+  function startJudgeSample() {
     const members = [{ id: 'm0', name: 'An' }, { id: 'm1', name: 'Bình' }];
     const now = Date.now();
     const trip = {
@@ -2196,7 +2273,50 @@ replace("  function selectTrip(trip) {", """  function startJudgeSample() {
     window.scrollTo(0, 0);
   }
 
-  function selectTrip(trip) {""")
+  function selectTrip(trip) {
+""")
+replace("""  const FALLBACK_RATE = {
+    rate: 25640.2, source: 'Xe reference', updated: '2026-11-11', live: false,
+  };""", """  const FALLBACK_RATE = {
+    rate: 25640.2, source: 'Xe', updated: '11/11 07:00', live: false,
+  };""")
+replace("""      <div class="stack">
+        ${trip.shared || isAddress(trip.fuji?.address) ? fujiPanel('split') : ''}""",
+        """      <div class="stack">
+        ${(() => {
+          const approved = (trip.bills || []).filter(b => b.status === 'approved');
+          return approved.length === 0 ? `
+            <div class="card empty-split-card">
+              <div style="font-size:28px; margin-bottom:8px;">🧾</div>
+              <h3 style="margin:0 0 6px 0; font-size:17px; font-weight:600; color:var(--ink);">Nothing to split yet</h3>
+              <p class="subtle" style="margin:0 0 16px 0; font-size:13.5px; line-height:1.5;">
+                Add your first bill in the Bills tab. Balances and transfers appear here once bills are approved.
+              </p>
+              <button type="button" class="btn secondary sm" data-act="navigate" data-view="bills">Go to Bills</button>
+            </div>` : '';
+        })()}
+        ${trip.shared || isAddress(trip.fuji?.address) ? fujiPanel('split') : ''}""")
+replace("""        <section class="panel">
+          <h2>${trip.shared ? 'What each person owes or gets back' : 'Net balances'}</h2>""",
+        """        <section class="panel" style="${(trip.bills || []).filter(b => b.status === 'approved').length === 0 ? 'opacity: 0.55; pointer-events: none;' : ''}">
+          <h2>${trip.shared ? 'What each person owes or gets back' : 'Net balances'}</h2>""")
+replace("""        <section class="panel">
+          <h2>${trip.shared ? 'Who pays whom' : 'USDC transfers to settle'}</h2>""",
+        """        <section class="panel" style="${(trip.bills || []).filter(b => b.status === 'approved').length === 0 ? 'opacity: 0.55; pointer-events: none;' : ''}">
+          <h2>${trip.shared ? 'Who pays whom' : 'USDC transfers to settle'}</h2>""")
+replace("""<span class="chip violet">${settled ? 'Settled' : quote ? 'In review' : 'Draft'}</span>""",
+        """<span class="chip violet">${settled ? 'Settled' : quote ? 'In review' : 'Draft · Pending approvals'}</span>""")
+replace("""Revision ' + trip.revision""", """Settlement draft (v' + trip.revision + ')'""")
+replace("""          <p class="notice${(quote || fx).live || quote?.historical ? '' : ' warn'}">${quoteStatus} · ${safe(fxLabel(quote || fx))}</p>""",
+        """          <p class="notice">${formatFxReference(quote || fx)}</p>""")
+replace("<span class=\"chip\">${phase()} · Time-locked USDC vault</span>", "<span class=\"chip\">${phase() === 'Closing' ? 'Trip ended · Ready to settle' : phase()} · Time-locked USDC vault</span>")
+replace("${row('Start',safe(t.startTime.replace('T',' ')))}", "${row('Start',safe(formatShortDateTime(t.startTime)))}")
+replace("${row('End',safe(t.endTime.replace('T',' ')))}", "${row('End',safe(formatShortDateTime(t.endTime)))}")
+replace("<span class=\"chip violet\">${p}</span>", "<span class=\"${p === 'Closing' ? 'chip warn' : 'chip violet'}\">${p === 'Closing' ? 'Trip ended · Ready to settle' : p}</span>")
+replace("${row('Status',p)}", "${row('Status',p === 'Closing' ? 'Trip ended · Ready to settle' : p)}")
+replace('<p class="notice warn notice-prominent">Early withdrawals use only your own balance. You remain a trip member after withdrawing all. After start, deposits are locked until final settlement; top-ups are allowed.</p>', '<p class="notice">Deposits lock after the start time. You can still top up. Early withdrawal is only possible before the start.</p>')
+replace("""${btn('Refresh market reference','refresh-fx',{tone:'secondary'})}</section></div>""",
+        """${btn('Refresh market reference','refresh-fx',{tone:'secondary'})}</section>${demoMode ? '<div style="margin-top:24px; text-align:center;"><button type="button" class="btn secondary sm" data-act="judge-demo-sample">Reset demo</button></div>' : ''}</div>""")
 replace("    const quote = await marketQuote();\n    syncTrips();",
         "    const quote = demoMode ? { rate: 25000, source: 'Fixed demo rate', updated: '', live: false, historical: true } : await marketQuote();\n    syncTrips();")
 replace("        fx = quote;\n        lockQuote(trip, quote);",

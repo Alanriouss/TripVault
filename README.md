@@ -39,8 +39,8 @@ TripVault records expenses paid in VND outside the app. Members deposit USDC int
    bun run start
    ```
 
-4. On your phone, copy the HTTPS link into the wallet’s built-in browser. In **MetaMask Mobile**, tap **Explore**, then open the browser and paste the link. In TripVault, tap **Connect Wallet**, switch to **Avalanche Fuji** if prompted, and choose **Create a room**. Sign the login message when asked. A room with a **six-digit invite code** confirms that wallet sign-in worked. Creating the room only requires a signature and uses no gas. [MetaMask Mobile browser guide](https://support.metamask.io/configure/wallet/how-to-use-the-metamask-mobile-browser/)
-5. To test across devices, open the **same HTTPS link** in your laptop browser with a different wallet account, click **Join a room**, and enter the six-digit code. Continue with [the shared-room flow](#test-the-shared-room-flow-on-avalanche-fuji) if you want to test deposits and settlement using Fuji test tokens.
+4. On your phone, copy the HTTPS link into the wallet’s built-in browser. In **MetaMask Mobile**, tap **Explore**, then open the browser and paste the link. In TripVault, tap **Connect Wallet**, switch to **Avalanche Fuji** if prompted, and choose **Create a trip**. Sign the login message when asked. A trip with a **six-digit invite code** confirms that wallet sign-in worked. Creating the trip only requires a signature and uses no gas. [MetaMask Mobile browser guide](https://support.metamask.io/configure/wallet/how-to-use-the-metamask-mobile-browser/)
+5. To test across devices, open the **same HTTPS link** in your laptop browser with a different wallet account, click **Join a trip**, and enter the six-digit code. Continue with [the shared-trip flow](#test-the-shared-trip-flow-on-avalanche-fuji) if you want to test deposits and settlement using Fuji test tokens.
 
 If you restart the tunnel, Cloudflare gives you a new link. Update `TRIPVAULT_ORIGIN` and restart TripVault before signing in again. [Cloudflare Quick Tunnels](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/)
 
@@ -146,11 +146,11 @@ $env:TRIPVAULT_PORT = "8789"
 bun run start
 ```
 
-## Test the shared-room flow on Avalanche Fuji
+## Test the shared-trip flow on Avalanche Fuji
 
-1. Open [shared-room mode](http://127.0.0.1:8788/) in a browser with an Ethereum-compatible wallet. Use two browser profiles with different accounts if both members are testing on the same computer. Each account needs Fuji AVAX for network fees and Fuji test USDC to deposit.
-2. Connect the organizer’s wallet and choose **Create a room**. Pick a deposit deadline, a later start time, and an end time after that. Leave time to join, create the fund, and deposit before the deadline.
-3. On the other browser profile, choose **Join a room** with the second wallet and enter the code. After everyone has joined, use **Wallet → Deploy Fuji vault** as the organizer. Confirm the roster and wallet transaction. Each member then deposits their share.
+1. Open [shared-trip mode](http://127.0.0.1:8788/) in a browser with an Ethereum-compatible wallet. Use two browser profiles with different accounts if both members are testing on the same computer. Each account needs Fuji AVAX for network fees and Fuji test USDC to deposit.
+2. Connect the organizer’s wallet and choose **Create a trip**. Pick a deposit deadline, a later start time, and an end time after that. Leave time to join, create the fund, and deposit before the deadline.
+3. On the other browser profile, choose **Join a trip** with the second wallet and enter the code. After everyone has joined, use **Wallet → Deploy Fuji vault** as the organizer. Confirm the roster and wallet transaction. Each member then deposits their share.
 4. After the start, record and review a bill. Once the trip has ended and bill reviews are complete, the organizer opens **Final split** and chooses **Calculate final amounts → Review payment amounts → Share amounts for approval**. Each other member chooses **Approve my amount** and tops up if prompted. The organizer chooses **Make group payments**, and each member can send their remaining balance to their wallet.
 
 For wallet sign-in, use the exact host and port printed in the terminal. Shared-room data is stored locally in `work/tripvault-rooms.sqlite3`.
