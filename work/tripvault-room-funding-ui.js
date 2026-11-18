@@ -219,6 +219,7 @@
     const reminder = rooms.reminders.find(item => item.id === id);
     const trip = reminder && rooms.list.get(reminder.roomId);
     if (!trip) return;
+    markRoomNotificationRead(trip.id + ':top-up:' + id);
     selectTrip(trip);
     state.view = 'wallet';
     render();

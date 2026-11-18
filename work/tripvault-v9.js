@@ -953,7 +953,7 @@
           ${plan.invalid ? '<p class="subtitle">Payment amounts are unavailable.</p>'
             : transfers ? '<div>' + transfers + '</div>' : '<p class="subtitle">No transfers needed yet.</p>'}` : ''}
         ${hasApprovedBills ? finalSplitDetails('expenses', 'Expense breakdown', people) : ''}
-        ${finalSplitDetails('rate', 'Exchange rate', `<p class="subtitle"><strong>${rateStatus}</strong></p><div class="split-rate">${fxRowValue(rate)}</div>`)}
+        ${finalSplitDetails('rate', 'Exchange rate', `<p class="split-rate-status">${rateStatus}</p><div class="split-rate">${fxRowValue(rate)}</div>`)}
       </section>
     </div>`;
   }
@@ -1133,7 +1133,7 @@
       </section>`;
     }
     utilities = secondaryActions + utilities + disconnect;
-    return `<section class="panel stack">
+    return `<section class="panel stack trip-settings-panel">
       <div><h2>${section === 'split' ? 'Group payments' : 'Wallet and trip fund'}</h2>
         <p class="subtitle">${trip?.shared ? 'This trip uses test USDC on Avalanche Fuji.' : 'Transactions use test USDC on Avalanche Fuji. Local demo balances are separate.'}</p>
       </div>
@@ -2849,6 +2849,7 @@ function roomFundingShortfalls(trip, funding, draft) {
     const reminder = rooms.reminders.find(item => item.id === id);
     const trip = reminder && rooms.list.get(reminder.roomId);
     if (!trip) return;
+    markRoomNotificationRead(trip.id + ':top-up:' + id);
     selectTrip(trip);
     state.view = 'wallet';
     render();
@@ -3314,7 +3315,12 @@ function roomFundingShortfalls(trip, funding, draft) {
       sender: reminder.sender, receivedAt: reminder.receivedAt,
     }));
 
-    const notices = [];
+    const notices = trip.members.slice(trip.members.indexOf(member) + 1)
+      .filter(person => Number.isSafeInteger(person.joinedAt) && person.joinedAt > 0)
+      .map(person => ({
+        id: 'member-joined:' + person.id, heading: 'New member joined',
+        sender: person.name, receivedAt: person.joinedAt, view: 'people',
+      }));
     if (roomFundingCancelled(trip)) {
       notices.push({ id: 'cancelled', heading: 'Trip cancelled', view: 'wallet',
         receivedAt: Date.parse(trip.depositDeadline),
@@ -3492,12 +3498,13 @@ function roomFundingShortfalls(trip, funding, draft) {
       const context = [item.roomName, item.sender, item.title].filter(Boolean).map(userText).join(' · ');
       const category = notificationCategory(item);
       const isUnread = !seen.has(item.id);
-      return `<article class="trip-notification ${category}${isUnread ? ' unread' : ''}">
+      return `<article class="trip-notification ${category}${isUnread ? ' unread' : ''}"
+        data-notification-id="${safe(item.id)}" data-act="mark-room-notification-read" data-id="${safe(item.id)}">
         <div class="notif-header">
-          <span class="notif-title">
+          <button type="button" class="notif-title" data-act="mark-room-notification-read" data-id="${safe(item.id)}">
             ${isUnread ? '<span class="notif-dot" aria-hidden="true"></span>' : ''}
             <strong>${item.heading}</strong>
-          </span>
+          </button>
           ${notificationTime(item.receivedAt)}
         </div>
         ${context ? '<span class="notif-context">' + context + '</span>' : ''}
@@ -3516,19 +3523,18 @@ function roomFundingShortfalls(trip, funding, draft) {
       '<div class="stack" data-room-notifications>' + markup + '</div>' + billSignInButton());
     const panel = sheet.querySelector('[data-room-notifications]');
     if (panel) panel.notificationMarkup = markup;
-    markTripNotificationsRead(items);
     render();
     syncRooms();
   }
 
-  function markTripNotificationsRead(items) {
+  function markRoomNotificationRead(id) {
     const seen = seenRoomNotifications();
-    if (!items.some(item => !seen.has(item.id))) return seen;
-    items.forEach(item => seen.add(item.id));
+    if (!id || seen.has(id)) return;
+    seen.add(id);
     try {
       localStorage.setItem(notificationReadKey, JSON.stringify([...seen].slice(-2000)));
     } catch {}
-    return seen;
+    if (!refreshNotificationSheet()) render();
   }
 
   function refreshNotificationSheet(items = readRoomNotifications()) {
@@ -3539,7 +3545,6 @@ function roomFundingShortfalls(trip, funding, draft) {
       panel.innerHTML = markup;
       localizeUI(panel);
       panel.notificationMarkup = markup;
-      markTripNotificationsRead(items);
       render();
     }
     return true;
@@ -3573,6 +3578,7 @@ function roomFundingShortfalls(trip, funding, draft) {
     if (!item) return openRoomNotifications();
     const targetTrip = rooms.list.get(item.roomId);
     if (!targetTrip) return;
+    markRoomNotificationRead(id);
     selectTrip(targetTrip);
     state.view = item.view || 'bills';
     render();
@@ -3849,6 +3855,12 @@ function roomFundingShortfalls(trip, funding, draft) {
     ['Review open bills before splitting expenses.', 'Hãy xem các hóa đơn còn chờ duyệt trước khi chia chi phí.'],
     ['Expenses will appear here after a bill is approved.', 'Chi phí sẽ hiện ở đây sau khi có hóa đơn được duyệt.'],
     ['Go to Bills', 'Mở Hóa đơn'],
+    ['New member joined', 'Có thành viên mới vào phòng'],
+    ['Demo vault', 'Quỹ mô phỏng'],
+    ['Total deposited', 'Tổng đã nạp'],
+    ['Your deposited balance', 'Số dư bạn đã nạp'],
+    ['Early withdrawal', 'Rút trước hạn'],
+    ['Deposits lock after the start time. You can still top up. Early withdrawal is only possible before the start.', 'Quỹ khóa rút khi chuyến đi bắt đầu. Bạn vẫn có thể nạp thêm và chỉ có thể rút trước giờ bắt đầu.'],
     ['Trip ended · Ready to settle', 'Chuyến đi đã kết thúc · Có thể quyết toán'],
     ['Settled', 'Đã quyết toán'],
     ['Historical rate', 'Tỷ giá tại thời điểm chốt'],
@@ -4879,7 +4891,7 @@ function roomFundingShortfalls(trip, funding, draft) {
   function overview(){const t=state.trip,ss=stats(),me=ss.find(m=>m.id===state.actor),approved=t.bills.filter(b=>b.status==='approved'),total=approved.reduce((a,b)=>a+b.amount,0);return `<section class="hero"><span class="chip">${phase() === 'Closing' ? 'Trip ended · Ready to settle' : phase()} · Time-locked USDC vault</span><div><h1>${safe(t.name)}</h1><div class="hero-meta"><span class="avatar-stack">${t.members.slice(0,4).map(avatar).join('')}</span><span>${t.members.length} travelers · ${safe(t.location)}</span></div></div></section><section class="metrics"><div class="metric"><span class="metric-name">${icon('wallet')}Vault deposits</span><strong>${fmt(Object.values(t.depositUnits).reduce((a,b)=>a+b,0) / USDC_SCALE)} USDC</strong></div><div class="metric"><span class="metric-name">${icon('bill')}Approved expenses</span><strong>${vnd(total)}</strong></div><div class="metric"><span class="metric-name">${icon('wallet')}You paid</span><strong>${vnd(me.paid)}</strong></div><div class="metric"><span class="metric-name">${icon('split')}Your net</span><strong>${vnd(me.net)}</strong></div></section><div class="overview-grid"><section class="panel"><div class="panel-head"><h2>Recent bills</h2>${btn('View all','navigate',{tone:'ghost',data:'data-view="bills"'})}</div>${t.bills.length?t.bills.slice(-3).reverse().map(billItem).join(''):'<p class="empty">No bills yet.</p>'}</section><section class="panel next-card"><span class="next-mark">${icon('bill')}</span><h2>Record a payment</h2><p>Paid for something in VND? Add it here. No USDC is moved when recording a bill.</p>${btn('Add a bill','new-bill',{symbol:'plus',disabled:t.settled})}</section></div><section class="panel trip-settings-panel"><div class="panel-head"><h2>Trip settings</h2></div>${row('Bill approval',t.approvalMode==='everyone'?'All members':'Organizer only')}${row('Minimum deposit',money(t.minimumUnits))}${row('Starts',formatTripTimeSpacious(t.startTime))}${row('Ends',formatTripTimeSpacious(t.endTime))}${row('Exchange rate',fxRowValue(t.reviewQuote || fx))}${row('Settlement','USDC from vault deposits at trip end')}<p class="notice">Final split locks a USD/VND reference before approval. Deposits and payouts are simulated.</p></section>`}
   function people(){const t=state.trip;return `<div class="section-head"><div><h1>People</h1><p>Who paid, who owes, and each member's net position.</p></div></div><section class="panel"><div class="panel-head"><h2>Travelers</h2><span class="chip">${t.members.length} members</span></div>${stats().map(m=>`<div class="row"><div class="row-label">${avatar(member(m.id))}<span><span class="row-name">${safe(m.name)}${m.id===state.actor?' · You':''}</span><span class="row-sub traveler-details">Paid ${vnd(m.paid)} · Owes ${vnd(m.owed)} · Deposited ${fmt(depositOf(m.id))} USDC</span></span></div><span class="row-value ${m.net>=0?'money-positive':'money-negative'}">${vnd(m.net)}<small>Net balance</small></span></div>`).join('')}</section>`}
   function bills(){const t=state.trip;return `<div class="section-head"><div><h1>Bills</h1><p>${t.bills.length} recorded · Paid outside the app</p></div>${btn('Add bill','new-bill',{symbol:'plus',disabled:t.shared ? !roomBillFunding(t).ready : !!t.settled})}</div>${t.shared ? roomFundingPanel(t) : ''}<section class="panel"><div class="panel-head"><h2>Trip expenses</h2></div>${t.bills.length?t.bills.slice().reverse().map(billItem).join(''):'<p class="empty">No bills yet. Record who paid outside the app.</p>'}</section><p class="notice">Bills are records of real-world payments, not payments from a shared crypto vault.</p>`}
-  function wallet(){const t=state.trip,p=phase(),my=depositOf(state.actor),total=Object.values(t.depositUnits).reduce((a,b)=>a+b,0) / USDC_SCALE;return `<div class="section-head"><div><h1>Wallet & vault</h1><p>Fuji testnet and local demo</p></div><span class="${p === 'Closing' ? 'chip warn' : 'chip violet'}">${p === 'Closing' ? 'Trip ended · Ready to settle' : p}</span></div><div class="stack">${fujiPanel()}<section class="panel"><h2>Demo vault</h2>${row('Total deposited',fmt(total)+' USDC')}${row('Your deposited balance',fmt(my)+' USDC')}${row('Minimum per member',money(t.minimumUnits))}${row('Start',safe(formatShortDateTime(t.startTime)))}${row('End',safe(formatShortDateTime(t.endTime)))}${row('Status',p === 'Closing' ? 'Trip ended · Ready to settle' : p)}<div class="inline" style="margin-top:16px">${btn('Deposit USDC','deposit',{disabled:t.settled})}${btn('Early withdrawal','withdraw',{tone:'secondary',disabled:p!=='Funding'||my<=0})}${t.settled?btn('Claim refund','claim',{tone:'secondary',disabled:my<=0}):''}</div><p class="notice">Deposits lock after the start time. You can still top up. Early withdrawal is only possible before the start.</p></section><section class="panel"><h2>Funding progress</h2>${t.members.map(m=>row(safe(m.name),fmt(depositOf(m.id))+' USDC',depositUnits(t,m.id)>=t.minimumUnits?'Minimum reached':'Below minimum')).join('')}</section><section class="panel"><h2>Demo member</h2>${row('Previewing as',safe(member(state.actor).name))}${btn('Switch demo member','switch-member',{tone:'secondary'})}<p class="notice">These are simulated member balances, not real connected wallets.</p></section><section class="panel"><h2>Exchange rate</h2><p id="fx-status" class="notice">${safe(fxLabel(fx))}</p>${btn('Refresh market reference','refresh-fx',{tone:'secondary'})}</section>${demoMode ? '<div style="margin-top:24px; text-align:center;"><button type="button" class="btn secondary sm" data-act="judge-demo-sample">Reset demo</button></div>' : ''}</div>`}
+  function wallet(){const t=state.trip,p=phase(),my=depositOf(state.actor),total=Object.values(t.depositUnits).reduce((a,b)=>a+b,0) / USDC_SCALE;return `<div class="section-head"><div><h1>Wallet & vault</h1><p>Fuji testnet and local demo</p></div><span class="${p === 'Closing' ? 'chip warn' : 'chip violet'}">${p === 'Closing' ? 'Trip ended · Ready to settle' : p}</span></div><div class="stack">${fujiPanel()}<section class="panel trip-settings-panel"><h2>Demo vault</h2>${row('Total deposited',fmt(total)+' USDC')}${row('Your deposited balance',fmt(my)+' USDC')}${row('Minimum per member',money(t.minimumUnits))}${row('Start',safe(formatShortDateTime(t.startTime)))}${row('End',safe(formatShortDateTime(t.endTime)))}${row('Status',p === 'Closing' ? 'Trip ended · Ready to settle' : p)}<div class="inline" style="margin-top:16px">${btn('Deposit USDC','deposit',{disabled:t.settled})}${btn('Early withdrawal','withdraw',{tone:'secondary',disabled:p!=='Funding'||my<=0})}${t.settled?btn('Claim refund','claim',{tone:'secondary',disabled:my<=0}):''}</div><p class="notice">Deposits lock after the start time. You can still top up. Early withdrawal is only possible before the start.</p></section><section class="panel"><h2>Funding progress</h2>${t.members.map(m=>row(safe(m.name),fmt(depositOf(m.id))+' USDC',depositUnits(t,m.id)>=t.minimumUnits?'Minimum reached':'Below minimum')).join('')}</section><section class="panel"><h2>Demo member</h2>${row('Previewing as',safe(member(state.actor).name))}${btn('Switch demo member','switch-member',{tone:'secondary'})}<p class="notice">These are simulated member balances, not real connected wallets.</p></section><section class="panel"><h2>Exchange rate</h2><p id="fx-status" class="notice">${safe(fxLabel(fx))}</p>${btn('Refresh market reference','refresh-fx',{tone:'secondary'})}</section>${demoMode ? '<div style="margin-top:24px; text-align:center;"><button type="button" class="btn secondary sm" data-act="judge-demo-sample">Reset demo</button></div>' : ''}</div>`}
   function fundsForm(kind){const p=phase(),my=depositOf(state.actor);if(state.trip.settled||(kind==='withdraw'&&p!=='Funding'))return;sheetOpen(kind==='deposit'?'Deposit USDC':'Early withdrawal',kind==='deposit'?'Add USDC to your personal locked balance.':'Withdraw only your own funds before the trip begins.',`<form id="fund-form" class="stack"><label class="field">Amount (USDC)<input name="amount" type="number" min="0.000001" step="0.000001" required placeholder="100"></label><p class="notice">Your deposit: ${fmt(my)} USDC · Minimum: ${money(state.trip.minimumUnits)} · ${p}</p><input type="hidden" name="kind" value="${kind}"><p id="sheet-error" class="form-error"></p></form>`,`<button class="btn full" type="submit" form="fund-form">Confirm demo ${kind}</button>`)}
   function screen() {
     if (state.trip.shared) {
@@ -5215,7 +5227,11 @@ function roomFundingShortfalls(trip, funding, draft) {
       deleteSelectionSnapshot = null;
       return sheet.close();
     }
-    if (act === 'judge-demo-sample') return startJudgeSample();
+    if (act === 'judge-demo-sample') {
+      if (demoMode) return startJudgeSample();
+      window.location.assign('/?demo=1');
+      return;
+    }
     if (act === 'room-create') return startRoomFlow('create');
     if (act === 'room-preset-time') return applyRoomTimePreset(element);
     if (act === 'room-replace-expired') return openReplacementTrip(trip);
@@ -5235,6 +5251,9 @@ function roomFundingShortfalls(trip, funding, draft) {
     if (act === 'room-notifications') return openRoomNotifications();
     if (act === 'clear-room-notifications') return clearRoomNotifications();
     if (act === 'open-room-notification') return openRoomNotification(id);
+    if (act === 'mark-room-notification-read') return markRoomNotificationRead(id);
+    const notification = element.closest?.('[data-notification-id]');
+    if (notification) markRoomNotificationRead(notification.dataset.notificationId);
     if (act === 'room-funding-top-up') return topUpRoomFunding(element);
     if (act === 'room-delete-select-mode') return toggleTripSelectionMode();
     if (act === 'room-select-delete') return selectTripForDeletion(id);

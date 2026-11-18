@@ -513,6 +513,12 @@ dialog::backdrop {
   flex-wrap: wrap;
 }
 .trip-notification .notif-title {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -1137,11 +1143,12 @@ dialog::backdrop {
   text-align: left;
 }
 .fx-rate-primary {
-  font-weight: 700 !important;
+  font-weight: 600;
   color: var(--ink);
-  font-size: 14.5px;
+  font-size: 13px;
   display: block;
 }
+.split-rate-status { font-size: 12px; color: var(--muted); }
 .fx-rate-sub {
   font-weight: 400 !important;
   font-size: 12.5px;
@@ -1383,10 +1390,11 @@ dialog.guide-modal .sheet-footer {
   box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
   flex-shrink: 0;
 }
-.guide-illustration img {
+.guide-illustration > img {
   display: block;
   width: 100%;
-  height: auto;
+  height: auto !important;
+  max-height: none !important;
   object-fit: contain;
 }
 .guide-description {
@@ -1887,6 +1895,9 @@ replace("    if (act === 'room-copy') return copyRoomInvite(trip);", """    if (
     if (act === 'room-notifications') return openRoomNotifications();
     if (act === 'clear-room-notifications') return clearRoomNotifications();
     if (act === 'open-room-notification') return openRoomNotification(id);
+    if (act === 'mark-room-notification-read') return markRoomNotificationRead(id);
+    const notification = element.closest?.('[data-notification-id]');
+    if (notification) markRoomNotificationRead(notification.dataset.notificationId);
     if (act === 'room-funding-top-up') return topUpRoomFunding(element);""")
 replace("disabled:!!t.settled})}</div><section class=\"panel\"><div class=\"panel-head\"><h2>Trip expenses",
         "disabled:t.shared ? !roomBillFunding(t).ready : !!t.settled})}</div>${t.shared ? roomFundingPanel(t) : ''}<section class=\"panel\"><div class=\"panel-head\"><h2>Trip expenses")
@@ -2216,7 +2227,11 @@ replace('.trip-return { display:', """.subtle-link { font-weight: 500; color: va
 replace("""    const content = trip ? screen() : rooms.online ? roomsHome()""", """    const content = trip ? screen() : demoMode
       ? demoLandingScreen()
       : rooms.online ? roomsHome()""")
-replace("    if (act === 'room-create')", """    if (act === 'judge-demo-sample') return startJudgeSample();
+replace("    if (act === 'room-create')", """    if (act === 'judge-demo-sample') {
+      if (demoMode) return startJudgeSample();
+      window.location.assign('/?demo=1');
+      return;
+    }
     if (act === 'room-create')""")
 replace("  function selectTrip(trip) {", """  function formatShortDateTime(iso) {
     if (!iso) return '';
@@ -2354,6 +2369,7 @@ replace("<span class=\"chip\">${phase()} · Time-locked USDC vault</span>", "<sp
 replace("${row('Start',safe(t.startTime.replace('T',' ')))}", "${row('Start',safe(formatShortDateTime(t.startTime)))}")
 replace("${row('End',safe(t.endTime.replace('T',' ')))}", "${row('End',safe(formatShortDateTime(t.endTime)))}")
 replace("<span class=\"chip violet\">${p}</span>", "<span class=\"${p === 'Closing' ? 'chip warn' : 'chip violet'}\">${p === 'Closing' ? 'Trip ended · Ready to settle' : p}</span>")
+replace('<section class="panel"><h2>Demo vault</h2>', '<section class="panel trip-settings-panel"><h2>Demo vault</h2>')
 replace("${row('Status',p)}", "${row('Status',p === 'Closing' ? 'Trip ended · Ready to settle' : p)}")
 replace('<p class="notice warn notice-prominent">Early withdrawals use only your own balance. You remain a trip member after withdrawing all. After start, deposits are locked until final settlement; top-ups are allowed.</p>', '<p class="notice">Deposits lock after the start time. You can still top up. Early withdrawal is only possible before the start.</p>')
 replace("""${btn('Refresh market reference','refresh-fx',{tone:'secondary'})}</section></div>""",

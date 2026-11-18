@@ -540,7 +540,7 @@ export function createRoomApi({ database, origin, rpc = fujiRpc, fetchFundingRat
     assert(trip.members.length < MAX_MEMBERS, 409, 'This room has reached 12 members.');
     const name = text(data.displayName, 40, 'display name', false) || shorten(address);
     const id = 'm' + trip.members.length;
-    trip.members.push({ id, name, address });
+    trip.members.push({ id, name, address, joinedAt: Date.now() });
     insertMember.run(record.id, address);
     invalidateSplit(trip);
     return persist(record, trip, address);

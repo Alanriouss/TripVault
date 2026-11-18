@@ -150,6 +150,13 @@ export async function testRoomsUi({ launch, flush, start, end }) {
   assert.match(guest.page.innerHTML, /data-view="people"[^>]*>View members<\/button>/);
   await owner.poll();
   assert.match(owner.page.innerHTML, /2 of 12/);
+  owner.click('room-notifications');
+  assert.match(owner.sheet.innerHTML, /New member joined[\s\S]*?Guest via code/);
+  assert.match(owner.page.innerHTML, /class="trip-bell-dot"/);
+  const joinedNotification = owner.sheet.innerHTML.match(/data-notification-id="([^"]+:member-joined:m1)"/)[1];
+  owner.click('mark-room-notification-read', { id: joinedNotification });
+  assert.doesNotMatch(owner.page.innerHTML, /class="trip-bell-dot"/);
+  owner.click('close-sheet');
   assert.match(owner.page.innerHTML, /Guest via code/);
   assert.equal(guest.button('room-rename'), undefined);
   assert.match(guest.page.innerHTML, /class="trip-profile"[\s\S]*?class="btn soft rename-member" data-act="room-rename-member"/);
@@ -605,7 +612,7 @@ async function testMemberDeposit({ launch, flush, start, end, cancelAtDeadline =
   guest.click('room-notifications');
   assert.match(guest.sheet.innerHTML, /Top up 1\.00 USDC/);
   assert.match(guest.sheet.innerHTML, /Top-up reminder/);
-  assert.doesNotMatch(guest.page.innerHTML, /class="trip-bell-dot"/);
+  assert.doesNotMatch(guest.sheet.innerHTML, /class="trip-notification [^"]*unread"[^>]*data-notification-id="[^"]+:top-up:/);
   guestDeposit = 5_250_000;
   guest.click('pay-top-up-reminder', { id: reminderId, units: '1000000' });
   await flush();
@@ -729,9 +736,13 @@ async function testMemberDeposit({ launch, flush, start, end, cancelAtDeadline =
   assert.match(browser.sheet.innerHTML, /Bill change requested/);
   assert.match(browser.sheet.innerHTML, /I paid separately/);
   assert.match(browser.sheet.innerHTML, /<small class="notification-time"><time datetime="[^"]+">/);
-  assert.doesNotMatch(browser.page.innerHTML, /class="trip-bell-dot"/);
+  assert.match(browser.page.innerHTML, /class="trip-bell-dot"/);
   const notificationId = browser.sheet.innerHTML.match(/data-act="open-room-notification"\s+data-id="([^"]+:feedback:[^"]+)"/)[1];
+  const readKey = 'tripvault-notifications-read:' + owner.address.toLowerCase();
+  const readBeforeOpen = JSON.parse(browser.storage.get(readKey) || '[]');
+  assert.ok(!readBeforeOpen.includes(notificationId));
   browser.click('open-room-notification', { id: notificationId });
+  assert.deepEqual(JSON.parse(browser.storage.get(readKey)), [...readBeforeOpen, notificationId]);
   assert.match(browser.sheet.innerHTML, /data-bill-review="2"/);
   assert.match(browser.sheet.innerHTML, /Suggested changes/);
   const [,, proposalId] = browser.sheet.innerHTML.match(/data-act="bill-feedback-vote"[^>]*data-author="(m1)" data-suggestion="([^"]+)"/);
@@ -743,7 +754,7 @@ async function testMemberDeposit({ launch, flush, start, end, cancelAtDeadline =
   assert.match(guest.sheet.innerHTML, /Someone disagreed with the suggestion[\s\S]*?I paid separately/);
   guest.click('close-sheet');
   await browser.poll();
-  assert.doesNotMatch(browser.page.innerHTML, /class="trip-bell-dot"/);
+  assert.match(browser.page.innerHTML, /class="trip-bell-dot"/);
   browser.click('close-sheet');
   serverTime += 5 * 60_000;
   guest.click('bill-feedback', { id: '2' });

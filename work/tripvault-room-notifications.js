@@ -87,7 +87,12 @@
       sender: reminder.sender, receivedAt: reminder.receivedAt,
     }));
 
-    const notices = [];
+    const notices = trip.members.slice(trip.members.indexOf(member) + 1)
+      .filter(person => Number.isSafeInteger(person.joinedAt) && person.joinedAt > 0)
+      .map(person => ({
+        id: 'member-joined:' + person.id, heading: 'New member joined',
+        sender: person.name, receivedAt: person.joinedAt, view: 'people',
+      }));
     if (roomFundingCancelled(trip)) {
       notices.push({ id: 'cancelled', heading: 'Trip cancelled', view: 'wallet',
         receivedAt: Date.parse(trip.depositDeadline),
@@ -265,12 +270,13 @@
       const context = [item.roomName, item.sender, item.title].filter(Boolean).map(userText).join(' · ');
       const category = notificationCategory(item);
       const isUnread = !seen.has(item.id);
-      return `<article class="trip-notification ${category}${isUnread ? ' unread' : ''}">
+      return `<article class="trip-notification ${category}${isUnread ? ' unread' : ''}"
+        data-notification-id="${safe(item.id)}" data-act="mark-room-notification-read" data-id="${safe(item.id)}">
         <div class="notif-header">
-          <span class="notif-title">
+          <button type="button" class="notif-title" data-act="mark-room-notification-read" data-id="${safe(item.id)}">
             ${isUnread ? '<span class="notif-dot" aria-hidden="true"></span>' : ''}
             <strong>${item.heading}</strong>
-          </span>
+          </button>
           ${notificationTime(item.receivedAt)}
         </div>
         ${context ? '<span class="notif-context">' + context + '</span>' : ''}
@@ -289,19 +295,18 @@
       '<div class="stack" data-room-notifications>' + markup + '</div>' + billSignInButton());
     const panel = sheet.querySelector('[data-room-notifications]');
     if (panel) panel.notificationMarkup = markup;
-    markTripNotificationsRead(items);
     render();
     syncRooms();
   }
 
-  function markTripNotificationsRead(items) {
+  function markRoomNotificationRead(id) {
     const seen = seenRoomNotifications();
-    if (!items.some(item => !seen.has(item.id))) return seen;
-    items.forEach(item => seen.add(item.id));
+    if (!id || seen.has(id)) return;
+    seen.add(id);
     try {
       localStorage.setItem(notificationReadKey, JSON.stringify([...seen].slice(-2000)));
     } catch {}
-    return seen;
+    if (!refreshNotificationSheet()) render();
   }
 
   function refreshNotificationSheet(items = readRoomNotifications()) {
@@ -312,7 +317,6 @@
       panel.innerHTML = markup;
       localizeUI(panel);
       panel.notificationMarkup = markup;
-      markTripNotificationsRead(items);
       render();
     }
     return true;
@@ -346,6 +350,7 @@
     if (!item) return openRoomNotifications();
     const targetTrip = rooms.list.get(item.roomId);
     if (!targetTrip) return;
+    markRoomNotificationRead(id);
     selectTrip(targetTrip);
     state.view = item.view || 'bills';
     render();

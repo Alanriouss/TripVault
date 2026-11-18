@@ -151,7 +151,7 @@
           ${plan.invalid ? '<p class="subtitle">Payment amounts are unavailable.</p>'
             : transfers ? '<div>' + transfers + '</div>' : '<p class="subtitle">No transfers needed yet.</p>'}` : ''}
         ${hasApprovedBills ? finalSplitDetails('expenses', 'Expense breakdown', people) : ''}
-        ${finalSplitDetails('rate', 'Exchange rate', `<p class="subtitle"><strong>${rateStatus}</strong></p><div class="split-rate">${fxRowValue(rate)}</div>`)}
+        ${finalSplitDetails('rate', 'Exchange rate', `<p class="split-rate-status">${rateStatus}</p><div class="split-rate">${fxRowValue(rate)}</div>`)}
       </section>
     </div>`;
   }
@@ -330,7 +330,7 @@
       </section>`;
     }
     utilities = secondaryActions + utilities + disconnect;
-    return `<section class="panel stack">
+    return `<section class="panel stack trip-settings-panel">
       <div><h2>${section === 'split' ? 'Group payments' : 'Wallet and trip fund'}</h2>
         <p class="subtitle">${trip?.shared ? 'This trip uses test USDC on Avalanche Fuji.' : 'Transactions use test USDC on Avalanche Fuji. Local demo balances are separate.'}</p>
       </div>
