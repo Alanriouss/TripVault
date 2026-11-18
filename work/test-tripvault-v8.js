@@ -104,6 +104,9 @@ async function launch(options = {}, script = source) {
     submit('bill-form', { label: 'Test bill', amount: String(amount), payer, participant });
   return {
     page, sheet, toast, storage, workspace, active, click, view, member, create, bill, approvals, approveBill, submit,
+    selectSiteLanguage: value => events.change({
+      target: { value, matches: selector => selector === '[data-site-language]' },
+    }),
     billDraft: fields => {
       const room = sheet.innerHTML.match(/id="bill-form"[^>]+data-room="([^"]+)"/)?.[1];
       assert.ok(room);
