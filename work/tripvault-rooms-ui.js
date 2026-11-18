@@ -982,8 +982,9 @@
     const shortSource = quote.source ? quote.source.replace(/\s+USD\/VND\s+reference/i, '').replace(/\s+reference/i, '') : '';
     const shortTime = quote.updated ? formatFxShortTime(quote.updated) : '';
     const notLiveLabel = quote.live || quote.historical ? '' : 'not live';
-    const details = [shortSource, shortTime, notLiveLabel].filter(Boolean).join(' · ');
-    return `<span class="fx-rate-container"><strong class="fx-rate-primary">${safe(rate)} VND / USD</strong><span class="fx-rate-sub">${safe(ui(details))}</span></span>`;
+    const details = [shortSource, shortTime, notLiveLabel].filter(Boolean)
+      .map(detail => `<span class="fx-rate-sub">${safe(ui(detail))}</span>`).join('');
+    return `<span class="fx-rate-container"><strong class="fx-rate-primary">${safe(rate)} VND / USD</strong>${details}</span>`;
   }
 
   function isRoomOrganizer(trip) {

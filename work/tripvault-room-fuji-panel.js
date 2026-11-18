@@ -145,7 +145,7 @@
           ${plan.invalid ? '<p class="subtitle">Payment amounts are unavailable.</p>'
             : transfers ? '<div>' + transfers + '</div>' : '<p class="subtitle">No transfers needed yet.</p>'}` : ''}
         ${finalSplitDetails('expenses', 'Expense breakdown', people)}
-        ${finalSplitDetails('rate', 'Exchange rate', `<p class="subtitle"><strong>${rateStatus}</strong></p><p class="subtitle">${safe(fxLabel(rate))}</p>`)}
+        ${finalSplitDetails('rate', 'Exchange rate', `<p class="subtitle"><strong>${rateStatus}</strong></p><div class="split-rate">${fxRowValue(rate)}</div>`)}
       </section>
     </div>`;
   }

@@ -133,6 +133,12 @@ async function launch(options = {}, script = source) {
 
 const happy = await launch();
 assert.match(happy.page.innerHTML, /No trips yet/);
+if (source.includes('data-split-trip')) {
+  const savedSplit = await launch({ storage: new Map([[v8Key, JSON.stringify({
+    trips: [], activeTripId: null, view: 'split',
+  })]]) });
+  assert.match(savedSplit.page.innerHTML, /No trips yet/);
+}
 assert.equal(happy.sheet.open, true);
 assert.equal(happy.sheet.lang, 'vi');
 assert.match(happy.sheet.innerHTML, /Cách dùng TripVault/);

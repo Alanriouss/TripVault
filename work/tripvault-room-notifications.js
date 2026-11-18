@@ -288,8 +288,8 @@
     sheetOpen('Notifications', 'Your trips',
       '<div class="stack" data-room-notifications>' + markup + '</div>' + billSignInButton());
     const panel = sheet.querySelector('[data-room-notifications]');
-    if (panel) panel.notificationMarkup = roomNotificationsBody(state.trip, items, markTripNotificationsRead(items));
-    else markTripNotificationsRead(items);
+    if (panel) panel.notificationMarkup = markup;
+    markTripNotificationsRead(items);
     render();
     syncRooms();
   }
@@ -311,7 +311,8 @@
     if (panel.notificationMarkup !== markup) {
       panel.innerHTML = markup;
       localizeUI(panel);
-      panel.notificationMarkup = roomNotificationsBody(state.trip, items, markTripNotificationsRead(items));
+      panel.notificationMarkup = markup;
+      markTripNotificationsRead(items);
       render();
     }
     return true;

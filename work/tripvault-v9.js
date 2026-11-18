@@ -947,7 +947,7 @@
           ${plan.invalid ? '<p class="subtitle">Payment amounts are unavailable.</p>'
             : transfers ? '<div>' + transfers + '</div>' : '<p class="subtitle">No transfers needed yet.</p>'}` : ''}
         ${finalSplitDetails('expenses', 'Expense breakdown', people)}
-        ${finalSplitDetails('rate', 'Exchange rate', `<p class="subtitle"><strong>${rateStatus}</strong></p><p class="subtitle">${safe(fxLabel(rate))}</p>`)}
+        ${finalSplitDetails('rate', 'Exchange rate', `<p class="subtitle"><strong>${rateStatus}</strong></p><div class="split-rate">${fxRowValue(rate)}</div>`)}
       </section>
     </div>`;
   }
@@ -2153,8 +2153,9 @@
     const shortSource = quote.source ? quote.source.replace(/\s+USD\/VND\s+reference/i, '').replace(/\s+reference/i, '') : '';
     const shortTime = quote.updated ? formatFxShortTime(quote.updated) : '';
     const notLiveLabel = quote.live || quote.historical ? '' : 'not live';
-    const details = [shortSource, shortTime, notLiveLabel].filter(Boolean).join(' · ');
-    return `<span class="fx-rate-container"><strong class="fx-rate-primary">${safe(rate)} VND / USD</strong><span class="fx-rate-sub">${safe(ui(details))}</span></span>`;
+    const details = [shortSource, shortTime, notLiveLabel].filter(Boolean)
+      .map(detail => `<span class="fx-rate-sub">${safe(ui(detail))}</span>`).join('');
+    return `<span class="fx-rate-container"><strong class="fx-rate-primary">${safe(rate)} VND / USD</strong>${details}</span>`;
   }
 
   function isRoomOrganizer(trip) {
@@ -3508,8 +3509,8 @@ function roomFundingShortfalls(trip, funding, draft) {
     sheetOpen('Notifications', 'Your trips',
       '<div class="stack" data-room-notifications>' + markup + '</div>' + billSignInButton());
     const panel = sheet.querySelector('[data-room-notifications]');
-    if (panel) panel.notificationMarkup = roomNotificationsBody(state.trip, items, markTripNotificationsRead(items));
-    else markTripNotificationsRead(items);
+    if (panel) panel.notificationMarkup = markup;
+    markTripNotificationsRead(items);
     render();
     syncRooms();
   }
@@ -3531,7 +3532,8 @@ function roomFundingShortfalls(trip, funding, draft) {
     if (panel.notificationMarkup !== markup) {
       panel.innerHTML = markup;
       localizeUI(panel);
-      panel.notificationMarkup = roomNotificationsBody(state.trip, items, markTripNotificationsRead(items));
+      panel.notificationMarkup = markup;
+      markTripNotificationsRead(items);
       render();
     }
     return true;
@@ -3769,6 +3771,8 @@ function roomFundingShortfalls(trip, funding, draft) {
     ['Paid outside', 'Đã trả bên ngoài ứng dụng'],
     ['Bills are records of real-world payments, not payments from a shared crypto vault.', 'Hóa đơn ghi lại các khoản thành viên đã ứng tiền bên ngoài TripVault.'],
     ['Waiting for approval', 'Đang chờ duyệt'],
+    ['Starts', 'Bắt đầu'],
+    ['Ends', 'Kết thúc'],
     ['Approved', 'Đã duyệt'],
     ['Awaiting approval', 'Chờ duyệt'],
     ['Automatically approved', 'Đã tự động duyệt'],
@@ -4047,6 +4051,7 @@ function roomFundingShortfalls(trip, funding, draft) {
   ]);
 
   const vietnamesePatterns = [
+    [/^(\d+) people$/, (_, count) => count + ' người'],
     [/^(\d+) members?( · (Shared room|Local demo))?$/, (_, count, suffix, kind) => count + ' thành viên' + (suffix ? ' · ' + ui(kind) : '')],
     [/^(\d+) of (\d+)$/, (_, count, total) => count + '/' + total],
     [/^(\d+) recorded · Paid outside the app$/, (_, count) => count + ' hóa đơn · Đã trả bên ngoài ứng dụng'],
@@ -4843,7 +4848,22 @@ function roomFundingShortfalls(trip, funding, draft) {
         </section>
       </div>`;
   }
-  function billItem(b){const payer=member(b.payer);return `<button type="button" class="bill-row is-${safe(b.status)}" data-act="bill-detail" data-id="${b.id}"><span class="row-label"><span class="bill-badge status-${safe(b.status)}">${icon(b.status === 'approved' ? 'check' : b.status === 'rejected' ? 'close' : 'bill')}</span><span><span class="bill-name">${userText(b.label)}</span><span class="bill-sub">${siteLanguage === 'vi' ? 'Paid by: ' : 'Paid by '}${userText(payer?.name || 'Unknown')} outside · ${b.participants.length} people · ${state.trip.shared ? roomBillStatus(b) : b.status==='approved'?'Approved':'Pending approval'}</span></span></span><span class="row-value">${vnd(b.amount)}</span></button>`}
+  function billItem(bill) {
+    const payer = member(bill.payer);
+    const status = state.trip.shared ? roomBillStatus(bill) : ui(bill.status === 'approved' ? 'Approved' : 'Pending approval');
+    const iconName = bill.status === 'approved' ? 'check' : bill.status === 'rejected' ? 'close' : 'bill';
+    return `<button type="button" class="bill-row is-${safe(bill.status)}" data-act="bill-detail" data-id="${bill.id}">
+      <span class="row-label">
+        <span class="bill-badge status-${safe(bill.status)}">${icon(iconName)}</span>
+        <span>
+          <span class="bill-name">${userText(bill.label)}</span>
+          <span class="bill-sub">${ui('Paid by')} ${userText(payer?.name || ui('Unknown'))} · ${ui(bill.participants.length + ' people')}</span>
+          <span class="bill-status">${safe(status)}</span>
+        </span>
+      </span>
+      <span class="row-value">${vnd(bill.amount)}</span>
+    </button>`;
+  }
   function overview(){const t=state.trip,ss=stats(),me=ss.find(m=>m.id===state.actor),approved=t.bills.filter(b=>b.status==='approved'),total=approved.reduce((a,b)=>a+b.amount,0);return `<section class="hero"><span class="chip">${phase() === 'Closing' ? 'Trip ended · Ready to settle' : phase()} · Time-locked USDC vault</span><div><h1>${safe(t.name)}</h1><div class="hero-meta"><span class="avatar-stack">${t.members.slice(0,4).map(avatar).join('')}</span><span>${t.members.length} travelers · ${safe(t.location)}</span></div></div></section><section class="metrics"><div class="metric"><span class="metric-name">${icon('wallet')}Vault deposits</span><strong>${fmt(Object.values(t.depositUnits).reduce((a,b)=>a+b,0) / USDC_SCALE)} USDC</strong></div><div class="metric"><span class="metric-name">${icon('bill')}Approved expenses</span><strong>${vnd(total)}</strong></div><div class="metric"><span class="metric-name">${icon('wallet')}You paid</span><strong>${vnd(me.paid)}</strong></div><div class="metric"><span class="metric-name">${icon('split')}Your net</span><strong>${vnd(me.net)}</strong></div></section><div class="overview-grid"><section class="panel"><div class="panel-head"><h2>Recent bills</h2>${btn('View all','navigate',{tone:'ghost',data:'data-view="bills"'})}</div>${t.bills.length?t.bills.slice(-3).reverse().map(billItem).join(''):'<p class="empty">No bills yet.</p>'}</section><section class="panel next-card"><span class="next-mark">${icon('bill')}</span><h2>Record a payment</h2><p>Paid for something in VND? Add it here. No USDC is moved when recording a bill.</p>${btn('Add a bill','new-bill',{symbol:'plus',disabled:t.settled})}</section></div><section class="panel trip-settings-panel"><div class="panel-head"><h2>Trip settings</h2></div>${row('Bill approval',t.approvalMode==='everyone'?'All members':'Organizer only')}${row('Minimum deposit',money(t.minimumUnits))}${row('Starts',formatTripTimeSpacious(t.startTime))}${row('Ends',formatTripTimeSpacious(t.endTime))}${row('Exchange rate',fxRowValue(t.reviewQuote || fx))}${row('Settlement','USDC from vault deposits at trip end')}<p class="notice">Final split locks a USD/VND reference before approval. Deposits and payouts are simulated.</p></section>`}
   function people(){const t=state.trip;return `<div class="section-head"><div><h1>People</h1><p>Who paid, who owes, and each member's net position.</p></div></div><section class="panel"><div class="panel-head"><h2>Travelers</h2><span class="chip">${t.members.length} members</span></div>${stats().map(m=>`<div class="row"><div class="row-label">${avatar(member(m.id))}<span><span class="row-name">${safe(m.name)}${m.id===state.actor?' · You':''}</span><span class="row-sub traveler-details">Paid ${vnd(m.paid)} · Owes ${vnd(m.owed)} · Deposited ${fmt(depositOf(m.id))} USDC</span></span></div><span class="row-value ${m.net>=0?'money-positive':'money-negative'}">${vnd(m.net)}<small>Net balance</small></span></div>`).join('')}</section>`}
   function bills(){const t=state.trip;return `<div class="section-head"><div><h1>Bills</h1><p>${t.bills.length} recorded · Paid outside the app</p></div>${btn('Add bill','new-bill',{symbol:'plus',disabled:t.shared ? !roomBillFunding(t).ready : !!t.settled})}</div>${t.shared ? roomFundingPanel(t) : ''}<section class="panel"><div class="panel-head"><h2>Trip expenses</h2></div>${t.bills.length?t.bills.slice().reverse().map(billItem).join(''):'<p class="empty">No bills yet. Record who paid outside the app.</p>'}</section><p class="notice">Bills are records of real-world payments, not payments from a shared crypto vault.</p>`}
@@ -4860,7 +4880,7 @@ function roomFundingShortfalls(trip, funding, draft) {
   }
   function render() {
     const split = app.querySelector?.('[data-split-trip]');
-    const openDetails = new Set(state.view === 'split' && split?.dataset.splitTrip === state.trip?.id
+    const openDetails = new Set(state.view === 'split' && split && split.dataset.splitTrip === state.trip?.id
       ? [...split.querySelectorAll('details[data-split-detail][open]')].map(item => item.dataset.splitDetail) : []);
     if (document.documentElement) {
       document.documentElement.lang = siteLanguage;

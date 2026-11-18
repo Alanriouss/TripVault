@@ -500,6 +500,11 @@ dialog::backdrop {
 .trip-notification.notif-warning { border-left-color: var(--warning); }
 .trip-notification.notif-success { border-left-color: var(--positive); }
 .trip-notification.notif-info { border-left-color: var(--accent); }
+.trip-notification:not(.unread) {
+  background: var(--page);
+  border-left-color: var(--line-strong);
+}
+.trip-notification:not(.unread) .notif-title { color: var(--muted); }
 .trip-notification .notif-header {
   display: flex;
   align-items: flex-start;
@@ -1102,14 +1107,34 @@ dialog::backdrop {
 }
 .bill-badge.status-pending,
 .bill-row.is-pending .bill-badge {
-  background: var(--tint) !important;
-  color: var(--accent-dark) !important;
+  background: #fef3c7;
+  color: #854d0e;
 }
+.bill-status {
+  display: inline-block;
+  margin-top: 5px;
+  padding: 3px 8px;
+  border-radius: 8px;
+  background: var(--page);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+.is-pending .bill-status, .is-disputed .bill-status, .is-cancellation .bill-status {
+  background: #fef3c7;
+  color: #854d0e;
+}
+.is-approved .bill-status { background: var(--positive-bg); color: var(--positive); }
+.is-rejected .bill-status { background: var(--danger-bg); color: var(--danger); }
 .fx-rate-container {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   text-align: right;
+}
+.split-rate .fx-rate-container {
+  align-items: flex-start;
+  text-align: left;
 }
 .fx-rate-primary {
   font-weight: 700 !important;
@@ -1194,16 +1219,20 @@ dialog::backdrop {
     overflow-x: clip !important;
   }
   .header-inner {
-    padding: 0 10px !important;
+    padding: 4px 10px !important;
     gap: 6px !important;
     min-height: 58px !important;
     max-width: 100vw !important;
-    overflow-x: hidden !important;
+  }
+  .header .wordmark {
+    flex-shrink: 0;
   }
   .header-actions {
     gap: 6px !important;
-    flex-shrink: 0 !important;
-    max-width: calc(100vw - 44px) !important;
+    flex: 1 1 auto !important;
+    min-width: 0;
+    flex-wrap: wrap;
+    justify-content: flex-end;
   }
   .breadcrumb {
     display: none !important;
@@ -1353,14 +1382,12 @@ dialog.guide-modal .sheet-footer {
   border: 1px solid var(--line);
   box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
   flex-shrink: 0;
-  min-height: 180px;
 }
 .guide-illustration img {
   display: block;
   width: 100%;
   height: auto;
-  max-height: 220px;
-  object-fit: cover;
+  object-fit: contain;
 }
 .guide-description {
   margin-bottom: 14px;
@@ -1447,9 +1474,6 @@ dialog.guide-modal .sheet-footer {
   }
   dialog.guide-modal .sheet-head {
     padding: 16px 16px 10px !important;
-  }
-  .guide-illustration img {
-    max-height: 160px;
   }
   .guide-actions {
     padding: 10px 16px 14px;
@@ -2016,7 +2040,7 @@ new_add_bill = """function addBill(editing = null) {
 }"""
 replace(old_add_bill, new_add_bill)
 replace('    app.innerHTML = header();', """    const split = app.querySelector?.('[data-split-trip]');
-    const openDetails = new Set(state.view === 'split' && split?.dataset.splitTrip === state.trip?.id
+    const openDetails = new Set(state.view === 'split' && split && split.dataset.splitTrip === state.trip?.id
       ? [...split.querySelectorAll('details[data-split-detail][open]')].map(item => item.dataset.splitDetail) : []);
     app.innerHTML = header();
     for (const detail of app.querySelectorAll?.('details[data-split-detail]') || []) {
@@ -2161,7 +2185,24 @@ source = source.replace('<button type="button" class="bill-row" data-act="bill-d
 source = source.replace('<span class="bill-badge">${icon(\'bill\')}</span>', '<span class="bill-badge status-${safe(b.status)}">${icon(b.status === \'approved\' ? \'check\' : b.status === \'rejected\' ? \'close\' : \'bill\')}</span>')
 source = source.replace('>${safe(b.label)}</span>', '>${userText(b.label)}</span>')
 source = source.replace('>${safe(m.name)}</span>', '>${userText(m.name)}</span>')
-replace("Paid by ${safe(payer?.name||'Unknown')} outside ·", "${siteLanguage === 'vi' ? 'Paid by: ' : 'Paid by '}${userText(payer?.name || 'Unknown')} outside ·")
+bill_item_start = source.index('  function billItem(b)')
+bill_item_end = source.index('\n', bill_item_start)
+replace(source[bill_item_start:bill_item_end], """  function billItem(bill) {
+    const payer = member(bill.payer);
+    const status = state.trip.shared ? roomBillStatus(bill) : ui(bill.status === 'approved' ? 'Approved' : 'Pending approval');
+    const iconName = bill.status === 'approved' ? 'check' : bill.status === 'rejected' ? 'close' : 'bill';
+    return `<button type="button" class="bill-row is-${safe(bill.status)}" data-act="bill-detail" data-id="${bill.id}">
+      <span class="row-label">
+        <span class="bill-badge status-${safe(bill.status)}">${icon(iconName)}</span>
+        <span>
+          <span class="bill-name">${userText(bill.label)}</span>
+          <span class="bill-sub">${ui('Paid by')} ${userText(payer?.name || ui('Unknown'))} · ${ui(bill.participants.length + ' people')}</span>
+          <span class="bill-status">${safe(status)}</span>
+        </span>
+      </span>
+      <span class="row-value">${vnd(bill.amount)}</span>
+    </button>`;
+  }""")
 source = source.replace('>${safe(m.name)}</option>', ' translate="no">${safe(m.name)}</option>')
 replace("const KEY = 'tripvault-timelocked-external-v8';", """const demoMode = new URLSearchParams(window.location?.search || '').get('demo') === '1';
   const KEY = demoMode ? 'tripvault-judge-demo-v1' : 'tripvault-timelocked-external-v8';""")

@@ -648,6 +648,7 @@ async function testMemberDeposit({ launch, flush, start, end, cancelAtDeadline =
   browser.submit('bill-form', { label: 'Pending snack', amount: '30000', payer: 'm1', participant: ['m0', 'm1'] });
   await flush();
   assert.match(browser.page.innerHTML, /Pending snack/);
+  assert.match(browser.page.innerHTML, /<span class="bill-status">Waiting for approval/);
   await guest.poll();
   assert.doesNotMatch(guest.page.innerHTML, /Top-up reminders/);
   chainTime = timeStart + 60;
@@ -669,6 +670,7 @@ async function testMemberDeposit({ launch, flush, start, end, cancelAtDeadline =
   assert.match(guest.sheet.innerHTML, /Trip ended early[\s\S]*?Open Final split/);
   guest.click('open-room-notification', { id: endNotification });
   assert.match(guest.page.innerHTML, /<h1>Final split<\/h1>/);
+  assert.match(guest.page.innerHTML, /<div class="split-rate">[\s\S]*?class="fx-rate-primary"[\s\S]*?class="fx-rate-sub"[\s\S]*?class="fx-rate-sub"/);
   browser.view('bills');
   await flush();
   assert.match(browser.page.innerHTML, /Dinner/);

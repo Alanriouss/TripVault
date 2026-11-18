@@ -193,6 +193,8 @@
     ['Paid outside', 'Đã trả bên ngoài ứng dụng'],
     ['Bills are records of real-world payments, not payments from a shared crypto vault.', 'Hóa đơn ghi lại các khoản thành viên đã ứng tiền bên ngoài TripVault.'],
     ['Waiting for approval', 'Đang chờ duyệt'],
+    ['Starts', 'Bắt đầu'],
+    ['Ends', 'Kết thúc'],
     ['Approved', 'Đã duyệt'],
     ['Awaiting approval', 'Chờ duyệt'],
     ['Automatically approved', 'Đã tự động duyệt'],
@@ -471,6 +473,7 @@
   ]);
 
   const vietnamesePatterns = [
+    [/^(\d+) people$/, (_, count) => count + ' người'],
     [/^(\d+) members?( · (Shared room|Local demo))?$/, (_, count, suffix, kind) => count + ' thành viên' + (suffix ? ' · ' + ui(kind) : '')],
     [/^(\d+) of (\d+)$/, (_, count, total) => count + '/' + total],
     [/^(\d+) recorded · Paid outside the app$/, (_, count) => count + ' hóa đơn · Đã trả bên ngoài ứng dụng'],
