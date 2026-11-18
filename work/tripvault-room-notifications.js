@@ -132,10 +132,32 @@
     }));
   }
 
+  function sampleNotificationTrip() {
+    const trip = state.trip;
+    return trip?.id === 'judges-sample' && !trip.shared ? trip : null;
+  }
+
+  function notificationAccount() {
+    return sampleNotificationTrip() ? 'demo:' + state.actor : rooms.account;
+  }
+
+  function sampleNotifications(trip) {
+    const sample = { roomId: trip.id, roomName: trip.name };
+    const prefix = trip.id + ':' + trip.endTime + ':';
+    return [
+      { ...sample, id: prefix + 'ended', heading: 'Trip ended', view: 'split',
+        receivedAt: Date.parse(trip.endTime), message: 'The trip has ended. Review any bills that are still open.' },
+      { ...sample, id: prefix + 'funded', heading: 'Minimum deposits reached', view: 'wallet',
+        receivedAt: Date.parse(trip.startTime) },
+    ];
+  }
+
   function readRoomNotifications() {
-    if (!rooms.account) return [];
+    if (!notificationAccount()) return [];
     const dismissed = dismissedRoomNotifications();
-    const items = [...rooms.list.values()].flatMap(tripNotificationEntries).filter(item => !dismissed.has(item.id));
+    const sample = sampleNotificationTrip();
+    const entries = sample ? sampleNotifications(sample) : [...rooms.list.values()].flatMap(tripNotificationEntries);
+    const items = entries.filter(item => !dismissed.has(item.id));
     return items.sort((a, b) => (b.receivedAt || 0) - (a.receivedAt || 0) || a.id.localeCompare(b.id));
   }
 
@@ -144,7 +166,7 @@
   }
 
   function dismissedRoomNotifications() {
-    const key = 'tripvault-notifications-dismissed:' + rooms.account;
+    const key = 'tripvault-notifications-dismissed:' + notificationAccount();
     if (key !== notificationDismissedKey) {
       notificationDismissedKey = key;
       const saved = readStorage(key);
@@ -154,7 +176,7 @@
   }
 
   function clearRoomNotifications() {
-    if (!rooms.account || !sheet.open) return;
+    if (!notificationAccount() || !sheet.open) return;
     const items = readRoomNotifications();
     if (!items.length) return;
     const dismissed = dismissedRoomNotifications();
@@ -166,13 +188,13 @@
   }
 
   window.addEventListener('storage', event => {
-    if (!rooms.account || event.key !== notificationDismissedKey) return;
+    if (!notificationAccount() || event.key !== notificationDismissedKey) return;
     notificationDismissedKey = undefined;
     if (!refreshNotificationSheet()) render();
   });
 
   function seenRoomNotifications() {
-    const key = 'tripvault-notifications-read:' + rooms.account;
+    const key = 'tripvault-notifications-read:' + notificationAccount();
     if (key !== notificationReadKey) {
       notificationReadKey = key;
       const saved = readStorage(key);
@@ -190,7 +212,7 @@
   }
 
   function roomBell() {
-    if (!rooms.account) return '';
+    if (!notificationAccount()) return '';
     const seen = seenRoomNotifications();
     const unreadCount = readRoomNotifications().filter(item => !seen.has(item.id)).length;
     const unread = unreadCount > 0;
@@ -287,16 +309,16 @@
   }
 
   function openRoomNotifications() {
-    if (!rooms.account) return;
+    if (!notificationAccount()) return;
     const seen = seenRoomNotifications();
     const items = readRoomNotifications();
     const markup = roomNotificationsBody(state.trip, items, seen);
     sheetOpen('Notifications', 'Your trips',
-      '<div class="stack" data-room-notifications>' + markup + '</div>' + billSignInButton());
+      '<div class="stack" data-room-notifications>' + markup + '</div>' + (sampleNotificationTrip() ? '' : billSignInButton()));
     const panel = sheet.querySelector('[data-room-notifications]');
     if (panel) panel.notificationMarkup = markup;
     render();
-    syncRooms();
+    if (!sampleNotificationTrip()) syncRooms();
   }
 
   function markRoomNotificationRead(id) {
@@ -348,14 +370,15 @@
   function openRoomNotification(id) {
     const item = readRoomNotifications().find(notification => notification.id === id);
     if (!item) return openRoomNotifications();
-    const targetTrip = rooms.list.get(item.roomId);
+    const sample = sampleNotificationTrip();
+    const targetTrip = sample?.id === item.roomId ? sample : rooms.list.get(item.roomId);
     if (!targetTrip) return;
     markRoomNotificationRead(id);
     selectTrip(targetTrip);
     state.view = item.view || 'bills';
     render();
     window.scrollTo(0, 0);
-    if (['wallet', 'split'].includes(item.view)) refreshVault();
-    if (item.view === 'split') refreshRoomFunding();
+    if (targetTrip.shared && ['wallet', 'split'].includes(item.view)) refreshVault();
+    if (targetTrip.shared && item.view === 'split') refreshRoomFunding();
     if (item.billId) roomBillDetail(item.billId);
   }

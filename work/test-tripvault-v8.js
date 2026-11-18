@@ -408,6 +408,24 @@ if (source.includes('function enableRooms()')) {
   await testRoomsUi({ launch, flush, start, end });
 }
 
+async function testDemoNotifications() {
+  const judge = await launch({ url: 'http://127.0.0.1:8788/?demo=1', language: 'en' });
+  judge.click('judge-demo-sample');
+  assert.match(judge.page.innerHTML, /class="trip-bell-dot" aria-hidden="true">2/);
+  judge.click('room-notifications');
+  assert.match(judge.sheet.innerHTML, /Trip ended/);
+  assert.match(judge.sheet.innerHTML, /Minimum deposits reached/);
+  assert.match(judge.page.innerHTML, /class="trip-bell-dot" aria-hidden="true">2/);
+  const noticeId = judge.sheet.innerHTML.match(/data-notification-id="([^"]+:ended)"/)[1];
+  judge.click('mark-room-notification-read', { id: noticeId });
+  assert.match(judge.page.innerHTML, /class="trip-bell-dot" aria-hidden="true">1/);
+  judge.click('open-room-notification', { id: noticeId });
+  assert.match(judge.page.innerHTML, /<h1>Final split<\/h1>/);
+  assert.equal(judge.requests(), 0);
+}
+
+if (source.includes('function sampleNotifications(')) await testDemoNotifications();
+
 async function testJudgeDemo(url, script) {
   const judge = await launch({ url, rate: null, language: 'en' }, script);
   judge.click('close-sheet');
