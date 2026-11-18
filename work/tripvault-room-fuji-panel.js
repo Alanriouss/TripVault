@@ -126,6 +126,7 @@
     const plan = settlementPlan(trip, rate);
     const settled = trip.settled || vault?.settled;
     const published = vault && matchesFujiDraft(trip, vault);
+    const hasApprovedBills = trip.bills.some(bill => bill.status === 'approved');
     const transfers = plan.transfers.map(transfer => row(
       userText(member(transfer.from).name) + ' → ' + userText(member(transfer.to).name),
       money(transfer.units), vnd(transfer.vnd) + ' equivalent',
@@ -141,10 +142,15 @@
     <div class="stack room-final-split" data-split-trip="${safe(trip.id)}">
       ${fujiPanel('split', finalSplitReview(trip, plan))}
       <section class="panel stack split-breakdown">
-        ${!settled ? `<div class="panel-head"><h2>Who pays whom</h2>${transfers && !published ? '<span class="chip">Estimate</span>' : ''}</div>
+        ${!settled && !hasApprovedBills ? `<div>
+          <h2>Nothing to split yet</h2>
+          <p class="subtitle">${trip.bills.length ? 'Review open bills before splitting expenses.' : 'Expenses will appear here after a bill is approved.'}</p>
+          ${btn('Go to Bills', 'navigate', { tone: 'secondary', data: 'data-view="bills"' })}
+        </div>` : ''}
+        ${!settled && hasApprovedBills ? `<div class="panel-head"><h2>Who pays whom</h2>${transfers && !published ? '<span class="chip">Estimate</span>' : ''}</div>
           ${plan.invalid ? '<p class="subtitle">Payment amounts are unavailable.</p>'
             : transfers ? '<div>' + transfers + '</div>' : '<p class="subtitle">No transfers needed yet.</p>'}` : ''}
-        ${finalSplitDetails('expenses', 'Expense breakdown', people)}
+        ${hasApprovedBills ? finalSplitDetails('expenses', 'Expense breakdown', people) : ''}
         ${finalSplitDetails('rate', 'Exchange rate', `<p class="subtitle"><strong>${rateStatus}</strong></p><div class="split-rate">${fxRowValue(rate)}</div>`)}
       </section>
     </div>`;
