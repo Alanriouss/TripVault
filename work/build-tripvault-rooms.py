@@ -1800,9 +1800,32 @@ replace("btn('Cancel my approval','revoke-bill',{tone:'secondary',",
         "btn('Cancel my approval','revoke-bill',{tone:'danger cancel-approval',")
 replace("function detail(id){const b=", "function detail(id){if(state.trip?.shared)return roomBillDetail(id);const b=")
 replace("b.status==='approved'?'Approved':'Pending approval'",
-        "state.trip.shared ? roomBillStatus(b) : b.status==='approved'?'Approved':'Pending approval'")
+        "state.trip.shared ? roomBillStatus(b) : b.status==='approved'?'Approved':b.status==='rejected'?'Rejected':b.status==='disputed'?'Disputed':'Pending approval'")
 replace("return trip.bills.some(bill => bill.status !== 'approved');",
-        "return trip.bills.some(bill => bill.status !== 'approved' && (!trip.shared || bill.status !== 'rejected'));")
+        "return trip.bills.some(bill => bill.status !== 'approved' && bill.status !== 'rejected');")
+replace(":btn('Approve bill','approve-bill',{data:`data-id=\"${b.id}\"`}))",
+        ":btn('Approve bill','approve-bill',{data:`data-id=\"${b.id}\"`}) + ' ' + btn('Disapprove bill','disapprove-bill',{tone:'danger',data:`data-id=\"${b.id}\"`}))")
+replace("""      case 'approve-bill':
+      case 'revoke-bill': {
+        const bill = trip.bills.find(item => item.id === Number(id));
+        if (bill) updateBill(bill, act === 'approve-bill');
+        break;
+      }""", """      case 'approve-bill':
+      case 'revoke-bill':
+      case 'disapprove-bill': {
+        const bill = trip.bills.find(item => item.id === Number(id));
+        if (bill) {
+          if (act === 'disapprove-bill') {
+            bill.status = 'rejected';
+            bill.approvals = [];
+            commit(trip, 'Bill disapproved and excluded.');
+            if (sheet.open) sheet.close();
+          } else {
+            updateBill(bill, act === 'approve-bill');
+          }
+        }
+        break;
+      }""")
 replace("${pending ? '<p class=\"notice warn\">Approve all pending bills before the final split.</p>' : ''}",
         """${pending ? '<p class="notice warn">' + (trip.shared ? 'Finish open bill reviews before making final payments.'
           : 'Approve all pending bills before the final split.') + '</p>' : ''}""")
@@ -1834,9 +1857,6 @@ replace("    if (act === 'guide') return showGuide();",
         "    if (act === 'guide') return openGuide();\n    if (act === 'guide-step') return moveGuide(id);")
 replace("  showFirstVisitGuide();\n  refreshFX();", "  showFirstVisitGuide();\n  refreshFX();\n  enableRooms();")
 replace("${content}\n          </main>", "${!rooms.online && window.location?.protocol === 'file:' ? '<p class=\"notice warn\">Open the TripVault Rooms launcher for invite links and room codes.</p>' : ''}\n            ${content}\n          </main>")
-replace("""        ${btn('Try a local demo', 'local-demo', { tone: 'ghost' })}
-""", """        ${btn('Explore demo trip', 'judge-demo-sample', { tone: 'secondary' })}
-""")
 replace("    const ended = Date.now() >= Date.parse(trip.endTime);", "    const ended = Date.now() >= roomEndTime(trip);")
 replace("${isAddress(trip.fuji?.address) ? fujiPanel('split') : ''}", "${trip.shared || isAddress(trip.fuji?.address) ? fujiPanel('split') : ''}")
 replace("const next = [state.trip.startTime, state.trip.endTime].map(value => Date.parse(value)).find(time => time > now);",

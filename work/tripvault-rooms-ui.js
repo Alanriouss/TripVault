@@ -1169,13 +1169,41 @@
   }
 
   function roomMembers(trip) {
-    return `<section class="panel">
-      <div class="panel-head"><h2>Members</h2><span class="chip">${trip.members.length} of 12</span></div>
-      ${trip.members.map(item => `<div class="row">
-        <span class="row-label">${avatar(item)}<span><span class="row-name">${userText(item.name)}${item.id === state.actor ? ' · You' : ''}</span>
-        <span class="row-sub room-wallet-address">${safe(item.address)}</span></span></span>
-        ${item.id === trip.owner ? '<span class="chip violet">Organizer</span>' : ''}
-      </div>`).join('')}
+    const vi = siteLanguage === 'vi';
+    const memberStats = stats(trip);
+    return `<div class="section-head">
+      <div>
+        <h1>${vi ? 'Thành viên' : 'People'}</h1>
+        <p>${vi ? 'Ai đã chi tiền, ai nợ, và vị thế ròng của từng thành viên.' : "Who paid, who owes, and each member's net position."}</p>
+      </div>
+    </div>
+    <section class="panel">
+      <div class="panel-head"><h2>${vi ? 'Danh sách thành viên' : 'Travelers'}</h2><span class="chip">${trip.members.length} of 12</span></div>
+      ${memberStats.map(m => {
+        const addr = m.address ? `${m.address.slice(0, 6)}...${m.address.slice(-4)}` : '';
+        const isOrganizer = m.id === trip.owner;
+        const details = vi
+          ? `Đã chi ${vnd(m.paid)} · Nợ ${vnd(m.owed)} · Đã nạp ${fmt(depositOf(m.id))} USDC`
+          : `Paid ${vnd(m.paid)} · Owes ${vnd(m.owed)} · Deposited ${fmt(depositOf(m.id))} USDC`;
+        return `<div class="row">
+          <div class="row-label">
+            ${avatar(member(m.id))}
+            <span>
+              <span class="row-name">
+                ${safe(m.name)}${m.id === state.actor ? (vi ? ' · Bạn' : ' · You') : ''}
+                ${isOrganizer ? '<span class="chip violet" style="margin-left:6px; font-size:11px; padding:2px 6px;">Organizer</span>' : ''}
+              </span>
+              <span class="row-sub traveler-details">
+                ${addr ? `<span class="room-wallet-address" style="font-family:monospace; margin-right:6px;">${addr}</span>· ` : ''}${details}
+              </span>
+            </span>
+          </div>
+          <span class="row-value ${m.net >= 0 ? 'money-positive' : 'money-negative'}">
+            ${vnd(m.net)}
+            <small>${vi ? 'Số dư ròng' : 'Net balance'}</small>
+          </span>
+        </div>`;
+      }).join('')}
     </section>`;
   }
 
@@ -1184,16 +1212,50 @@
     const end = roomEndTime(trip);
     const start = Date.parse(trip.startTime);
     const deadline = Math.min(start, end);
+    const ss = stats(trip);
+    const me = ss.find(m => m.id === state.actor) || { paid: 0, owed: 0, net: 0 };
+    const approved = trip.bills.filter(b => b.status === 'approved');
+    const totalApprovedVnd = approved.reduce((a, b) => a + b.amount, 0);
+    const totalDepositedUsdc = Object.values(trip.depositUnits || {}).reduce((a, b) => a + b, 0) / USDC_SCALE;
+    const vi = siteLanguage === 'vi';
+    const statusChip = roomFundingCancelled(trip) ? 'Trip cancelled' : trip.settled ? 'Settled on Fuji' : end <= Date.now() ? 'Trip ended · Ready to settle'
+      : trip.locked ? (Date.now() < start ? 'Getting ready' : 'Trip in progress') : 'Room open';
+
     return `<div class="stack">
       <section class="hero">
-        <span class="chip">${roomFundingCancelled(trip) ? 'Trip cancelled' : trip.settled ? 'Settled on Fuji' : end <= Date.now() ? 'Trip ended'
-          : trip.locked ? (Date.now() < start ? 'Getting ready' : 'Trip in progress') : 'Room open'}</span>
-        <h1>${userText(trip.name)}</h1>${trip.location ? '<div>' + userText(trip.location) + '</div>' : ''}
+        <span class="chip">${statusChip} · Fuji USDC Vault</span>
+        <div>
+          <h1>${userText(trip.name)}</h1>
+          <div class="hero-meta">
+            <span class="avatar-stack">${trip.members.slice(0, 4).map(avatar).join('')}</span>
+            <span>${trip.members.length} ${vi ? 'thành viên' : 'travelers'}${trip.location ? ' · ' + userText(trip.location) : ''}</span>
+          </div>
+        </div>
       </section>
-      ${roomFundBalance(trip)}
-      ${roomProgressPanel(trip)}
+
+      <section class="metrics">
+        <div class="metric"><span class="metric-name">${icon('wallet')}${vi ? 'Quỹ đã nạp' : 'Vault deposits'}</span><strong>${fmt(totalDepositedUsdc)} USDC</strong></div>
+        <div class="metric"><span class="metric-name">${icon('bill')}${vi ? 'Chi phí đã duyệt' : 'Approved expenses'}</span><strong>${vnd(totalApprovedVnd)}</strong></div>
+        <div class="metric"><span class="metric-name">${icon('wallet')}${vi ? 'Bạn đã chi' : 'You paid'}</span><strong>${vnd(me.paid)}</strong></div>
+        <div class="metric"><span class="metric-name">${icon('split')}${vi ? 'Vị thế ròng' : 'Your net'}</span><strong class="${me.net >= 0 ? 'money-positive' : 'money-negative'}">${vnd(me.net)}</strong></div>
+      </section>
+
       ${roomInviteCard(trip)}
-      ${roomMembers(trip)}
+      ${roomProgressPanel(trip)}
+
+      <div class="overview-grid">
+        <section class="panel">
+          <div class="panel-head"><h2>${vi ? 'Hóa đơn gần đây' : 'Recent bills'}</h2>${btn(vi ? 'Xem tất cả' : 'View all', 'navigate', { tone: 'ghost', data: 'data-view="bills"' })}</div>
+          ${trip.bills.length ? trip.bills.slice(-3).reverse().map(billItem).join('') : `<p class="empty">${vi ? 'Chưa có hóa đơn nào.' : 'No bills yet.'}</p>`}
+        </section>
+        <section class="panel next-card">
+          <span class="next-mark">${icon('bill')}</span>
+          <h2>${vi ? 'Ghi nhận chi tiêu' : 'Record a payment'}</h2>
+          <p>${vi ? 'Đã chi tiêu bằng tiền mặt hoặc thẻ bên ngoài? Thêm hóa đơn tại đây để chia với mọi người.' : 'Paid for something outside the app? Add it here to split with members.'}</p>
+          ${btn(vi ? 'Thêm hóa đơn' : 'Add a bill', 'new-bill', { symbol: 'plus', disabled: !roomBillFunding(trip).ready || !!trip.settled })}
+        </section>
+      </div>
+
       <section class="panel trip-settings-panel"><h2>Trip settings</h2>
         ${row('Minimum each person adds', money(trip.minimumUnits))}
         ${trip.depositDeadline ? row('Deposit deadline', formatTripTimeSpacious(Date.parse(trip.depositDeadline)),
@@ -1239,33 +1301,42 @@
   function roomsHome() {
     const trips = availableTrips().slice().reverse();
     const vi = siteLanguage === 'vi';
-    const orientationBanner = `<div class="notice app-orientation-notice" style="margin-bottom:14px; font-size:14px; border-left:4px solid var(--accent); background:rgba(232, 65, 66, 0.05); padding:14px 16px; border-radius:14px; box-shadow:var(--shadow-sm); line-height:1.6;">
-      <strong>🎯 ${vi ? 'Mục đích của TripVault:' : 'TripVault Purpose:'}</strong> ${vi ? 'Quỹ chung cho các chuyến đi nhiều ngày: nạp tiền trước, ghi hóa đơn trong chuyến đi, và tất toán một lần khi kết thúc.' : 'Shared trip fund: everyone deposits first, you log bills as you go, and the app settles once at the end.'}
-    </div>`;
-    return `<div class="section-head"><div><h1>Your trips</h1><p>Create a trip or join one with your wallet.</p></div></div>
-      <div class="stack">
-        ${orientationBanner}
-        <section class="panel stack">
-        <div class="inline">
-          ${btn('Create a trip', 'room-create', { symbol: 'plus' })}
-          ${btn('Join a trip', 'room-join', { tone: 'secondary' })}
-          ${!rooms.token ? btn('Sign in', 'room-sign-in', { tone: 'ghost' }) : ''}
+    const card = `
+      <div class="card demo-landing-card" style="padding: 24px; margin-bottom: 20px;">
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+          <span class="brand-mark">TV</span>
+          <h1 style="margin:0; font-size:22px; font-weight:700;">TripVault</h1>
         </div>
-        ${btn('Try a local demo', 'local-demo', { tone: 'ghost' })}
-      </section>
-      ${trips.length ? '<section class="panel">' + tripSelectionControls() + trips.map(tripListRow).join('') + '</section>'
-        : `<section class="panel stack" style="border: 1px dashed var(--tint-border); background: var(--tint);">
-            <div class="panel-head">
-              <h2 style="color: var(--accent-dark);">Đà Lạt weekend · Demo Room</h2>
-              <span class="chip">UI Preview</span>
-            </div>
-            <p class="subtitle">Experience the full group expense workflow: funding progress, bills, approvals, and settlements.</p>
-            <div class="inline">
-              ${btn('Open demo trip', 'judge-demo-sample')}
-            </div>
-          </section>`}
-      ${fujiPanel()}
+        <p class="subtle" style="font-size:14px; margin:0 0 16px 0; line-height:1.5;">
+          ${vi ? 'Quỹ chung cho các chuyến đi nhiều ngày: mọi người nạp tiền trước, ghi hóa đơn trong chuyến đi, và tất toán một lần khi kết thúc.' : 'Shared trip fund: everyone deposits first, you log bills as you go, and the app settles once at the end.'}
+        </p>
+        <ol class="demo-steps" style="margin:0 0 20px 0; padding-left:20px; font-size:14px; line-height:1.8; color:var(--ink);">
+          <li>${vi ? 'Nạp USDC vào quỹ chung' : 'Deposit USDC into the fund'}</li>
+          <li>${vi ? 'Ghi hóa đơn và cùng phê duyệt' : 'Log bills and approve them'}</li>
+          <li>${vi ? 'Tất toán cho tất cả trong một bước' : 'Settle everyone in one step'}</li>
+        </ol>
+        <div class="inline" style="gap:10px; margin-bottom:12px;">
+          ${btn(vi ? 'Tạo chuyến đi' : 'Create a trip', 'room-create', { symbol: 'plus', tone: 'full primary' })}
+          ${btn(vi ? 'Tham gia chuyến đi' : 'Join a trip', 'room-join', { tone: 'secondary' })}
+          ${!rooms.token ? btn(vi ? 'Đăng nhập' : 'Sign in', 'room-sign-in', { tone: 'ghost' }) : ''}
+        </div>
+        <div style="text-align:center; font-size:13px; color:var(--subtle);">
+          ${vi ? 'Muốn thử nghiệm nhanh không cần ví?' : 'Looking for a simulation?'}
+          <button type="button" class="btn ghost sm subtle-link" data-act="local-demo" style="display:inline; padding:0 4px; font-size:13px; text-decoration:underline;">${vi ? 'Dùng bản Demo' : 'Try a local demo'}</button>
+        </div>
       </div>`;
+
+    const tripsSection = trips.length
+      ? '<section class="panel">' + tripSelectionControls() + trips.map(tripListRow).join('') + '</section>'
+      : `<section class="panel" style="text-align:center; padding:32px 16px;">
+          <p class="empty" style="margin:0;">${vi ? 'Chưa có chuyến đi nào. Hãy bấm "Tạo chuyến đi" hoặc "Tham gia chuyến đi" ở trên!' : 'No trips yet. Create a trip or join one with your wallet.'}</p>
+        </section>`;
+
+    return `<div class="stack">
+      ${card}
+      ${tripsSection}
+      ${fujiPanel()}
+    </div>`;
   }
 
   function roomLockForDeploy(trip) {

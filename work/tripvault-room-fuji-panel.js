@@ -126,6 +126,17 @@
     const plan = settlementPlan(trip, rate);
     const settled = trip.settled || vault?.settled;
     const published = vault && matchesFujiDraft(trip, vault);
+    const vi = siteLanguage === 'vi';
+    const approvedBills = (trip.bills || []).filter(b => b.status === 'approved');
+    const emptyCard = approvedBills.length === 0 ? `
+      <div class="card empty-split-card">
+        <div style="font-size:28px; margin-bottom:8px;">🧾</div>
+        <h3 style="margin:0 0 6px 0; font-size:17px; font-weight:600; color:var(--ink);">${vi ? 'Chưa có gì để tất toán' : 'Nothing to split yet'}</h3>
+        <p class="subtle" style="margin:0 0 16px 0; font-size:13.5px; line-height:1.5;">
+          ${vi ? 'Thêm hóa đơn đầu tiên trong tab Hóa đơn. Số dư và giao dịch chuyển khoản sẽ xuất hiện ở đây khi hóa đơn được duyệt.' : 'Add your first bill in the Bills tab. Balances and transfers appear here once bills are approved.'}
+        </p>
+        <button type="button" class="btn secondary sm" data-act="navigate" data-view="bills">${vi ? 'Đến tab Hóa đơn' : 'Go to Bills'}</button>
+      </div>` : '';
     const transfers = plan.transfers.map(transfer => row(
       userText(member(transfer.from).name) + ' → ' + userText(member(transfer.to).name),
       money(transfer.units), vnd(transfer.vnd) + ' equivalent',
@@ -134,11 +145,14 @@
       'Paid ' + vnd(person.paid) + ' · Owes ' + vnd(person.owed),
     )).join('');
     const rateStatus = quote ? (quote.historical ? 'Historical rate' : 'Locked for approval') : 'Estimate';
+    const statusText = settled ? (vi ? 'Đã tất toán' : 'Settled') : (quote || published) ? (vi ? 'Đang xem xét' : 'In review') : (vi ? 'Bản nháp · Chờ phê duyệt' : 'Draft · Pending approvals');
+
     return `<div class="section-head">
       <div><h1>Final split</h1><p>${userText(trip.name)}</p></div>
-      ${settled || published ? `<span class="chip violet">${settled ? 'Settled' : 'In review'}</span>` : ''}
+      <span class="chip violet">${statusText}</span>
     </div>
     <div class="stack room-final-split" data-split-trip="${safe(trip.id)}">
+      ${emptyCard}
       ${fujiPanel('split', finalSplitReview(trip, plan))}
       <section class="panel stack split-breakdown">
         ${!settled ? `<div class="panel-head"><h2>Who pays whom</h2>${transfers && !published ? '<span class="chip">Estimate</span>' : ''}</div>

@@ -14,6 +14,30 @@ var __export = (target, all) => {
     });
 };
 
+// work/tripvault-room-server/node_modules/@noble/curves/esm/abstract/utils.js
+var exports_utils = {};
+__export(exports_utils, {
+  bitGet: () => bitGet,
+  bitLen: () => bitLen,
+  bitMask: () => bitMask,
+  bitSet: () => bitSet,
+  bytesToHex: () => bytesToHex,
+  bytesToNumberBE: () => bytesToNumberBE,
+  bytesToNumberLE: () => bytesToNumberLE,
+  concatBytes: () => concatBytes2,
+  createHmacDrbg: () => createHmacDrbg,
+  ensureBytes: () => ensureBytes,
+  equalBytes: () => equalBytes,
+  hexToBytes: () => hexToBytes,
+  hexToNumber: () => hexToNumber,
+  numberToBytesBE: () => numberToBytesBE,
+  numberToBytesLE: () => numberToBytesLE,
+  numberToHexUnpadded: () => numberToHexUnpadded,
+  numberToVarBytesBE: () => numberToVarBytesBE,
+  utf8ToBytes: () => utf8ToBytes2,
+  validateObject: () => validateObject
+});
+
 // work/tripvault-room-server/entry.js
 import { Database } from "bun:sqlite";
 import { createHash, randomBytes as randomBytes2, randomInt, randomUUID } from "crypto";
@@ -1592,28 +1616,6 @@ var hmac = (hash, key, message) => new HMAC(hash, key).update(message).digest();
 hmac.create = (hash, key) => new HMAC(hash, key);
 
 // work/tripvault-room-server/node_modules/@noble/curves/esm/abstract/utils.js
-var exports_utils = {};
-__export(exports_utils, {
-  bitGet: () => bitGet,
-  bitLen: () => bitLen,
-  bitMask: () => bitMask,
-  bitSet: () => bitSet,
-  bytesToHex: () => bytesToHex,
-  bytesToNumberBE: () => bytesToNumberBE,
-  bytesToNumberLE: () => bytesToNumberLE,
-  concatBytes: () => concatBytes2,
-  createHmacDrbg: () => createHmacDrbg,
-  ensureBytes: () => ensureBytes,
-  equalBytes: () => equalBytes,
-  hexToBytes: () => hexToBytes,
-  hexToNumber: () => hexToNumber,
-  numberToBytesBE: () => numberToBytesBE,
-  numberToBytesLE: () => numberToBytesLE,
-  numberToHexUnpadded: () => numberToHexUnpadded,
-  numberToVarBytesBE: () => numberToVarBytesBE,
-  utf8ToBytes: () => utf8ToBytes2,
-  validateObject: () => validateObject
-});
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 var _0n2 = BigInt(0);
 var _1n2 = BigInt(1);
@@ -6017,6 +6019,7 @@ function roomFundingShortfalls(trip, funding, draft) {
     if (bill.status === "rejected")
       continue;
     const count = bill.participants.length;
+    const isCustom = bill.splitType === "custom" && bill.customShares && typeof bill.customShares === "object";
     const share = Math.floor(bill.amount / count);
     const remainder = bill.amount % count;
     const payerShare = bill.participants.indexOf(bill.payer);
@@ -6026,7 +6029,8 @@ function roomFundingShortfalls(trip, funding, draft) {
     for (const [index, id] of bill.participants.entries()) {
       if (bill.status !== "approved" && index === payerShare)
         continue;
-      net.set(id, net.get(id) - share - (index < remainder ? 1 : 0));
+      const amountOwed = isCustom ? Math.round(Number(bill.customShares[id])) || 0 : share + (index < remainder ? 1 : 0);
+      net.set(id, net.get(id) - amountOwed);
     }
   }
   return trip.members.map((member, index) => {
@@ -6146,10 +6150,22 @@ function logBillNotification(bill, kind, actor, recipients, receivedAt, comment,
 }
 function billDetails(trip, data) {
   const label = text(data.label, 70, "bill name");
-  const { amount, payer, participants } = data;
+  const { amount, payer, participants, splitType, customShares } = data;
   const ids = new Set(trip.members.map((member) => member.id));
   assert2(isUnits(amount) && amount <= 1e9 && ids.has(payer) && Array.isArray(participants) && participants.length > 0 && participants.length <= ids.size && new Set(participants).size === participants.length && participants.every((id) => ids.has(id)), 400, "Enter valid bill details and choose the members sharing it.");
-  return { label, amount, payer, participants };
+  if (splitType === "custom" && customShares && typeof customShares === "object") {
+    let sum = 0;
+    const validated = {};
+    for (const pid of participants) {
+      const val = Math.round(Number(customShares[pid]) || 0);
+      assert2(val >= 0 && Number.isSafeInteger(val), 400, "Invalid custom share amount.");
+      validated[pid] = val;
+      sum += val;
+    }
+    assert2(sum === amount, 400, `The sum of custom shares (${sum}) must equal the total bill amount (${amount}).`);
+    return { label, amount, payer, participants, splitType: "custom", customShares: validated };
+  }
+  return { label, amount, payer, participants, splitType: "equal" };
 }
 function cleanQuote(quote) {
   assert2(quote && typeof quote === "object" && Number.isFinite(quote.rate) && quote.rate >= 1 && quote.rate <= 1e9, 400, "Invalid USD/VND reference.");

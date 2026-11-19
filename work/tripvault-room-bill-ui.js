@@ -73,9 +73,13 @@
       return row(userText(member(id).name), vnd(amt) + pct,
         bill.autoApprovals?.includes(id) ? 'Automatically approved' : bill.approvals.includes(id) ? 'Approved' : 'Waiting for approval');
     }).join('');
+    const vi = siteLanguage === 'vi';
     const reviewButtons = canReview
-      ? (hasApproved ? '' : btn('Approve bill', 'approve-bill', { data: idData }))
-        + btn('Suggest changes', 'bill-feedback', { tone: 'secondary', data: idData })
+      ? (hasApproved
+          ? btn(vi ? 'Hủy duyệt của tôi' : 'Cancel my approval', 'bill-disapprove', { tone: 'danger cancel-approval', data: idData })
+          : btn(vi ? 'Duyệt hóa đơn' : 'Approve bill', 'approve-bill', { data: idData })
+            + btn(vi ? 'Từ chối duyệt' : 'Disapprove bill', 'bill-disapprove', { tone: 'danger', data: idData }))
+        + btn(vi ? 'Góp ý / Đề xuất sửa' : 'Suggest changes', 'bill-feedback', { tone: 'secondary', data: idData })
       : '';
     const editButton = editable && creator === state.actor ? btn('Edit bill', 'bill-edit', { tone: 'secondary', data: idData }) : '';
     const cancelButtons = reviewable && voters.includes(state.actor)
@@ -113,6 +117,22 @@
     const bill = trip?.shared && trip.bills.find(item => item.id === id);
     if (!bill) return;
     if (action === 'bill-edit') return addBill(bill);
+    if (action === 'bill-disapprove') {
+      const vi = siteLanguage === 'vi';
+      if (bill.approvals.includes(state.actor)) {
+        return changeRoom(trip, 'bill.approve', { id, approve: false }, updated => {
+          if (updated) roomBillDetail(id);
+        }, showBillReviewError);
+      }
+      return sheetOpen(vi ? 'Từ chối duyệt hóa đơn' : 'Disapprove bill', { user: bill.label }, `<form method="dialog" id="bill-feedback-form" class="stack">
+        <input type="hidden" name="id" value="${id}">
+        <label class="field">${vi ? 'Lý do từ chối / cần điều chỉnh' : 'Reason for disapproval'}<textarea name="comment" rows="4" required maxlength="500" placeholder="${vi ? 'Ví dụ: Tôi không tham gia hoặc số tiền chưa đúng...' : 'e.g. I did not participate or amount is inaccurate...'}" autofocus></textarea></label>
+        <p class="subtitle" style="font-size:13px; color:var(--muted);">${vi ? 'Lý do này sẽ hiển thị cho các thành viên trong phòng cùng hòa giải và chỉnh sửa.' : 'Everyone in this trip will see your reason to mediate and update the bill.'}</p>
+        <p id="sheet-error" class="form-error" role="status"></p>
+        ${billSignInButton()}
+        <button class="btn full danger" type="submit">${vi ? 'Xác nhận từ chối' : 'Confirm disapproval'}</button>
+      </form>`);
+    }
     if (action === 'bill-feedback') {
       return sheetOpen('Suggest changes', { user: bill.label }, `<form method="dialog" id="bill-feedback-form" class="stack">
         <input type="hidden" name="id" value="${id}">
