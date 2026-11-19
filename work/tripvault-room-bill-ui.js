@@ -74,15 +74,11 @@
       const s = shares(bill).find(item => item.id === id);
       const amt = s ? s.amount : 0;
       const pct = bill.amount ? ` (${percentage.format(amt / bill.amount)})` : '';
-      return row(userText(member(id).name), vnd(amt) + pct,
+      return row(userText(member(id).name), '<span class="bill-share-money">' + vnd(amt) + '</span>'
+        + (pct ? '<small class="bill-share-percent">' + pct + '</small>' : ''),
         bill.autoApprovals?.includes(id) ? 'Automatically approved' : bill.approvals.includes(id) ? 'Approved' : 'Waiting for approval');
     }).join('');
-    const reviewButtons = demo
-      ? (reviewable && bill.participants.includes(state.actor) && ['pending', 'disputed', 'approved'].includes(bill.status)
-        ? btn(hasApproved ? 'Cancel my approval' : 'Approve bill', hasApproved ? 'revoke-bill' : 'approve-bill',
-          { tone: hasApproved ? 'danger cancel-approval' : '', data: idData }) : '')
-        + (canReview ? btn('Suggest changes', 'bill-feedback', { tone: 'secondary', data: idData }) : '')
-      : canReview
+    const reviewButtons = canReview
       ? (hasApproved ? '' : btn('Approve bill', 'approve-bill', { data: idData }))
         + btn('Suggest changes', 'bill-feedback', { tone: 'secondary', data: idData })
       : '';

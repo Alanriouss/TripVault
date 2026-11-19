@@ -263,7 +263,7 @@
   }
 
   function startRoomFlow(kind, key = '', template = null) {
-    if (!rooms.online) {
+    if (!rooms.online && !demoMode && !isDemoTrip()) {
       sheetOpen('TripVault Rooms', 'Open the room server',
         '<p class="notice">Open the TripVault Rooms launcher to create or join a shared room.</p>');
       return;
@@ -654,8 +654,9 @@
     if (!intent) return;
     const titles = { create: 'Create a room', join: 'Join a room', signin: 'Sign in to rooms' };
     const title = titles[intent.kind];
-    const connected = walletSession.account;
-    const fuji = walletSession.chain === FUJI.id;
+    const local = demoMode || isDemoTrip();
+    const connected = local ? 'Demo' : walletSession.account;
+    const fuji = local || walletSession.chain === FUJI.id;
     if (!connected || !fuji) {
       sheetOpen(title, 'Connect the wallet you will use for this trip',
         '<p class="notice">Members join with a wallet. TripVault asks for a sign-in signature when you continue.</p>',
@@ -666,7 +667,8 @@
     }
     const template = intent.template;
     const name = `<label class="field">Your display name <input name="displayName" maxlength="40" placeholder="Optional" value="${safe(template?.displayName)}"></label>`;
-    const wallet = '<p class="notice">Wallet: ' + safe(connected) + '</p>';
+    const wallet = local ? '<p class="subtitle">These are simulated member balances, not real connected wallets.</p>'
+      : '<p class="notice">Wallet: ' + safe(connected) + '</p>';
     let fields = '';
     if (intent.kind === 'create') {
       const defaultDeadline = template?.depositDeadline ? safe(template.depositDeadline.slice(0, 16)) : (template ? '' : localDatetimeValue(120));
@@ -774,6 +776,7 @@
   }
 
   async function submitRoomForm(data, fail) {
+    if (demoMode || isDemoTrip()) return submitDemoRoom(data, fail);
     const intent = rooms.intent;
     if (!intent || rooms.busy) return;
     const name = String(data.get('displayName') || '').trim();
@@ -833,7 +836,7 @@
   }
 
   async function changeRoom(trip, type, fields = {}, completed, fail = notice) {
-    if (isDemoTrip(trip) && type.startsWith('bill.')) return changeDemoBill(trip, type, fields, completed, fail);
+    if (isDemoTrip(trip)) return changeDemoTrip(trip, type, fields, completed, fail);
     if (rooms.busy || !trip.shared) return null;
     if (!rooms.token || rooms.account !== walletSession.account) {
       return fail('Sign in again with the same wallet, then retry.');
@@ -902,6 +905,7 @@
   }
 
   function canEditRoomDisplayName(trip) {
+    if (isDemoTrip(trip)) return trip.members.some(person => person.id === state.actor);
     return Boolean(trip?.shared && rooms.account && rooms.account === walletSession.account
       && trip.members.some(item => item.id === state.actor && item.address === rooms.account));
   }
@@ -920,7 +924,7 @@
       <input type="hidden" name="kind" value="${kind}">
       <label class="field">${label}<input name="name" maxlength="${renameTrip ? 70 : 40}" value="${safe(current)}" required autofocus></label>
       <p id="sheet-error" class="form-error" role="status"></p>
-      ${billSignInButton()}
+      ${trip.shared ? billSignInButton() : ''}
     </form>`, '<button class="btn full" type="submit" form="room-rename-form">Save name</button>');
   }
 
@@ -937,7 +941,7 @@
   }
 
   function roomBillsClosed(trip) {
-    return Boolean(trip.shared && (trip.billsClosedAt || Date.now() >= roomEndTime(trip)));
+    return Boolean((trip.shared || isDemoTrip(trip)) && (trip.billsClosedAt || Date.now() >= roomEndTime(trip)));
   }
 
   function roomDeadlinePassed(trip) {
@@ -945,6 +949,7 @@
   }
 
   function roomFundingCancelled(trip) {
+    if (isDemoTrip(trip)) return demoFunding(trip).cancelled;
     return Boolean(trip?.depositDeadline && ((state.trip?.id === trip.id && currentVault()?.cancelled)
       || getDisplayedFunding(trip)?.cancelled || (!trip.fuji?.address && roomDeadlinePassed(trip))));
   }
@@ -990,6 +995,7 @@
   }
 
   function isRoomOrganizer(trip) {
+    if (isDemoTrip(trip)) return state.actor === trip.owner;
     return Boolean(trip?.shared && rooms.token && rooms.account === walletSession.account
       && trip.members.some(member => member.id === trip.owner && member.address === rooms.account));
   }
@@ -999,11 +1005,13 @@
   }
 
   function showEarlyEndControl(trip) {
-    return rooms.canEnd && isRoomOrganizer(trip) && !trip.settled && roomEndTime(trip) > Date.now()
+    return (isDemoTrip(trip) || rooms.canEnd) && isRoomOrganizer(trip) && !trip.settled && roomEndTime(trip) > Date.now()
       && !roomFundingCancelled(trip) && (!trip.fuji?.address || trip.fuji.contractVersion >= 2);
   }
 
   function canEndRoom(trip) {
+    if (isDemoTrip(trip)) return showEarlyEndControl(trip) && demoFundReady(trip)
+      && demoFunding(trip).started && demoFunding(trip).balances.every(units => units >= trip.minimumUnits);
     return showEarlyEndControl(trip)
       && (!trip.depositDeadline || (trip.fuji?.address && Date.parse(trip.startTime) <= Date.now()));
   }
@@ -1020,6 +1028,7 @@
   function endRoomNow(trip, id) {
     if (!canEndRoom(trip) || trip.id !== id || walletSession.busy || trip.fuji?.lastTx?.phase === 'pending') return;
     if (sheet.open) sheet.close();
+    if (isDemoTrip(trip)) return changeRoom(trip, 'room.end', {}, () => notice('Trip ended. Open Final split to review who pays whom.'));
     if (!trip.fuji?.address) {
       return changeRoom(trip, 'room.end', {}, updated => {
         if (updated) notice('Trip ended. Open Final split to review who pays whom.');
@@ -1119,7 +1128,8 @@
 
   function roomInviteUrl(trip) {
     const url = new URL('/', window.location.origin);
-    url.searchParams.set('join', trip.invite);
+    url.searchParams.set('join', isDemoTrip(trip) ? trip.code : trip.invite);
+    if (isDemoTrip(trip)) url.searchParams.set('demo', '1');
     return url.href;
   }
 
@@ -1162,12 +1172,13 @@
   function roomTripToolbar(trip) {
     const profile = member(state.actor);
     return `<div class="trip-return">
-      ${btn('All trips', 'trip-list', { tone: 'secondary', symbol: 'back' })}
+      <button type="button" class="btn secondary" data-act="trip-list" aria-label="${ui('All trips')}">
+        ${icon('back')}<span class="trip-back-label">All trips</span>
+      </button>
       ${profile ? `<div class="trip-profile">
         ${avatar(profile)}
         <span class="trip-profile-name" translate="no" title="${safe(profile.name)}">${safe(profile.name)}</span>
         ${canEditRoomDisplayName(trip) ? btn('Edit my name', 'room-rename-member', { tone: 'soft rename-member' }) : ''}
-        ${isDemoTrip(trip) ? btn('Switch demo member', 'switch-member', { tone: 'soft rename-member' }) : ''}
       </div>` : ''}
     </div>`;
   }
@@ -1253,7 +1264,7 @@
         <div class="inline">
           ${btn('Create a trip', 'room-create', { symbol: 'plus' })}
           ${btn('Join a trip', 'room-join', { tone: 'secondary' })}
-          ${!rooms.token ? btn('Sign in', 'room-sign-in', { tone: 'ghost' }) : ''}
+          ${!demoMode && !rooms.token ? btn('Sign in', 'room-sign-in', { tone: 'ghost' }) : ''}
         </div>
         ${btn('Try a local demo', 'local-demo', { tone: 'ghost' })}
       </section>
