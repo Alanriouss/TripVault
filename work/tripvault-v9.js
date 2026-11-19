@@ -3677,6 +3677,16 @@ function roomFundingShortfalls(trip, funding, draft) {
   }
 
   // Demo uses the shared trip components, with local balances and actions.
+  const standaloneDemo = false;
+
+  function demoModeBanner() {
+    if (!demoMode) return '';
+    return `<section class="demo-mode-banner" aria-label="${ui('Demo mode')}">
+      <div><strong>Demo mode</strong><p>Balances and members are simulated in this mode.</p></div>
+      ${standaloneDemo ? '' : '<a class="btn secondary" href="/" data-exit-demo>Connect a real wallet</a>'}
+    </section>`;
+  }
+
   function isDemoTrip(trip = state.trip) {
     return Boolean(trip && !trip.shared && (demoMode || trip.demoVersion === 2
       || trip.id === 'judges-sample' || (!trip.fuji && !walletSession.account)));
@@ -4066,6 +4076,9 @@ function roomFundingShortfalls(trip, funding, draft) {
   const SITE_LANGUAGE_KEY = 'tripvault-site-language';
   let siteLanguage = readStorage(SITE_LANGUAGE_KEY) === 'vi' ? 'vi' : 'en';
   const vietnameseUI = new Map([
+    ['Demo mode', 'Chế độ Demo'],
+    ['Balances and members are simulated in this mode.', 'Tiền và thành viên trong chế độ này được mô phỏng.'],
+    ['Connect a real wallet', 'Kết nối ví thật'],
     ['Demo controls', 'Điều khiển bản thử'],
     ['Restart with setup', 'Tạo lại từ bước chuẩn bị'],
     ['Start funded demo trip', 'Bắt đầu chuyến đi mô phỏng đã đủ quỹ'],
@@ -5250,6 +5263,7 @@ function roomFundingShortfalls(trip, funding, draft) {
             ${!demoMode && !rooms.online && window.location?.protocol === 'file:' ? '<p class="notice warn">Open the TripVault Rooms launcher for invite links and room codes.</p>' : ''}
             ${trip && (trip.shared || isDemoTrip(trip)) ? roomTripToolbar(trip) : ''}
             ${trip?.shared && !rooms.token ? '<p class="notice warn">Your room sign-in expired. ' + btn('Sign in again', 'room-reauthenticate', { tone: 'secondary' }) + '</p>' : ''}
+            ${demoModeBanner()}
             ${content}
             ${isDemoTrip(trip) ? demoMemberControls() : ''}
           </main>

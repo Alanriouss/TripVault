@@ -1,8 +1,18 @@
 import assert from 'node:assert/strict';
 
-export async function testDemoUi({ launch }) {
+export async function testDemoUi({ launch, supportsWalletExit }) {
   const demoKey = 'tripvault-judge-demo-v1';
   const demo = await launch({ url: 'http://127.0.0.1:8788/?demo=1', language: 'en' });
+  const checkModeBanner = () => {
+    assert.match(demo.page.innerHTML, /demo-mode-banner/);
+    if (supportsWalletExit === true) assert.match(demo.page.innerHTML, /href="\/" data-exit-demo>Connect a real wallet/);
+    if (supportsWalletExit === false) assert.doesNotMatch(demo.page.innerHTML, /data-exit-demo/);
+  };
+  checkModeBanner();
+  demo.click('judge-demo-sample');
+  checkModeBanner();
+  demo.click('trip-list');
+  checkModeBanner();
   demo.click('judge-demo-sample');
   assert.match(demo.page.innerHTML, /class="panel fund-summary"/);
   assert.match(demo.page.innerHTML, /class="panel trip-progress"/);

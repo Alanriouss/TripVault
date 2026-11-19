@@ -1,6 +1,9 @@
   const SITE_LANGUAGE_KEY = 'tripvault-site-language';
   let siteLanguage = readStorage(SITE_LANGUAGE_KEY) === 'vi' ? 'vi' : 'en';
   const vietnameseUI = new Map([
+    ['Demo mode', 'Chế độ Demo'],
+    ['Balances and members are simulated in this mode.', 'Tiền và thành viên trong chế độ này được mô phỏng.'],
+    ['Connect a real wallet', 'Kết nối ví thật'],
     ['Demo controls', 'Điều khiển bản thử'],
     ['Restart with setup', 'Tạo lại từ bước chuẩn bị'],
     ['Start funded demo trip', 'Bắt đầu chuyến đi mô phỏng đã đủ quỹ'],

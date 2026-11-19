@@ -1,4 +1,14 @@
   // Demo uses the shared trip components, with local balances and actions.
+  const standaloneDemo = false;
+
+  function demoModeBanner() {
+    if (!demoMode) return '';
+    return `<section class="demo-mode-banner" aria-label="${ui('Demo mode')}">
+      <div><strong>Demo mode</strong><p>Balances and members are simulated in this mode.</p></div>
+      ${standaloneDemo ? '' : '<a class="btn secondary" href="/" data-exit-demo>Connect a real wallet</a>'}
+    </section>`;
+  }
+
   function isDemoTrip(trip = state.trip) {
     return Boolean(trip && !trip.shared && (demoMode || trip.demoVersion === 2
       || trip.id === 'judges-sample' || (!trip.fuji && !walletSession.account)));

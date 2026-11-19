@@ -1856,6 +1856,10 @@ dialog.guide-modal .sheet-footer {
 </style>
 <style>
 .demo-controls { margin-top: 16px; padding: 12px 16px; border: 1px dashed var(--line-strong); border-radius: 12px; background: var(--paper); }
+.demo-mode-banner { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; padding: 14px 16px; border: 1px solid var(--tint-border); border-radius: 14px; background: var(--tint); }
+.demo-mode-banner strong { font-size: 14px; }
+.demo-mode-banner p { margin: 3px 0 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.demo-mode-banner .btn { flex-shrink: 0; max-width: 100%; white-space: normal; text-align: center; }
 .demo-controls > summary { cursor: pointer; color: var(--muted); font-size: 13px; font-weight: 600; }
 .demo-controls-body { display: grid; gap: 12px; padding-top: 12px; }
 .trip-wallet-panel .row > .row-label { min-width: 0 !important; }
@@ -5565,6 +5569,16 @@ function roomFundingShortfalls(trip, funding, draft) {
   }
 
   // Demo uses the shared trip components, with local balances and actions.
+  const standaloneDemo = false;
+
+  function demoModeBanner() {
+    if (!demoMode) return '';
+    return `<section class="demo-mode-banner" aria-label="${ui('Demo mode')}">
+      <div><strong>Demo mode</strong><p>Balances and members are simulated in this mode.</p></div>
+      ${standaloneDemo ? '' : '<a class="btn secondary" href="/" data-exit-demo>Connect a real wallet</a>'}
+    </section>`;
+  }
+
   function isDemoTrip(trip = state.trip) {
     return Boolean(trip && !trip.shared && (demoMode || trip.demoVersion === 2
       || trip.id === 'judges-sample' || (!trip.fuji && !walletSession.account)));
@@ -5954,6 +5968,9 @@ function roomFundingShortfalls(trip, funding, draft) {
   const SITE_LANGUAGE_KEY = 'tripvault-site-language';
   let siteLanguage = readStorage(SITE_LANGUAGE_KEY) === 'vi' ? 'vi' : 'en';
   const vietnameseUI = new Map([
+    ['Demo mode', 'Chế độ Demo'],
+    ['Balances and members are simulated in this mode.', 'Tiền và thành viên trong chế độ này được mô phỏng.'],
+    ['Connect a real wallet', 'Kết nối ví thật'],
     ['Demo controls', 'Điều khiển bản thử'],
     ['Restart with setup', 'Tạo lại từ bước chuẩn bị'],
     ['Start funded demo trip', 'Bắt đầu chuyến đi mô phỏng đã đủ quỹ'],
@@ -7138,6 +7155,7 @@ function roomFundingShortfalls(trip, funding, draft) {
             ${!demoMode && !rooms.online && window.location?.protocol === 'file:' ? '<p class="notice warn">Open the TripVault Rooms launcher for invite links and room codes.</p>' : ''}
             ${trip && (trip.shared || isDemoTrip(trip)) ? roomTripToolbar(trip) : ''}
             ${trip?.shared && !rooms.token ? '<p class="notice warn">Your room sign-in expired. ' + btn('Sign in again', 'room-reauthenticate', { tone: 'secondary' }) + '</p>' : ''}
+            ${demoModeBanner()}
             ${content}
             ${isDemoTrip(trip) ? demoMemberControls() : ''}
           </main>

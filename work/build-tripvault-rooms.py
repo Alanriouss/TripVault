@@ -2395,7 +2395,7 @@ replace("    if (act === 'room-create') return startRoomFlow('create');", """   
     }
     if (act === 'room-create') return startRoomFlow('create');""")
 replace('    const avatarButton = trip && !trip.shared && !demoMode', '    const avatarButton = trip && !trip.shared && !isDemoTrip(trip)')
-replace('            ${content}\n          </main>', '            ${content}\n            ${isDemoTrip(trip) ? demoMemberControls() : \'\'}\n          </main>')
+replace('            ${content}\n          </main>', '            ${demoModeBanner()}\n            ${content}\n            ${isDemoTrip(trip) ? demoMemberControls() : \'\'}\n          </main>')
 replace('  function render() {', '  function render() {\n    refreshDemoState(state.trip);')
 replace("&& Date.now() >= Date.parse(trip.endTime) && !hasPendingBills(trip)", "&& Date.now() >= roomEndTime(trip) && !hasPendingBills(trip)")
 replace("if (t.settled || (!editing && t.shared && !roomBillFunding(t).ready)) return;", "if (t.settled || (!editing && (t.shared || isDemoTrip(t)) && !roomBillFunding(t).ready)) return;")
@@ -2439,6 +2439,10 @@ replace('  showFirstVisitGuide();', """  showFirstVisitGuide();
   }""")
 replace('</head>', '''<style>
 .demo-controls { margin-top: 16px; padding: 12px 16px; border: 1px dashed var(--line-strong); border-radius: 12px; background: var(--paper); }
+.demo-mode-banner { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; padding: 14px 16px; border: 1px solid var(--tint-border); border-radius: 14px; background: var(--tint); }
+.demo-mode-banner strong { font-size: 14px; }
+.demo-mode-banner p { margin: 3px 0 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.demo-mode-banner .btn { flex-shrink: 0; max-width: 100%; white-space: normal; text-align: center; }
 .demo-controls > summary { cursor: pointer; color: var(--muted); font-size: 13px; font-weight: 600; }
 .demo-controls-body { display: grid; gap: 12px; padding-top: 12px; }
 .trip-wallet-panel .row > .row-label { min-width: 0 !important; }
@@ -2478,6 +2482,7 @@ try:
     demo_source = source.replace(
         "const demoMode = new URLSearchParams(window.location?.search || '').get('demo') === '1';",
         "const demoMode = true;", 1)
+    demo_source = demo_source.replace('const standaloneDemo = false;', 'const standaloneDemo = true;', 1)
     demo_source = demo_source.replace('''        <div style="text-align:center; margin-top:12px; font-size:13px; color:var(--subtle);">
           Using a real wallet? <a href="${exitDemoUrl}" class="subtle-link">Open shared-trip mode</a>
         </div>''', '')
