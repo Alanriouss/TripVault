@@ -104,6 +104,9 @@ async function launch(options = {}, script = source) {
     submit('bill-form', { label: 'Test bill', amount: String(amount), payer, participant });
   return {
     page, sheet, toast, storage, workspace, active, click, view, member, create, bill, approvals, approveBill, submit,
+    selectSiteLanguage: value => events.change({
+      target: { value, matches: selector => selector === '[data-site-language]' },
+    }),
     billDraft: fields => {
       const room = sheet.innerHTML.match(/id="bill-form"[^>]+data-room="([^"]+)"/)?.[1];
       assert.ok(room);
@@ -128,8 +131,22 @@ async function launch(options = {}, script = source) {
   };
 }
 
+if (source.includes('const vietnameseUI =')) {
+  const dictionary = source.slice(source.indexOf('  const vietnameseUI ='), source.indexOf('  function localizeUI('));
+  const subtitle = runInNewContext("const siteLanguage = 'vi';" + dictionary
+    + "ui('Create a trip or join one with your wallet.')");
+  assert.equal(subtitle, 'Tạo chuyến đi hoặc dùng ví để tham gia chuyến đi có sẵn.');
+  assert.match(readFileSync(output, 'utf8'), /dialog.guide-modal .sheet-body \{\s*display: block;\s*min-height: 0;/);
+}
+
 const happy = await launch();
 assert.match(happy.page.innerHTML, /No trips yet/);
+if (source.includes('data-split-trip')) {
+  const savedSplit = await launch({ storage: new Map([[v8Key, JSON.stringify({
+    trips: [], activeTripId: null, view: 'split',
+  })]]) });
+  assert.match(savedSplit.page.innerHTML, /No trips yet/);
+}
 assert.equal(happy.sheet.open, true);
 assert.equal(happy.sheet.lang, 'vi');
 assert.match(happy.sheet.innerHTML, /Cách dùng TripVault/);
@@ -397,6 +414,31 @@ await testFuji({ launch, end, flush, source });
 if (source.includes('function enableRooms()')) {
   const { testRoomsUi } = await import('./tripvault-room-server/test-ui.js');
   await testRoomsUi({ launch, flush, start, end });
+}
+
+async function testDemoNotifications() {
+  const judge = await launch({ url: 'http://127.0.0.1:8788/?demo=1', language: 'en' });
+  judge.click('judge-demo-sample');
+  assert.match(judge.page.innerHTML, /25,000 VND \/ USD/);
+  assert.match(judge.page.innerHTML, /Fixed demo rate/);
+  assert.doesNotMatch(judge.page.innerHTML, /2001/);
+  assert.match(judge.page.innerHTML, /class="trip-bell-dot" aria-hidden="true">2/);
+  judge.click('room-notifications');
+  assert.match(judge.sheet.innerHTML, /Trip ended/);
+  assert.match(judge.sheet.innerHTML, /Minimum deposits reached/);
+  assert.match(judge.page.innerHTML, /class="trip-bell-dot" aria-hidden="true">2/);
+  const noticeId = judge.sheet.innerHTML.match(/data-notification-id="([^"]+:ended)"/)[1];
+  judge.click('mark-room-notification-read', { id: noticeId });
+  assert.match(judge.page.innerHTML, /class="trip-bell-dot" aria-hidden="true">1/);
+  judge.click('open-room-notification', { id: noticeId });
+  assert.match(judge.page.innerHTML, /<h1>Final split<\/h1>/);
+  assert.equal(judge.requests(), 0);
+}
+
+if (source.includes('function sampleNotifications(')) await testDemoNotifications();
+if (source.includes('function demoWallet(')) {
+  const { testDemoUi } = await import('./test-tripvault-demo-ui.js');
+  await testDemoUi({ launch });
 }
 
 async function testJudgeDemo(url, script) {

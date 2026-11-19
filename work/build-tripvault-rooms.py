@@ -11,6 +11,7 @@ room_ui += '\n' + funding_math + '\n' + (root / 'work/tripvault-room-funding-ui.
 room_ui += '\n' + (root / 'work/tripvault-room-progress.js').read_text()
 room_ui += '\n' + (root / 'work/tripvault-room-bill-ui.js').read_text()
 room_ui += '\n' + (root / 'work/tripvault-room-notifications.js').read_text()
+room_ui += '\n' + (root / 'work/tripvault-demo-ui.js').read_text()
 
 def replace(old, new):
     global source
@@ -500,6 +501,11 @@ dialog::backdrop {
 .trip-notification.notif-warning { border-left-color: var(--warning); }
 .trip-notification.notif-success { border-left-color: var(--positive); }
 .trip-notification.notif-info { border-left-color: var(--accent); }
+.trip-notification:not(.unread) {
+  background: var(--page);
+  border-left-color: var(--line-strong);
+}
+.trip-notification:not(.unread) .notif-title { color: var(--muted); }
 .trip-notification .notif-header {
   display: flex;
   align-items: flex-start;
@@ -508,6 +514,12 @@ dialog::backdrop {
   flex-wrap: wrap;
 }
 .trip-notification .notif-title {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -1102,21 +1114,42 @@ dialog::backdrop {
 }
 .bill-badge.status-pending,
 .bill-row.is-pending .bill-badge {
-  background: var(--tint) !important;
-  color: var(--accent-dark) !important;
+  background: #fef3c7;
+  color: #854d0e;
 }
+.bill-status {
+  display: inline-block;
+  margin-top: 5px;
+  padding: 3px 8px;
+  border-radius: 8px;
+  background: var(--page);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+.is-pending .bill-status, .is-disputed .bill-status, .is-cancellation .bill-status {
+  background: #fef3c7;
+  color: #854d0e;
+}
+.is-approved .bill-status { background: var(--positive-bg); color: var(--positive); }
+.is-rejected .bill-status { background: var(--danger-bg); color: var(--danger); }
 .fx-rate-container {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   text-align: right;
 }
+.split-rate .fx-rate-container {
+  align-items: flex-start;
+  text-align: left;
+}
 .fx-rate-primary {
-  font-weight: 700 !important;
+  font-weight: 600;
   color: var(--ink);
-  font-size: 14.5px;
+  font-size: 13px;
   display: block;
 }
+.split-rate-status { font-size: 12px; color: var(--muted); }
 .fx-rate-sub {
   font-weight: 400 !important;
   font-size: 12.5px;
@@ -1194,16 +1227,20 @@ dialog::backdrop {
     overflow-x: clip !important;
   }
   .header-inner {
-    padding: 0 10px !important;
+    padding: 4px 10px !important;
     gap: 6px !important;
     min-height: 58px !important;
     max-width: 100vw !important;
-    overflow-x: hidden !important;
+  }
+  .header .wordmark {
+    flex-shrink: 0;
   }
   .header-actions {
     gap: 6px !important;
-    flex-shrink: 0 !important;
-    max-width: calc(100vw - 44px) !important;
+    flex: 1 1 auto !important;
+    min-width: 0;
+    flex-wrap: wrap;
+    justify-content: flex-end;
   }
   .breadcrumb {
     display: none !important;
@@ -1325,6 +1362,8 @@ dialog.guide-modal .sheet-head .btn {
   flex-shrink: 0 !important;
 }
 dialog.guide-modal .sheet-body {
+  display: block;
+  min-height: 0;
   flex: 1 1 auto !important;
   overflow-y: auto !important;
   overscroll-behavior: contain !important;
@@ -1353,14 +1392,13 @@ dialog.guide-modal .sheet-footer {
   border: 1px solid var(--line);
   box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
   flex-shrink: 0;
-  min-height: 180px;
 }
-.guide-illustration img {
+.guide-illustration > img {
   display: block;
   width: 100%;
-  height: auto;
-  max-height: 220px;
-  object-fit: cover;
+  height: auto !important;
+  max-height: none !important;
+  object-fit: contain;
 }
 .guide-description {
   margin-bottom: 14px;
@@ -1447,9 +1485,6 @@ dialog.guide-modal .sheet-footer {
   }
   dialog.guide-modal .sheet-head {
     padding: 16px 16px 10px !important;
-  }
-  .guide-illustration img {
-    max-height: 160px;
   }
   .guide-actions {
     padding: 10px 16px 14px;
@@ -1596,11 +1631,11 @@ replace("""    if (!trip || trip.fuji?.address || state.actor !== trip.owner || 
       || (trip.shared && !trip.locked) || members.length !== trip.members.length""")
 replace("""    const content = trip ? screen() : state.trips.length ? tripsScreen() : empty() + '<div class="stack" style="margin-top:13px">' + fujiPanel() + '</div>';""", """    const content = trip ? screen() : rooms.online ? roomsHome()
       : state.trips.length ? tripsScreen() : empty() + '<div class="stack" style="margin-top:13px">' + fujiPanel() + '</div>';""")
-replace("const newTrip = btn('New trip', 'new-trip',", "const newTrip = btn(rooms.online ? 'New room' : 'New trip', 'new-trip',")
+replace("const newTrip = btn('New trip', 'new-trip',", "const newTrip = btn('New trip', 'new-trip',")
 replace("const tripsButton = trip ? btn('Trips', 'trip-list', { tone: 'ghost' }) : newTrip;",
         "const tripsButton = trip?.shared ? '' : trip ? btn('Trips', 'trip-list', { tone: 'ghost' }) : newTrip;")
 replace("""    const avatarButton = trip
-      ? `<button""", """    const avatarButton = trip && !trip.shared
+      ? `<button""", """    const avatarButton = trip && !trip.shared && !demoMode
       ? `<button""")
 replace('<span class="chip violet header-demo">Demo</span>', '''<span class="chip violet header-demo">${trip?.shared ? 'Room' : 'Demo'}</span>''')
 replace("    const saved = storageUnavailable ? null : readStorage(KEY);", "    if (changedTrip?.shared) return true;\n    const saved = storageUnavailable ? null : readStorage(KEY);")
@@ -1781,11 +1816,11 @@ replace("""'fuji-deploy-form', 'fuji-funds-form'].includes(form.id)""", """'fuji
 replace("    if (form.id === 'fuji-deploy-form') deployFuji(data, fail);", "    if (form.id === 'room-form') submitRoomForm(data, fail);\n    else if (form.id === 'fuji-link-form') linkExistingVault(data, fail);\n    else if (form.id === 'fuji-deploy-form') deployFuji(data, fail);")
 replace("      updateFunds(state.trip, data.get('kind'), parseUnits(data.get('amount')), fail);", "      if (!state.trip.shared) updateFunds(state.trip, data.get('kind'), parseUnits(data.get('amount')), fail);")
 replace("  function screen(){return ({overview,people,bills,split,wallet}[state.view]||overview)()}", """  function screen() {
-    if (state.trip.shared) {
+    if (state.trip.shared || demoMode) {
       if (state.view === 'overview') return roomOverview();
       if (state.view === 'people') return roomMembers(state.trip);
       if (state.view === 'split') return roomFinalSplit(state.trip);
-      if (state.view === 'wallet') return fujiPanel();
+      if (state.view === 'wallet') return state.trip.shared ? fujiPanel() : demoWallet(state.trip);
     }
     return ({ overview, people, bills, split, wallet }[state.view] || overview)();
   }""")
@@ -1798,7 +1833,7 @@ replace("btn('Cancel approval', 'revoke-split', { tone: 'secondary' })",
         "btn('Cancel approval', 'revoke-split', { tone: 'danger cancel-approval' })")
 replace("btn('Cancel my approval','revoke-bill',{tone:'secondary',",
         "btn('Cancel my approval','revoke-bill',{tone:'danger cancel-approval',")
-replace("function detail(id){const b=", "function detail(id){if(state.trip?.shared)return roomBillDetail(id);const b=")
+replace("function detail(id){const b=", "function detail(id){if(state.trip?.shared || demoMode)return roomBillDetail(id);const b=")
 replace("b.status==='approved'?'Approved':'Pending approval'",
         "state.trip.shared ? roomBillStatus(b) : b.status==='approved'?'Approved':'Pending approval'")
 replace("return trip.bills.some(bill => bill.status !== 'approved');",
@@ -1863,6 +1898,9 @@ replace("    if (act === 'room-copy') return copyRoomInvite(trip);", """    if (
     if (act === 'room-notifications') return openRoomNotifications();
     if (act === 'clear-room-notifications') return clearRoomNotifications();
     if (act === 'open-room-notification') return openRoomNotification(id);
+    if (act === 'mark-room-notification-read') return markRoomNotificationRead(id);
+    const notification = element.closest?.('[data-notification-id]');
+    if (notification) markRoomNotificationRead(notification.dataset.notificationId);
     if (act === 'room-funding-top-up') return topUpRoomFunding(element);""")
 replace("disabled:!!t.settled})}</div><section class=\"panel\"><div class=\"panel-head\"><h2>Trip expenses",
         "disabled:t.shared ? !roomBillFunding(t).ready : !!t.settled})}</div>${t.shared ? roomFundingPanel(t) : ''}<section class=\"panel\"><div class=\"panel-head\"><h2>Trip expenses")
@@ -2016,7 +2054,7 @@ new_add_bill = """function addBill(editing = null) {
 }"""
 replace(old_add_bill, new_add_bill)
 replace('    app.innerHTML = header();', """    const split = app.querySelector?.('[data-split-trip]');
-    const openDetails = new Set(state.view === 'split' && split?.dataset.splitTrip === state.trip?.id
+    const openDetails = new Set(state.view === 'split' && split && split.dataset.splitTrip === state.trip?.id
       ? [...split.querySelectorAll('details[data-split-detail][open]')].map(item => item.dataset.splitDetail) : []);
     app.innerHTML = header();
     for (const detail of app.querySelectorAll?.('details[data-split-detail]') || []) {
@@ -2024,7 +2062,7 @@ replace('    app.innerHTML = header();', """    const split = app.querySelector?
     }
     updateBillFundingForm();
     updateRoomSignInButton();""")
-replace("            ${content}\n          </main>", """            ${trip?.shared ? roomTripToolbar(trip) : ''}
+replace("            ${content}\n          </main>", """            ${trip && (trip.shared || demoMode) ? roomTripToolbar(trip) : ''}
             ${trip?.shared && !rooms.token ? '<p class="notice warn">Your room sign-in expired. ' + btn('Sign in again', 'room-reauthenticate', { tone: 'secondary' }) + '</p>' : ''}
             ${content}
           </main>""")
@@ -2125,12 +2163,12 @@ replace("              ${btn('Guide', 'guide', { tone: 'ghost' })}",
 replace("""<span class="chip violet header-demo">${trip?.shared ? 'Room' : 'Demo'}</span>""",
         """${trip?.shared ? '' : '<span class="chip violet header-demo">Demo</span>'}""")
 replace("const tripsButton = trip?.shared ? '' : trip ? btn('Trips', 'trip-list', { tone: 'ghost' }) : newTrip;",
-        "const tripsButton = trip?.shared || (!trip && rooms.online) ? '' : trip ? btn('Trips', 'trip-list', { tone: 'ghost' }) : newTrip;")
+        "const tripsButton = trip?.shared || (demoMode && trip) || (!trip && rooms.online) ? '' : trip ? btn('Trips', 'trip-list', { tone: 'ghost' }) : newTrip;")
 replace("""${trip ? 'Trips / ' + safe(trip.name) : 'Your trips'}""",
         """${trip ? 'Trips / ' + userText(trip.name) : 'Your trips'}""")
 replace('    app.innerHTML = header();', """    if (document.documentElement) {
       document.documentElement.lang = siteLanguage;
-      document.title = 'TripVault · ' + ui('Rooms');
+      document.title = 'TripVault · ' + ui('Shared Trip Fund');
       const skipLink = document.querySelector('.skip');
       if (skipLink) skipLink.textContent = ui('Skip to content');
     }
@@ -2161,7 +2199,24 @@ source = source.replace('<button type="button" class="bill-row" data-act="bill-d
 source = source.replace('<span class="bill-badge">${icon(\'bill\')}</span>', '<span class="bill-badge status-${safe(b.status)}">${icon(b.status === \'approved\' ? \'check\' : b.status === \'rejected\' ? \'close\' : \'bill\')}</span>')
 source = source.replace('>${safe(b.label)}</span>', '>${userText(b.label)}</span>')
 source = source.replace('>${safe(m.name)}</span>', '>${userText(m.name)}</span>')
-replace("Paid by ${safe(payer?.name||'Unknown')} outside ·", "${siteLanguage === 'vi' ? 'Paid by: ' : 'Paid by '}${userText(payer?.name || 'Unknown')} outside ·")
+bill_item_start = source.index('  function billItem(b)')
+bill_item_end = source.index('\n', bill_item_start)
+replace(source[bill_item_start:bill_item_end], """  function billItem(bill) {
+    const payer = member(bill.payer);
+    const status = state.trip.shared || demoMode ? roomBillStatus(bill) : ui(bill.status === 'approved' ? 'Approved' : 'Pending approval');
+    const iconName = bill.status === 'approved' ? 'check' : bill.status === 'rejected' ? 'close' : 'bill';
+    return `<button type="button" class="bill-row is-${safe(bill.status)}" data-act="bill-detail" data-id="${bill.id}">
+      <span class="row-label">
+        <span class="bill-badge status-${safe(bill.status)}">${icon(iconName)}</span>
+        <span>
+          <span class="bill-name">${userText(bill.label)}</span>
+          <span class="bill-sub">${ui('Paid by')} ${userText(payer?.name || ui('Unknown'))} · ${ui(bill.participants.length + ' people')}</span>
+          <span class="bill-status">${safe(status)}</span>
+        </span>
+      </span>
+      <span class="row-value">${vnd(bill.amount)}</span>
+    </button>`;
+  }""")
 source = source.replace('>${safe(m.name)}</option>', ' translate="no">${safe(m.name)}</option>')
 replace("const KEY = 'tripvault-timelocked-external-v8';", """const demoMode = new URLSearchParams(window.location?.search || '').get('demo') === '1';
   const KEY = demoMode ? 'tripvault-judge-demo-v1' : 'tripvault-timelocked-external-v8';""")
@@ -2175,7 +2230,11 @@ replace('.trip-return { display:', """.subtle-link { font-weight: 500; color: va
 replace("""    const content = trip ? screen() : rooms.online ? roomsHome()""", """    const content = trip ? screen() : demoMode
       ? demoLandingScreen()
       : rooms.online ? roomsHome()""")
-replace("    if (act === 'room-create')", """    if (act === 'judge-demo-sample') return startJudgeSample();
+replace("    if (act === 'room-create')", """    if (act === 'judge-demo-sample') {
+      if (demoMode) return startJudgeSample();
+      window.location.assign('/?demo=1');
+      return;
+    }
     if (act === 'room-create')""")
 replace("  function selectTrip(trip) {", """  function formatShortDateTime(iso) {
     if (!iso) return '';
@@ -2193,30 +2252,14 @@ replace("  function selectTrip(trip) {", """  function formatShortDateTime(iso) 
   }
 
   function formatFxReference(quote) {
-    if (!quote || !quote.rate) return 'Reference rate: Unavailable';
-    const rounded = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(Math.round(quote.rate));
-    let src = 'Xe';
-    if (quote.source) {
-      if (quote.source.includes('Fixed demo')) src = 'Demo';
-      else if (quote.source.includes('ExchangeRate-API')) src = 'ExchangeRate-API';
-      else if (quote.source.includes('Xe')) src = 'Xe';
-      else src = quote.source;
-    }
-    let timeStr = '11/11 07:00';
-    if (quote.updated) {
-      const d = new Date(quote.updated);
-      if (!isNaN(d.getTime())) {
-        const day = String(d.getDate()).padStart(2, '0');
-        const month = String(d.getMonth() + 1).padStart(2, '0');
-        const hours = String(d.getHours()).padStart(2, '0');
-        const mins = String(d.getMinutes()).padStart(2, '0');
-        timeStr = `${day}/${month} ${hours}:${mins}`;
-      } else {
-        const cleaned = String(quote.updated).replace(/20\\d\\d[-/]?\\s*/, '').trim();
-        if (cleaned) timeStr = cleaned;
-      }
-    }
-    return `Reference rate: ${rounded} VND per USD (${src}, ${timeStr})`;
+    if (!quote || !quote.rate) return ui('Reference rate unavailable');
+    const rounded = new Intl.NumberFormat(siteLanguage === 'vi' ? 'vi-VN' : 'en-US', {
+      maximumFractionDigits: 0,
+    }).format(quote.rate);
+    const source = quote.source || '';
+    const time = quote.updated ? formatFxShortTime(quote.updated) : '';
+    const details = [source, time].filter(Boolean).join(' · ');
+    return ui('Reference rate') + ' · ' + rounded + ' VND / USD' + (details ? ' · ' + details : '');
   }
 
   function demoLandingScreen() {
@@ -2278,7 +2321,7 @@ replace("  function selectTrip(trip) {", """  function formatShortDateTime(iso) 
 replace("""  const FALLBACK_RATE = {
     rate: 25640.2, source: 'Xe reference', updated: '2026-11-11', live: false,
   };""", """  const FALLBACK_RATE = {
-    rate: 25640.2, source: 'Xe', updated: '11/11 07:00', live: false,
+    rate: 25640.2, source: 'Xe', updated: '2026-11-11T00:00:00Z', live: false,
   };""")
 replace("""      <div class="stack">
         ${trip.shared || isAddress(trip.fuji?.address) ? fujiPanel('split') : ''}""",
@@ -2313,6 +2356,7 @@ replace("<span class=\"chip\">${phase()} · Time-locked USDC vault</span>", "<sp
 replace("${row('Start',safe(t.startTime.replace('T',' ')))}", "${row('Start',safe(formatShortDateTime(t.startTime)))}")
 replace("${row('End',safe(t.endTime.replace('T',' ')))}", "${row('End',safe(formatShortDateTime(t.endTime)))}")
 replace("<span class=\"chip violet\">${p}</span>", "<span class=\"${p === 'Closing' ? 'chip warn' : 'chip violet'}\">${p === 'Closing' ? 'Trip ended · Ready to settle' : p}</span>")
+replace('<section class="panel"><h2>Demo vault</h2>', '<section class="panel trip-settings-panel"><h2>Demo vault</h2>')
 replace("${row('Status',p)}", "${row('Status',p === 'Closing' ? 'Trip ended · Ready to settle' : p)}")
 replace('<p class="notice warn notice-prominent">Early withdrawals use only your own balance. You remain a trip member after withdrawing all. After start, deposits are locked until final settlement; top-ups are allowed.</p>', '<p class="notice">Deposits lock after the start time. You can still top up. Early withdrawal is only possible before the start.</p>')
 replace("""${btn('Refresh market reference','refresh-fx',{tone:'secondary'})}</section></div>""",
@@ -2324,6 +2368,11 @@ replace("        fx = quote;\n        lockQuote(trip, quote);",
 replace("  refreshFX();\n  if (!demoMode) enableRooms();",
         "  if (!demoMode) {\n    refreshFX();\n    enableRooms();\n  }")
 replace("  discoverWallets();", "  if (!demoMode) discoverWallets();")
+replace("  restoreWorkspace(loadWorkspace());", """  if (demoMode) fx = {
+    rate: 25000, source: 'Fixed demo rate', updated: '', live: false, historical: true,
+  };
+  restoreWorkspace(loadWorkspace());""")
+
 replace("  function fujiPanel(section = 'wallet', review = null) {\n    const trip",
         "  function fujiPanel(section = 'wallet', review = null) {\n    if (demoMode) return '';\n    const trip")
 replace('!rooms.online && window.location?.protocol', '!demoMode && !rooms.online && window.location?.protocol')
@@ -2338,6 +2387,14 @@ try:
     public_dir = root / 'public'
     public_dir.mkdir(exist_ok=True)
     (public_dir / 'index.html').write_text(source, encoding='utf-8')
+    # Keep the standalone GitHub Pages demo on the same UI as the server.
+    demo_source = source.replace(
+        "const demoMode = new URLSearchParams(window.location?.search || '').get('demo') === '1';",
+        "const demoMode = true;", 1)
+    demo_source = demo_source.replace('''        <div style="text-align:center; margin-top:12px; font-size:13px; color:var(--subtle);">
+          Using a real wallet? <a href="${exitDemoUrl}" class="subtle-link">Open shared-trip mode</a>
+        </div>''', '')
+    (root / 'docs/index.html').write_text(demo_source, encoding='utf-8')
     (root / 'work/tripvault-v9.js').write_text(source.split('<script>\n', 1)[1].split('</script>', 1)[0], encoding='utf-8')
     (backend.parent / 'entry.js').write_text(generated, encoding='utf-8')
     print("Build output written to workspace.")

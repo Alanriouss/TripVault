@@ -968,6 +968,7 @@
 
   function formatFxShortTime(raw) {
     if (!raw) return '';
+    if (!/^\d{4}-\d{2}-\d{2}(?:T|$)/.test(String(raw)) && !/^[A-Za-z]{3},? /.test(String(raw))) return String(raw);
     const d = new Date(raw);
     if (!isNaN(d.getTime())) {
       const pad = n => String(n).padStart(2, '0');
@@ -982,8 +983,9 @@
     const shortSource = quote.source ? quote.source.replace(/\s+USD\/VND\s+reference/i, '').replace(/\s+reference/i, '') : '';
     const shortTime = quote.updated ? formatFxShortTime(quote.updated) : '';
     const notLiveLabel = quote.live || quote.historical ? '' : 'not live';
-    const details = [shortSource, shortTime, notLiveLabel].filter(Boolean).join(' · ');
-    return `<span class="fx-rate-container"><strong class="fx-rate-primary">${safe(rate)} VND / USD</strong><span class="fx-rate-sub">${safe(ui(details))}</span></span>`;
+    const details = [shortSource, shortTime, notLiveLabel].filter(Boolean)
+      .map(detail => `<span class="fx-rate-sub">${safe(ui(detail))}</span>`).join('');
+    return `<span class="fx-rate-container"><strong class="fx-rate-primary">${safe(rate)} VND / USD</strong>${details}</span>`;
   }
 
   function isRoomOrganizer(trip) {
@@ -1164,6 +1166,7 @@
         ${avatar(profile)}
         <span class="trip-profile-name" translate="no" title="${safe(profile.name)}">${safe(profile.name)}</span>
         ${canEditRoomDisplayName(trip) ? btn('Edit my name', 'room-rename-member', { tone: 'soft rename-member' }) : ''}
+        ${demoMode && !trip.shared ? btn('Switch demo member', 'switch-member', { tone: 'soft rename-member' }) : ''}
       </div>` : ''}
     </div>`;
   }
@@ -1173,7 +1176,7 @@
       <div class="panel-head"><h2>Members</h2><span class="chip">${trip.members.length} of 12</span></div>
       ${trip.members.map(item => `<div class="row">
         <span class="row-label">${avatar(item)}<span><span class="row-name">${userText(item.name)}${item.id === state.actor ? ' · You' : ''}</span>
-        <span class="row-sub room-wallet-address">${safe(item.address)}</span></span></span>
+        ${item.address ? '<span class="row-sub room-wallet-address">' + safe(item.address) + '</span>' : ''}</span></span>
         ${item.id === trip.owner ? '<span class="chip violet">Organizer</span>' : ''}
       </div>`).join('')}
     </section>`;
@@ -1186,8 +1189,8 @@
     const deadline = Math.min(start, end);
     return `<div class="stack">
       <section class="hero">
-        <span class="chip">${roomFundingCancelled(trip) ? 'Trip cancelled' : trip.settled ? 'Settled on Fuji' : end <= Date.now() ? 'Trip ended'
-          : trip.locked ? (Date.now() < start ? 'Getting ready' : 'Trip in progress') : 'Room open'}</span>
+        <span class="chip">${roomFundingCancelled(trip) ? 'Trip cancelled' : trip.settled ? (trip.shared ? 'Settled on Fuji' : 'Settled') : end <= Date.now() ? 'Trip ended'
+          : trip.locked || !trip.shared ? (Date.now() < start ? 'Getting ready' : 'Trip in progress') : 'Room open'}</span>
         <h1>${userText(trip.name)}</h1>${trip.location ? '<div>' + userText(trip.location) + '</div>' : ''}
       </section>
       ${roomFundBalance(trip)}

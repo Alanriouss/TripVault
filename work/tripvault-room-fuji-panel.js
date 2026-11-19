@@ -125,7 +125,8 @@
     const rate = quote || fx;
     const plan = settlementPlan(trip, rate);
     const settled = trip.settled || vault?.settled;
-    const published = vault && matchesFujiDraft(trip, vault);
+    const published = trip.shared ? vault && matchesFujiDraft(trip, vault) : Boolean(quote);
+    const hasApprovedBills = trip.bills.some(bill => bill.status === 'approved');
     const transfers = plan.transfers.map(transfer => row(
       userText(member(transfer.from).name) + ' → ' + userText(member(transfer.to).name),
       money(transfer.units), vnd(transfer.vnd) + ' equivalent',
@@ -139,13 +140,18 @@
       ${settled || published ? `<span class="chip violet">${settled ? 'Settled' : 'In review'}</span>` : ''}
     </div>
     <div class="stack room-final-split" data-split-trip="${safe(trip.id)}">
-      ${fujiPanel('split', finalSplitReview(trip, plan))}
+      ${trip.shared ? fujiPanel('split', finalSplitReview(trip, plan)) : demoPaymentsPanel(trip, plan)}
       <section class="panel stack split-breakdown">
-        ${!settled ? `<div class="panel-head"><h2>Who pays whom</h2>${transfers && !published ? '<span class="chip">Estimate</span>' : ''}</div>
+        ${!settled && !hasApprovedBills ? `<div>
+          <h2>Nothing to split yet</h2>
+          <p class="subtitle">${trip.bills.length ? 'Review open bills before splitting expenses.' : 'Expenses will appear here after a bill is approved.'}</p>
+          ${btn('Go to Bills', 'navigate', { tone: 'secondary', data: 'data-view="bills"' })}
+        </div>` : ''}
+        ${!settled && hasApprovedBills ? `<div class="panel-head"><h2>Who pays whom</h2>${transfers && !published ? '<span class="chip">Estimate</span>' : ''}</div>
           ${plan.invalid ? '<p class="subtitle">Payment amounts are unavailable.</p>'
             : transfers ? '<div>' + transfers + '</div>' : '<p class="subtitle">No transfers needed yet.</p>'}` : ''}
-        ${finalSplitDetails('expenses', 'Expense breakdown', people)}
-        ${finalSplitDetails('rate', 'Exchange rate', `<p class="subtitle"><strong>${rateStatus}</strong></p><p class="subtitle">${safe(fxLabel(rate))}</p>`)}
+        ${hasApprovedBills ? finalSplitDetails('expenses', 'Expense breakdown', people) : ''}
+        ${finalSplitDetails('rate', 'Exchange rate', `<p class="split-rate-status">${rateStatus}</p><div class="split-rate">${fxRowValue(rate)}</div>`)}
       </section>
     </div>`;
   }
@@ -324,7 +330,7 @@
       </section>`;
     }
     utilities = secondaryActions + utilities + disconnect;
-    return `<section class="panel stack">
+    return `<section class="panel stack trip-settings-panel">
       <div><h2>${section === 'split' ? 'Group payments' : 'Wallet and trip fund'}</h2>
         <p class="subtitle">${trip?.shared ? 'This trip uses test USDC on Avalanche Fuji.' : 'Transactions use test USDC on Avalanche Fuji. Local demo balances are separate.'}</p>
       </div>

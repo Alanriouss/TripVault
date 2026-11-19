@@ -2,7 +2,7 @@
   const GUIDE_CONTENT = {
     vi: {
       title: 'Cách dùng TripVault',
-      subtitle: 'Hướng dẫn tạo phòng, nạp quỹ, chia chi phí và quyết toán an toàn.',
+      subtitle: 'Tạo chuyến đi, nạp quỹ, ghi hóa đơn và quyết toán.',
       language: 'Ngôn ngữ hướng dẫn', close: 'Bắt đầu dùng ngay', skip: 'Bỏ qua', back: 'Quay lại', next: 'Tiếp theo',
       progress: (step, total) => `Bước ${step} / ${total}`,
       steps: [
@@ -20,50 +20,25 @@
           alt: 'Màn hình Your trips và giao diện tạo phòng với các trường tên chuyến, mức nạp và 3 mốc thời gian.',
         },
         {
-          title: 'Bước 2 · Mời thành viên (Invite members)',
-          copy: `<p>Sau khi tạo phòng, chia sẻ phòng cho các thành viên trong nhóm:</p>
-                 <div class="guide-step-card">
-                   <ul style="margin: 0 0 0 18px; padding: 0; line-height: 1.6;">
-                     <li><b>Mã phòng 6 số</b>: Chia sẻ mã 6 số (ví dụ: <code class="room-code-badge">624183</code>), bạn bè chỉ cần bấm <b>Tham gia phòng (Join a room)</b> và nhập mã.</li>
-                     <li><b>Liên kết mời (Invite link)</b>: Bấm <b>Sao chép liên kết mời</b> để gửi qua Zalo, Telegram hoặc tin nhắn.</li>
-                     <li>Thành viên kết nối ví hỗ trợ mạng <b>Avalanche Fuji</b> và ký xác nhận SIWE không mật khẩu.</li>
-                   </ul>
-                 </div>`,
+          title: 'Bước 2 · Mời thành viên',
+          copy: `<p>Gửi mã mời 6 số hoặc sao chép liên kết mời cho bạn bè.</p><p>Mỗi người chọn <b>Tham gia chuyến đi</b>, kết nối ví rồi ký yêu cầu đăng nhập. Trước hạn nạp quỹ, mọi người cần nạp đủ mức tối thiểu.</p>`,
           alt: 'Màn hình hiển thị mã phòng 6 chữ số và nút sao chép liên kết mời thành viên.',
         },
         {
-          title: 'Bước 3 · Làm quen thanh menu chức năng (Sidebar navigation)',
-          copy: `<p>Thanh điều hướng bên trái (hoặc thanh đáy trên Mobile) cung cấp 5 công cụ chính:</p>
-                 <div class="guide-step-card">
-                   <ul style="margin: 0 0 0 18px; padding: 0; line-height: 1.7;">
-                     <li>🏠 <b>Tổng quan (Overview)</b>: Xem mã phòng, tiến độ chuyến đi, số dư quỹ và cài đặt.</li>
-                     <li>👥 <b>Thành viên (People)</b>: Danh sách bạn đồng hành, chi tiết ai đã ứng tiền và ai nợ.</li>
-                     <li>🧾 <b>Hóa đơn (Bills)</b>: Ghi nhận chi tiêu thực tế (VND) với 2 phương thức <b>Chia đều</b> hoặc <b>Chia tùy chỉnh</b>.</li>
-                     <li>⚖️ <b>Quyết toán (Final split)</b>: Tính toán bù trừ công nợ Zero-Sum bảo toàn và quy đổi sang USDC.</li>
-                     <li>💳 <b>Ví & Quỹ (Wallet)</b>: Nạp USDC vào quỹ Avalanche Fuji, rút tiền trước hạn hoặc nhận tiền về ví.</li>
-                   </ul>
-                 </div>`,
+          title: 'Bước 3 · Các mục chính',
+          copy: `<ul><li><b>Tổng quan</b> xem lời mời, tiến độ và số dư quỹ.</li><li><b>Thành viên</b> xem những người cùng đi.</li><li><b>Hóa đơn</b> ghi tiền đã ứng và duyệt phần được chia.</li><li><b>Quyết toán</b> xem ai trả hoặc nhận bao nhiêu.</li><li><b>Ví</b> nạp quỹ, rút trước hạn nạp hoặc nhận số dư sau quyết toán.</li></ul>`,
           alt: 'Thanh điều hướng bên trái hiển thị 5 mục: Overview, People, Bills, Final split, Wallet.',
         },
         {
-          title: 'Bước 4 · Quyết toán & Bắt buộc duyệt (Approve)',
-          copy: `<p>Khi chuyến đi kết thúc, quy trình quyết toán diễn ra minh bạch và an toàn:</p>
-                 <div class="guide-step-card">
-                   <div class="guide-card-tag danger">⚠️ Lưu ý chốt sổ</div>
-                   <ul style="margin: 6px 0 0 18px; padding: 0; line-height: 1.6;">
-                     <li><b>Khóa & duyệt hóa đơn</b>: Hoàn tất phê duyệt các hóa đơn đang chờ.</li>
-                     <li><b>Trưởng nhóm tính tiền</b>: Mở <b>Quyết toán (Final split)</b> để khóa tỷ giá USD/VND và công bố bảng phân bổ.</li>
-                     <li><b>Bắt buộc Approve</b>: <b>Tất cả thành viên phải bấm "Approve" (Xác nhận)</b> số tiền của mình thì hệ thống mới cho phép giải ngân.</li>
-                     <li><b>Thanh toán on-chain</b>: Trưởng nhóm thực hiện lệnh quyết toán; các thành viên vào <b>Ví (Wallet)</b> để rút số dư USDC về ví riêng.</li>
-                   </ul>
-                 </div>`,
+          title: 'Bước 4 · Duyệt và quyết toán',
+          copy: `<p>Hãy xử lý các hóa đơn đang chờ duyệt, yêu cầu sửa hoặc hủy.</p><p>Trưởng nhóm mở <b>Quyết toán</b> để chốt tỷ giá và công bố số tiền. Tất cả thành viên duyệt phần của mình, rồi trưởng nhóm thực hiện quyết toán. Sau đó mỗi người mở <b>Ví</b> để nhận số dư.</p>`,
           alt: 'Màn hình Final split hiển thị bảng quyết toán và các nút Approve xác nhận của thành viên.',
         },
       ],
     },
     en: {
       title: 'How to use TripVault',
-      subtitle: 'Create a room, fund the vault, split expenses, and settle securely.',
+      subtitle: 'Create a trip, add to the shared fund, record bills, and settle.',
       language: 'Guide language', close: 'Get started', skip: 'Skip for now', back: 'Back', next: 'Next',
       progress: (step, total) => `Step ${step} of ${total}`,
       steps: [
@@ -81,43 +56,18 @@
           alt: 'Your trips view with Create a room button and the form showing name, deposit and times.',
         },
         {
-          title: 'Step 2 · Invite group members (Invite members)',
-          copy: `<p>Share the newly created room with your travel companions:</p>
-                 <div class="guide-step-card">
-                   <ul style="margin: 0 0 0 18px; padding: 0; line-height: 1.6;">
-                     <li><b>6-digit room code</b>: Share the code (e.g. <code class="room-code-badge">624183</code>). Members click <b>Join a room</b> and enter it.</li>
-                     <li><b>Copy invite link</b>: One click to copy the link and send via chat or social apps.</li>
-                     <li>Members connect a wallet on <b>Avalanche Fuji</b> and sign a passwordless SIWE challenge to join.</li>
-                   </ul>
-                 </div>`,
+          title: 'Step 2 · Invite members',
+          copy: `<p>Share the six-digit invite code or copy the invite link.</p><p>Each member selects <b>Join a trip</b>, connects a wallet, and signs in. Everyone must add the minimum deposit before the deposit deadline.</p>`,
           alt: 'Room invite card showing 6-digit room code and copy invite link button.',
         },
         {
-          title: 'Step 3 · Navigation menu & Key tools (Sidebar)',
-          copy: `<p>The sidebar navigation (or bottom bar on mobile) provides 5 essential tools:</p>
-                 <div class="guide-step-card">
-                   <ul style="margin: 0 0 0 18px; padding: 0; line-height: 1.7;">
-                     <li>🏠 <b>Overview</b>: Room code, trip progress stepper, vault balance, and settings.</li>
-                     <li>👥 <b>People</b>: Travelers roster, who paid what, who owes, and net positions.</li>
-                     <li>🧾 <b>Bills</b>: Record real-world VND expenses with <b>Equal split</b> or <b>Custom split</b>.</li>
-                     <li>⚖️ <b>Final split</b>: Calculate Zero-Sum balanced debt offsets converted to USDC.</li>
-                     <li>💳 <b>Wallet</b>: Manage Fuji smart contract deposits, early withdrawals, and payouts.</li>
-                   </ul>
-                 </div>`,
+          title: 'Step 3 · Main tools',
+          copy: `<ul><li><b>Overview</b> shows invitations, progress, and the shared fund balance.</li><li><b>People</b> lists your travel companions.</li><li><b>Bills</b> records payments and collects approvals.</li><li><b>Final split</b> shows who pays or receives money.</li><li><b>Wallet</b> adds funds, withdraws before the deposit deadline, and claims the balance after settlement.</li></ul>`,
           alt: 'Sidebar showing 5 navigation tabs: Overview, People, Bills, Final split, Wallet.',
         },
         {
-          title: 'Step 4 · Settlement & Mandatory approvals (Approve)',
-          copy: `<p>Once the journey ends, the settlement process is democratic and transparent:</p>
-                 <div class="guide-step-card">
-                   <div class="guide-card-tag danger">⚠️ Settlement rule</div>
-                   <ul style="margin: 6px 0 0 18px; padding: 0; line-height: 1.6;">
-                     <li><b>Finalize open bills</b>: Ensure all recorded bills are reviewed and approved.</li>
-                     <li><b>Organizer prepares split</b>: Open <b>Final split</b> to lock the USD/VND reference rate and share amounts.</li>
-                     <li><b>Mandatory Approvals</b>: <b>All members must review and click "Approve"</b> on their balance before settlement unlocks.</li>
-                     <li><b>On-chain settlement</b>: Organizer triggers group payments; travelers claim their final USDC balances in <b>Wallet</b>.</li>
-                   </ul>
-                 </div>`,
+          title: 'Step 4 · Review and settle',
+          copy: `<p>Resolve pending bills, suggested changes, and cancellation requests first.</p><p>The organizer opens <b>Final split</b> to lock the rate and share the amounts. Every member approves their amount, then the organizer settles the group. Each member can claim their remaining balance in <b>Wallet</b>.</p>`,
           alt: 'Final split screen showing member balance reviews and approval buttons.',
         },
       ],

@@ -21,9 +21,9 @@
 
   function roomBillStatus(bill) {
     const status = ROOM_BILL_STATUS[bill.status] || 'Waiting for approval';
-    if (bill.status !== 'pending' && bill.status !== 'disputed') return status;
+    if (bill.status !== 'pending' && bill.status !== 'disputed') return ui(status);
     const count = bill.participants.filter(id => bill.approvals.includes(id)).length;
-    return status + ' · ' + count + '/' + bill.participants.length + ' ' + (siteLanguage === 'vi' ? 'đã duyệt' : 'approved');
+    return ui(status + ' · ' + count + '/' + bill.participants.length + ' approved');
   }
 
   function showBillReviewError(message) {
@@ -36,6 +36,7 @@
     const trip = state.trip;
     const bill = trip.bills.find(item => item.id === id);
     if (!bill) return;
+    const demo = demoMode && !trip.shared;
     const reviewable = !trip.settled && !trip.reviewQuote && bill.status !== 'rejected';
     const editable = reviewable && ['pending', 'disputed'].includes(bill.status);
     const canReview = editable && bill.participants.includes(state.actor);
@@ -65,27 +66,34 @@
     }).join('');
     const history = bill.history?.map(item =>
       `<div>${row(userText(item.label), vnd(item.amount), 'Paid by ' + userText(member(item.payer)?.name))}${comments(item.feedback)}</div>`).join('');
-    const splitLabel = bill.splitType === 'custom' ? (siteLanguage === 'vi' ? 'Chia tùy chỉnh' : 'Custom split') : (siteLanguage === 'vi' ? 'Chia đều' : 'Equal split');
+    const splitLabel = ui(bill.splitType === 'custom' ? 'Custom split' : 'Equal split');
+    const percentage = new Intl.NumberFormat(siteLanguage === 'vi' ? 'vi-VN' : 'en-US', {
+      style: 'percent', minimumFractionDigits: 1, maximumFractionDigits: 1,
+    });
     const reviewRows = bill.participants.map(id => {
       const s = shares(bill).find(item => item.id === id);
       const amt = s ? s.amount : 0;
-      const pct = bill.amount ? ` (${((amt / bill.amount) * 100).toFixed(1)}%)` : '';
+      const pct = bill.amount ? ` (${percentage.format(amt / bill.amount)})` : '';
       return row(userText(member(id).name), vnd(amt) + pct,
         bill.autoApprovals?.includes(id) ? 'Automatically approved' : bill.approvals.includes(id) ? 'Approved' : 'Waiting for approval');
     }).join('');
-    const reviewButtons = canReview
+    const reviewButtons = demo
+      ? (!trip.settled && (trip.approvalMode === 'everyone' || state.actor === trip.owner)
+        ? btn(hasApproved ? 'Cancel my approval' : 'Approve bill', hasApproved ? 'revoke-bill' : 'approve-bill',
+          { tone: hasApproved ? 'danger cancel-approval' : '', data: idData }) : '')
+      : canReview
       ? (hasApproved ? '' : btn('Approve bill', 'approve-bill', { data: idData }))
         + btn('Suggest changes', 'bill-feedback', { tone: 'secondary', data: idData })
       : '';
-    const editButton = editable && creator === state.actor ? btn('Edit bill', 'bill-edit', { tone: 'secondary', data: idData }) : '';
-    const cancelButtons = reviewable && voters.includes(state.actor)
+    const editButton = !demo && editable && creator === state.actor ? btn('Edit bill', 'bill-edit', { tone: 'secondary', data: idData }) : '';
+    const cancelButtons = !demo && reviewable && voters.includes(state.actor)
       ? (!votes.includes(state.actor) ? btn(bill.cancellation ? 'Agree to cancel' : 'Disagree and request cancellation', 'bill-cancel-yes',
         { tone: 'danger', data: idData }) : '') +
         (bill.cancellation ? btn('Keep bill', 'bill-cancel-no', { tone: 'secondary', data: idData }) : '')
       : '';
     sheetOpen({ user: bill.label }, roomBillStatus(bill), `<div class="stack" data-bill-review="${id}">
       ${row('Amount paid', vnd(bill.amount), 'Paid by ' + userText(member(bill.payer).name))}
-      <section class="panel"><h3>People sharing this bill (${splitLabel})</h3>${reviewRows}</section>
+      <section class="panel"><h3>${ui('People sharing this bill')} (${splitLabel})</h3>${reviewRows}</section>
       ${bill.status === 'pending' && bill.reviewBy ? `<p class="notice">Automatically approves at ${safe(formatTripTime(bill.reviewBy))} if nobody requests changes or asks to remove it.</p>` : ''}
       ${bill.status === 'approved' ? '<p class="subtitle">This bill has been approved. Suggestions are available while a bill is still being reviewed.</p>' : ''}
       ${suggestions ? `<section class="panel"><h3>Suggested changes</h3>${suggestions}</section>` : ''}
@@ -104,7 +112,7 @@
       <p id="bill-review-error" class="form-error" role="status"></p>
       ${reviewButtons || editButton ? `<div class="bill-actions">${reviewButtons}${editButton}</div>` : ''}
       ${cancelButtons ? `<div class="bill-actions bill-removal-actions${reviewButtons || editButton ? '' : ' solo'}">${cancelButtons}</div>` : ''}
-      ${reviewable ? billSignInButton() : ''}
+      ${reviewable && !demo ? billSignInButton() : ''}
     </div>`);
   }
 

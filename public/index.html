@@ -765,6 +765,11 @@ dialog::backdrop {
 .trip-notification.notif-warning { border-left-color: var(--warning); }
 .trip-notification.notif-success { border-left-color: var(--positive); }
 .trip-notification.notif-info { border-left-color: var(--accent); }
+.trip-notification:not(.unread) {
+  background: var(--page);
+  border-left-color: var(--line-strong);
+}
+.trip-notification:not(.unread) .notif-title { color: var(--muted); }
 .trip-notification .notif-header {
   display: flex;
   align-items: flex-start;
@@ -773,6 +778,12 @@ dialog::backdrop {
   flex-wrap: wrap;
 }
 .trip-notification .notif-title {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -1367,21 +1378,42 @@ dialog::backdrop {
 }
 .bill-badge.status-pending,
 .bill-row.is-pending .bill-badge {
-  background: var(--tint) !important;
-  color: var(--accent-dark) !important;
+  background: #fef3c7;
+  color: #854d0e;
 }
+.bill-status {
+  display: inline-block;
+  margin-top: 5px;
+  padding: 3px 8px;
+  border-radius: 8px;
+  background: var(--page);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+.is-pending .bill-status, .is-disputed .bill-status, .is-cancellation .bill-status {
+  background: #fef3c7;
+  color: #854d0e;
+}
+.is-approved .bill-status { background: var(--positive-bg); color: var(--positive); }
+.is-rejected .bill-status { background: var(--danger-bg); color: var(--danger); }
 .fx-rate-container {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   text-align: right;
 }
+.split-rate .fx-rate-container {
+  align-items: flex-start;
+  text-align: left;
+}
 .fx-rate-primary {
-  font-weight: 700 !important;
+  font-weight: 600;
   color: var(--ink);
-  font-size: 14.5px;
+  font-size: 13px;
   display: block;
 }
+.split-rate-status { font-size: 12px; color: var(--muted); }
 .fx-rate-sub {
   font-weight: 400 !important;
   font-size: 12.5px;
@@ -1459,16 +1491,20 @@ dialog::backdrop {
     overflow-x: clip !important;
   }
   .header-inner {
-    padding: 0 10px !important;
+    padding: 4px 10px !important;
     gap: 6px !important;
     min-height: 58px !important;
     max-width: 100vw !important;
-    overflow-x: hidden !important;
+  }
+  .header .wordmark {
+    flex-shrink: 0;
   }
   .header-actions {
     gap: 6px !important;
-    flex-shrink: 0 !important;
-    max-width: calc(100vw - 44px) !important;
+    flex: 1 1 auto !important;
+    min-width: 0;
+    flex-wrap: wrap;
+    justify-content: flex-end;
   }
   .breadcrumb {
     display: none !important;
@@ -1590,6 +1626,8 @@ dialog.guide-modal .sheet-head .btn {
   flex-shrink: 0 !important;
 }
 dialog.guide-modal .sheet-body {
+  display: block;
+  min-height: 0;
   flex: 1 1 auto !important;
   overflow-y: auto !important;
   overscroll-behavior: contain !important;
@@ -1618,14 +1656,13 @@ dialog.guide-modal .sheet-footer {
   border: 1px solid var(--line);
   box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
   flex-shrink: 0;
-  min-height: 180px;
 }
-.guide-illustration img {
+.guide-illustration > img {
   display: block;
   width: 100%;
-  height: auto;
-  max-height: 220px;
-  object-fit: cover;
+  height: auto !important;
+  max-height: none !important;
+  object-fit: contain;
 }
 .guide-description {
   margin-bottom: 14px;
@@ -1712,9 +1749,6 @@ dialog.guide-modal .sheet-footer {
   }
   dialog.guide-modal .sheet-head {
     padding: 16px 16px 10px !important;
-  }
-  .guide-illustration img {
-    max-height: 160px;
   }
   .guide-actions {
     padding: 10px 16px 14px;
@@ -1837,7 +1871,7 @@ dialog.guide-modal .sheet-footer {
   const LEGACY_KEY = 'tripvault-timelocked-external-v7';
   const USDC_SCALE = 1_000_000;
   const FALLBACK_RATE = {
-    rate: 25640.2, source: 'Xe', updated: '11/11 07:00', live: false,
+    rate: 25640.2, source: 'Xe', updated: '2026-11-11T00:00:00Z', live: false,
   };
   const app = document.getElementById('app');
   const sheet = document.getElementById('sheet');
@@ -2756,7 +2790,8 @@ dialog.guide-modal .sheet-footer {
     const rate = quote || fx;
     const plan = settlementPlan(trip, rate);
     const settled = trip.settled || vault?.settled;
-    const published = vault && matchesFujiDraft(trip, vault);
+    const published = trip.shared ? vault && matchesFujiDraft(trip, vault) : Boolean(quote);
+    const hasApprovedBills = trip.bills.some(bill => bill.status === 'approved');
     const transfers = plan.transfers.map(transfer => row(
       userText(member(transfer.from).name) + ' → ' + userText(member(transfer.to).name),
       money(transfer.units), vnd(transfer.vnd) + ' equivalent',
@@ -2770,13 +2805,18 @@ dialog.guide-modal .sheet-footer {
       ${settled || published ? `<span class="chip violet">${settled ? 'Settled' : 'In review'}</span>` : ''}
     </div>
     <div class="stack room-final-split" data-split-trip="${safe(trip.id)}">
-      ${fujiPanel('split', finalSplitReview(trip, plan))}
+      ${trip.shared ? fujiPanel('split', finalSplitReview(trip, plan)) : demoPaymentsPanel(trip, plan)}
       <section class="panel stack split-breakdown">
-        ${!settled ? `<div class="panel-head"><h2>Who pays whom</h2>${transfers && !published ? '<span class="chip">Estimate</span>' : ''}</div>
+        ${!settled && !hasApprovedBills ? `<div>
+          <h2>Nothing to split yet</h2>
+          <p class="subtitle">${trip.bills.length ? 'Review open bills before splitting expenses.' : 'Expenses will appear here after a bill is approved.'}</p>
+          ${btn('Go to Bills', 'navigate', { tone: 'secondary', data: 'data-view="bills"' })}
+        </div>` : ''}
+        ${!settled && hasApprovedBills ? `<div class="panel-head"><h2>Who pays whom</h2>${transfers && !published ? '<span class="chip">Estimate</span>' : ''}</div>
           ${plan.invalid ? '<p class="subtitle">Payment amounts are unavailable.</p>'
             : transfers ? '<div>' + transfers + '</div>' : '<p class="subtitle">No transfers needed yet.</p>'}` : ''}
-        ${finalSplitDetails('expenses', 'Expense breakdown', people)}
-        ${finalSplitDetails('rate', 'Exchange rate', `<p class="subtitle"><strong>${rateStatus}</strong></p><p class="subtitle">${safe(fxLabel(rate))}</p>`)}
+        ${hasApprovedBills ? finalSplitDetails('expenses', 'Expense breakdown', people) : ''}
+        ${finalSplitDetails('rate', 'Exchange rate', `<p class="split-rate-status">${rateStatus}</p><div class="split-rate">${fxRowValue(rate)}</div>`)}
       </section>
     </div>`;
   }
@@ -2956,7 +2996,7 @@ dialog.guide-modal .sheet-footer {
       </section>`;
     }
     utilities = secondaryActions + utilities + disconnect;
-    return `<section class="panel stack">
+    return `<section class="panel stack trip-settings-panel">
       <div><h2>${section === 'split' ? 'Group payments' : 'Wallet and trip fund'}</h2>
         <p class="subtitle">${trip?.shared ? 'This trip uses test USDC on Avalanche Fuji.' : 'Transactions use test USDC on Avalanche Fuji. Local demo balances are separate.'}</p>
       </div>
@@ -3968,6 +4008,7 @@ dialog.guide-modal .sheet-footer {
 
   function formatFxShortTime(raw) {
     if (!raw) return '';
+    if (!/^\d{4}-\d{2}-\d{2}(?:T|$)/.test(String(raw)) && !/^[A-Za-z]{3},? /.test(String(raw))) return String(raw);
     const d = new Date(raw);
     if (!isNaN(d.getTime())) {
       const pad = n => String(n).padStart(2, '0');
@@ -3982,8 +4023,9 @@ dialog.guide-modal .sheet-footer {
     const shortSource = quote.source ? quote.source.replace(/\s+USD\/VND\s+reference/i, '').replace(/\s+reference/i, '') : '';
     const shortTime = quote.updated ? formatFxShortTime(quote.updated) : '';
     const notLiveLabel = quote.live || quote.historical ? '' : 'not live';
-    const details = [shortSource, shortTime, notLiveLabel].filter(Boolean).join(' · ');
-    return `<span class="fx-rate-container"><strong class="fx-rate-primary">${safe(rate)} VND / USD</strong><span class="fx-rate-sub">${safe(ui(details))}</span></span>`;
+    const details = [shortSource, shortTime, notLiveLabel].filter(Boolean)
+      .map(detail => `<span class="fx-rate-sub">${safe(ui(detail))}</span>`).join('');
+    return `<span class="fx-rate-container"><strong class="fx-rate-primary">${safe(rate)} VND / USD</strong>${details}</span>`;
   }
 
   function isRoomOrganizer(trip) {
@@ -4164,6 +4206,7 @@ dialog.guide-modal .sheet-footer {
         ${avatar(profile)}
         <span class="trip-profile-name" translate="no" title="${safe(profile.name)}">${safe(profile.name)}</span>
         ${canEditRoomDisplayName(trip) ? btn('Edit my name', 'room-rename-member', { tone: 'soft rename-member' }) : ''}
+        ${demoMode && !trip.shared ? btn('Switch demo member', 'switch-member', { tone: 'soft rename-member' }) : ''}
       </div>` : ''}
     </div>`;
   }
@@ -4173,7 +4216,7 @@ dialog.guide-modal .sheet-footer {
       <div class="panel-head"><h2>Members</h2><span class="chip">${trip.members.length} of 12</span></div>
       ${trip.members.map(item => `<div class="row">
         <span class="row-label">${avatar(item)}<span><span class="row-name">${userText(item.name)}${item.id === state.actor ? ' · You' : ''}</span>
-        <span class="row-sub room-wallet-address">${safe(item.address)}</span></span></span>
+        ${item.address ? '<span class="row-sub room-wallet-address">' + safe(item.address) + '</span>' : ''}</span></span>
         ${item.id === trip.owner ? '<span class="chip violet">Organizer</span>' : ''}
       </div>`).join('')}
     </section>`;
@@ -4186,8 +4229,8 @@ dialog.guide-modal .sheet-footer {
     const deadline = Math.min(start, end);
     return `<div class="stack">
       <section class="hero">
-        <span class="chip">${roomFundingCancelled(trip) ? 'Trip cancelled' : trip.settled ? 'Settled on Fuji' : end <= Date.now() ? 'Trip ended'
-          : trip.locked ? (Date.now() < start ? 'Getting ready' : 'Trip in progress') : 'Room open'}</span>
+        <span class="chip">${roomFundingCancelled(trip) ? 'Trip cancelled' : trip.settled ? (trip.shared ? 'Settled on Fuji' : 'Settled') : end <= Date.now() ? 'Trip ended'
+          : trip.locked || !trip.shared ? (Date.now() < start ? 'Getting ready' : 'Trip in progress') : 'Room open'}</span>
         <h1>${userText(trip.name)}</h1>${trip.location ? '<div>' + userText(trip.location) + '</div>' : ''}
       </section>
       ${roomFundBalance(trip)}
@@ -4558,6 +4601,7 @@ function roomFundingShortfalls(trip, funding, draft) {
     const funding = getDisplayedFunding(trip);
     const balances = funding?.failed ? null : funding?.balances ?? currentVault()?.balances;
     let value = 'Fund not set up';
+    if (!trip.shared) value = money(Object.values(trip.depositUnits || {}).reduce((sum, units) => sum + units, 0));
     if (trip.fuji?.address) {
       value = funding?.failed ? 'Could not verify balance' : 'Checking balance…';
       if (balances) {
@@ -4570,7 +4614,7 @@ function roomFundingShortfalls(trip, funding, draft) {
       }
     }
     return `<section class="panel fund-summary" aria-labelledby="fund-summary-title">
-      <div><h2 id="fund-summary-title">Trip fund balance</h2><p class="subtitle">Total held on Avalanche Fuji</p></div>
+      <div><h2 id="fund-summary-title">Trip fund balance</h2><p class="subtitle">${trip.shared ? 'Total held on Avalanche Fuji' : 'Simulated trip fund balance'}</p></div>
       <strong>${safe(value)}</strong>
     </section>`;
   }
@@ -4671,6 +4715,7 @@ function roomFundingShortfalls(trip, funding, draft) {
     const reminder = rooms.reminders.find(item => item.id === id);
     const trip = reminder && rooms.list.get(reminder.roomId);
     if (!trip) return;
+    markRoomNotificationRead(trip.id + ':top-up:' + id);
     selectTrip(trip);
     state.view = 'wallet';
     render();
@@ -4727,6 +4772,7 @@ function roomFundingShortfalls(trip, funding, draft) {
   const TRIP_PROGRESS_STEPS = ['Set up', 'Add funds', 'Record bills', 'Final payments', 'Done'];
 
   function tripProgress(trip) {
+    if (demoMode && !trip.shared) return demoTripProgress(trip);
     const vault = currentVault();
     const funding = getDisplayedFunding(trip);
     const organizer = isRoomOrganizer(trip);
@@ -4873,9 +4919,9 @@ function roomFundingShortfalls(trip, funding, draft) {
 
   function roomBillStatus(bill) {
     const status = ROOM_BILL_STATUS[bill.status] || 'Waiting for approval';
-    if (bill.status !== 'pending' && bill.status !== 'disputed') return status;
+    if (bill.status !== 'pending' && bill.status !== 'disputed') return ui(status);
     const count = bill.participants.filter(id => bill.approvals.includes(id)).length;
-    return status + ' · ' + count + '/' + bill.participants.length + ' ' + (siteLanguage === 'vi' ? 'đã duyệt' : 'approved');
+    return ui(status + ' · ' + count + '/' + bill.participants.length + ' approved');
   }
 
   function showBillReviewError(message) {
@@ -4888,6 +4934,7 @@ function roomFundingShortfalls(trip, funding, draft) {
     const trip = state.trip;
     const bill = trip.bills.find(item => item.id === id);
     if (!bill) return;
+    const demo = demoMode && !trip.shared;
     const reviewable = !trip.settled && !trip.reviewQuote && bill.status !== 'rejected';
     const editable = reviewable && ['pending', 'disputed'].includes(bill.status);
     const canReview = editable && bill.participants.includes(state.actor);
@@ -4917,27 +4964,34 @@ function roomFundingShortfalls(trip, funding, draft) {
     }).join('');
     const history = bill.history?.map(item =>
       `<div>${row(userText(item.label), vnd(item.amount), 'Paid by ' + userText(member(item.payer)?.name))}${comments(item.feedback)}</div>`).join('');
-    const splitLabel = bill.splitType === 'custom' ? (siteLanguage === 'vi' ? 'Chia tùy chỉnh' : 'Custom split') : (siteLanguage === 'vi' ? 'Chia đều' : 'Equal split');
+    const splitLabel = ui(bill.splitType === 'custom' ? 'Custom split' : 'Equal split');
+    const percentage = new Intl.NumberFormat(siteLanguage === 'vi' ? 'vi-VN' : 'en-US', {
+      style: 'percent', minimumFractionDigits: 1, maximumFractionDigits: 1,
+    });
     const reviewRows = bill.participants.map(id => {
       const s = shares(bill).find(item => item.id === id);
       const amt = s ? s.amount : 0;
-      const pct = bill.amount ? ` (${((amt / bill.amount) * 100).toFixed(1)}%)` : '';
+      const pct = bill.amount ? ` (${percentage.format(amt / bill.amount)})` : '';
       return row(userText(member(id).name), vnd(amt) + pct,
         bill.autoApprovals?.includes(id) ? 'Automatically approved' : bill.approvals.includes(id) ? 'Approved' : 'Waiting for approval');
     }).join('');
-    const reviewButtons = canReview
+    const reviewButtons = demo
+      ? (!trip.settled && (trip.approvalMode === 'everyone' || state.actor === trip.owner)
+        ? btn(hasApproved ? 'Cancel my approval' : 'Approve bill', hasApproved ? 'revoke-bill' : 'approve-bill',
+          { tone: hasApproved ? 'danger cancel-approval' : '', data: idData }) : '')
+      : canReview
       ? (hasApproved ? '' : btn('Approve bill', 'approve-bill', { data: idData }))
         + btn('Suggest changes', 'bill-feedback', { tone: 'secondary', data: idData })
       : '';
-    const editButton = editable && creator === state.actor ? btn('Edit bill', 'bill-edit', { tone: 'secondary', data: idData }) : '';
-    const cancelButtons = reviewable && voters.includes(state.actor)
+    const editButton = !demo && editable && creator === state.actor ? btn('Edit bill', 'bill-edit', { tone: 'secondary', data: idData }) : '';
+    const cancelButtons = !demo && reviewable && voters.includes(state.actor)
       ? (!votes.includes(state.actor) ? btn(bill.cancellation ? 'Agree to cancel' : 'Disagree and request cancellation', 'bill-cancel-yes',
         { tone: 'danger', data: idData }) : '') +
         (bill.cancellation ? btn('Keep bill', 'bill-cancel-no', { tone: 'secondary', data: idData }) : '')
       : '';
     sheetOpen({ user: bill.label }, roomBillStatus(bill), `<div class="stack" data-bill-review="${id}">
       ${row('Amount paid', vnd(bill.amount), 'Paid by ' + userText(member(bill.payer).name))}
-      <section class="panel"><h3>People sharing this bill (${splitLabel})</h3>${reviewRows}</section>
+      <section class="panel"><h3>${ui('People sharing this bill')} (${splitLabel})</h3>${reviewRows}</section>
       ${bill.status === 'pending' && bill.reviewBy ? `<p class="notice">Automatically approves at ${safe(formatTripTime(bill.reviewBy))} if nobody requests changes or asks to remove it.</p>` : ''}
       ${bill.status === 'approved' ? '<p class="subtitle">This bill has been approved. Suggestions are available while a bill is still being reviewed.</p>' : ''}
       ${suggestions ? `<section class="panel"><h3>Suggested changes</h3>${suggestions}</section>` : ''}
@@ -4956,7 +5010,7 @@ function roomFundingShortfalls(trip, funding, draft) {
       <p id="bill-review-error" class="form-error" role="status"></p>
       ${reviewButtons || editButton ? `<div class="bill-actions">${reviewButtons}${editButton}</div>` : ''}
       ${cancelButtons ? `<div class="bill-actions bill-removal-actions${reviewButtons || editButton ? '' : ' solo'}">${cancelButtons}</div>` : ''}
-      ${reviewable ? billSignInButton() : ''}
+      ${reviewable && !demo ? billSignInButton() : ''}
     </div>`);
   }
 
@@ -5133,7 +5187,12 @@ function roomFundingShortfalls(trip, funding, draft) {
       sender: reminder.sender, receivedAt: reminder.receivedAt,
     }));
 
-    const notices = [];
+    const notices = trip.members.slice(trip.members.indexOf(member) + 1)
+      .filter(person => Number.isSafeInteger(person.joinedAt) && person.joinedAt > 0)
+      .map(person => ({
+        id: 'member-joined:' + person.id, heading: 'New member joined',
+        sender: person.name, receivedAt: person.joinedAt, view: 'people',
+      }));
     if (roomFundingCancelled(trip)) {
       notices.push({ id: 'cancelled', heading: 'Trip cancelled', view: 'wallet',
         receivedAt: Date.parse(trip.depositDeadline),
@@ -5173,10 +5232,32 @@ function roomFundingShortfalls(trip, funding, draft) {
     }));
   }
 
+  function sampleNotificationTrip() {
+    const trip = state.trip;
+    return trip?.id === 'judges-sample' && !trip.shared ? trip : null;
+  }
+
+  function notificationAccount() {
+    return sampleNotificationTrip() ? 'demo:' + state.actor : rooms.account;
+  }
+
+  function sampleNotifications(trip) {
+    const sample = { roomId: trip.id, roomName: trip.name };
+    const prefix = trip.id + ':' + trip.endTime + ':';
+    return [
+      { ...sample, id: prefix + 'ended', heading: 'Trip ended', view: 'split',
+        receivedAt: Date.parse(trip.endTime), message: 'The trip has ended. Review any bills that are still open.' },
+      { ...sample, id: prefix + 'funded', heading: 'Minimum deposits reached', view: 'wallet',
+        receivedAt: Date.parse(trip.startTime) },
+    ];
+  }
+
   function readRoomNotifications() {
-    if (!rooms.account) return [];
+    if (!notificationAccount()) return [];
     const dismissed = dismissedRoomNotifications();
-    const items = [...rooms.list.values()].flatMap(tripNotificationEntries).filter(item => !dismissed.has(item.id));
+    const sample = sampleNotificationTrip();
+    const entries = sample ? sampleNotifications(sample) : [...rooms.list.values()].flatMap(tripNotificationEntries);
+    const items = entries.filter(item => !dismissed.has(item.id));
     return items.sort((a, b) => (b.receivedAt || 0) - (a.receivedAt || 0) || a.id.localeCompare(b.id));
   }
 
@@ -5185,7 +5266,7 @@ function roomFundingShortfalls(trip, funding, draft) {
   }
 
   function dismissedRoomNotifications() {
-    const key = 'tripvault-notifications-dismissed:' + rooms.account;
+    const key = 'tripvault-notifications-dismissed:' + notificationAccount();
     if (key !== notificationDismissedKey) {
       notificationDismissedKey = key;
       const saved = readStorage(key);
@@ -5195,7 +5276,7 @@ function roomFundingShortfalls(trip, funding, draft) {
   }
 
   function clearRoomNotifications() {
-    if (!rooms.account || !sheet.open) return;
+    if (!notificationAccount() || !sheet.open) return;
     const items = readRoomNotifications();
     if (!items.length) return;
     const dismissed = dismissedRoomNotifications();
@@ -5207,13 +5288,13 @@ function roomFundingShortfalls(trip, funding, draft) {
   }
 
   window.addEventListener('storage', event => {
-    if (!rooms.account || event.key !== notificationDismissedKey) return;
+    if (!notificationAccount() || event.key !== notificationDismissedKey) return;
     notificationDismissedKey = undefined;
     if (!refreshNotificationSheet()) render();
   });
 
   function seenRoomNotifications() {
-    const key = 'tripvault-notifications-read:' + rooms.account;
+    const key = 'tripvault-notifications-read:' + notificationAccount();
     if (key !== notificationReadKey) {
       notificationReadKey = key;
       const saved = readStorage(key);
@@ -5231,7 +5312,7 @@ function roomFundingShortfalls(trip, funding, draft) {
   }
 
   function roomBell() {
-    if (!rooms.account) return '';
+    if (!notificationAccount()) return '';
     const seen = seenRoomNotifications();
     const unreadCount = readRoomNotifications().filter(item => !seen.has(item.id)).length;
     const unread = unreadCount > 0;
@@ -5311,12 +5392,13 @@ function roomFundingShortfalls(trip, funding, draft) {
       const context = [item.roomName, item.sender, item.title].filter(Boolean).map(userText).join(' · ');
       const category = notificationCategory(item);
       const isUnread = !seen.has(item.id);
-      return `<article class="trip-notification ${category}${isUnread ? ' unread' : ''}">
+      return `<article class="trip-notification ${category}${isUnread ? ' unread' : ''}"
+        data-notification-id="${safe(item.id)}" data-act="mark-room-notification-read" data-id="${safe(item.id)}">
         <div class="notif-header">
-          <span class="notif-title">
+          <button type="button" class="notif-title" data-act="mark-room-notification-read" data-id="${safe(item.id)}">
             ${isUnread ? '<span class="notif-dot" aria-hidden="true"></span>' : ''}
             <strong>${item.heading}</strong>
-          </span>
+          </button>
           ${notificationTime(item.receivedAt)}
         </div>
         ${context ? '<span class="notif-context">' + context + '</span>' : ''}
@@ -5327,27 +5409,26 @@ function roomFundingShortfalls(trip, funding, draft) {
   }
 
   function openRoomNotifications() {
-    if (!rooms.account) return;
+    if (!notificationAccount()) return;
     const seen = seenRoomNotifications();
     const items = readRoomNotifications();
     const markup = roomNotificationsBody(state.trip, items, seen);
     sheetOpen('Notifications', 'Your trips',
-      '<div class="stack" data-room-notifications>' + markup + '</div>' + billSignInButton());
+      '<div class="stack" data-room-notifications>' + markup + '</div>' + (sampleNotificationTrip() ? '' : billSignInButton()));
     const panel = sheet.querySelector('[data-room-notifications]');
-    if (panel) panel.notificationMarkup = roomNotificationsBody(state.trip, items, markTripNotificationsRead(items));
-    else markTripNotificationsRead(items);
+    if (panel) panel.notificationMarkup = markup;
     render();
-    syncRooms();
+    if (!sampleNotificationTrip()) syncRooms();
   }
 
-  function markTripNotificationsRead(items) {
+  function markRoomNotificationRead(id) {
     const seen = seenRoomNotifications();
-    if (!items.some(item => !seen.has(item.id))) return seen;
-    items.forEach(item => seen.add(item.id));
+    if (!id || seen.has(id)) return;
+    seen.add(id);
     try {
       localStorage.setItem(notificationReadKey, JSON.stringify([...seen].slice(-2000)));
     } catch {}
-    return seen;
+    if (!refreshNotificationSheet()) render();
   }
 
   function refreshNotificationSheet(items = readRoomNotifications()) {
@@ -5357,7 +5438,7 @@ function roomFundingShortfalls(trip, funding, draft) {
     if (panel.notificationMarkup !== markup) {
       panel.innerHTML = markup;
       localizeUI(panel);
-      panel.notificationMarkup = roomNotificationsBody(state.trip, items, markTripNotificationsRead(items));
+      panel.notificationMarkup = markup;
       render();
     }
     return true;
@@ -5389,22 +5470,136 @@ function roomFundingShortfalls(trip, funding, draft) {
   function openRoomNotification(id) {
     const item = readRoomNotifications().find(notification => notification.id === id);
     if (!item) return openRoomNotifications();
-    const targetTrip = rooms.list.get(item.roomId);
+    const sample = sampleNotificationTrip();
+    const targetTrip = sample?.id === item.roomId ? sample : rooms.list.get(item.roomId);
     if (!targetTrip) return;
+    markRoomNotificationRead(id);
     selectTrip(targetTrip);
     state.view = item.view || 'bills';
     render();
     window.scrollTo(0, 0);
-    if (['wallet', 'split'].includes(item.view)) refreshVault();
-    if (item.view === 'split') refreshRoomFunding();
+    if (targetTrip.shared && ['wallet', 'split'].includes(item.view)) refreshVault();
+    if (targetTrip.shared && item.view === 'split') refreshRoomFunding();
     if (item.billId) roomBillDetail(item.billId);
+  }
+
+  // Demo uses the shared trip components, with local balances and actions.
+  function demoTripProgress(trip) {
+    if (trip.settled) return { step: 4, title: 'Group payments complete',
+      message: 'Open Wallet to send any remaining balance to your wallet.', view: 'wallet' };
+    if (Date.now() < Date.parse(trip.startTime)) return { step: 1, title: 'Check group deposits',
+      message: 'Checking who has added the minimum.', view: 'wallet' };
+    if (Date.now() < roomEndTime(trip)) return { step: 2, title: 'Record shared expenses',
+      message: 'Add payments made outside TripVault as bills.', view: 'bills' };
+    if (hasPendingBills(trip)) return { step: 3, title: 'Finish bill reviews',
+      message: 'Finish open bill reviews before making final payments.', view: 'bills' };
+    return { step: 3, title: trip.reviewQuote ? 'Check final payments' : 'Prepare final payments',
+      message: trip.reviewQuote ? 'Open Final split to check the latest approvals and top-ups.'
+        : 'Open Final split to calculate and share what each person owes.', view: 'split' };
+  }
+
+  function demoWallet(trip) {
+    const myUnits = depositUnits(trip, state.actor);
+    const funding = Date.now() < Date.parse(trip.startTime);
+    return `<div class="stack">
+      ${roomFundBalance(trip)}
+      <section class="panel stack trip-settings-panel">
+        <div><h2>Wallet and trip fund</h2><p class="subtitle">These are simulated member balances, not real connected wallets.</p></div>
+        ${row('Your balance in the trip fund', money(myUnits), userText(member(state.actor).name))}
+        ${row('Minimum each person adds', money(trip.minimumUnits))}
+        ${row('Trip start', formatTripTimeSpacious(trip.startTime))}
+        ${row('Trip end', formatTripTimeSpacious(trip.endTime))}
+        <div class="inline wallet-actions">
+          ${btn('Deposit USDC', 'deposit', { disabled: trip.settled })}
+          ${btn('Early withdrawal', 'withdraw', { tone: 'secondary', disabled: !funding || myUnits <= 0 })}
+          ${trip.settled ? btn('Claim refund', 'claim', { disabled: myUnits <= 0 }) : ''}
+        </div>
+        <p class="subtitle">Deposits lock after the start time. You can still top up. Early withdrawal is only possible before the start.</p>
+      </section>
+      <section class="panel"><h2>Funding progress</h2>
+        ${trip.members.map(person => row(userText(person.name), money(depositUnits(trip, person.id)),
+          depositUnits(trip, person.id) >= trip.minimumUnits ? 'Minimum reached' : 'Below minimum')).join('')}
+      </section>
+      ${demoMemberControls()}
+    </div>`;
+  }
+
+  function demoMemberControls() {
+    return `<section class="panel stack"><div><h2>Demo member</h2>
+      <p class="subtitle">These are simulated member balances, not real connected wallets.</p></div>
+      ${row('Previewing as', userText(member(state.actor).name))}
+      <div class="inline">${btn('Switch demo member', 'switch-member', { tone: 'secondary' })}
+        ${btn('Reset demo', 'judge-demo-sample', { tone: 'ghost' })}</div>
+    </section>`;
+  }
+
+  function demoPaymentsPanel(trip, plan) {
+    const pending = hasPendingBills(trip);
+    const quote = trip.reviewQuote;
+    const approved = trip.splitApprovals.includes(state.actor);
+    const organizer = state.actor === trip.owner;
+    const ended = Date.now() >= roomEndTime(trip);
+    let message = '';
+    let actions = '';
+    let utilities = '';
+    if (trip.settled) {
+      message = '<p class="subtitle">Demo settlement completed. Claim remaining USDC in Wallet.</p>';
+      actions = btn('Open Wallet', 'navigate', { data: 'data-view="wallet"' });
+    } else if (!ended) {
+      message = '<p class="subtitle">Group payments can start after the trip ends.</p>';
+    } else if (pending) {
+      message = '<p class="subtitle">Finish open bill reviews before making final payments.</p>';
+      actions = btn('Review open bills', 'navigate', { data: 'data-view="bills"' });
+    } else if (!quote) {
+      message = '<p class="subtitle">The organizer prepares the split and locks the rate for approval.</p>';
+      if (organizer) actions = btn('Calculate final amounts', 'prepare-split', { disabled: preparingTrip === trip });
+    } else {
+      message = `<p class="subtitle">${trip.splitApprovals.length} of ${trip.members.length} approved.</p>`;
+      actions = approved ? '' : btn('Approve my amount', 'approve-split', { disabled: plan.invalid });
+      if (approved) utilities += btn('Undo my approval', 'revoke-split', { tone: 'danger cancel-approval' });
+      const shortfall = plan.shortfalls.find(person => person.id === state.actor);
+      if (shortfall) actions += btn('Top up ' + money(shortfall.units), 'quick-top-up', {
+        data: `data-trip="${safe(trip.id)}" data-member="${safe(state.actor)}" data-revision="${trip.revision}" data-units="${shortfall.units}"`,
+      });
+      if (organizer) {
+        actions += btn('Make group payments', 'settle', { disabled: !canSettle(trip, plan) });
+        utilities += btn('Start a new review', 'reopen-split', { tone: 'ghost' });
+      }
+      if (plan.shortfalls.length) message += `<p class="subtitle">Top up the following balances before settlement.</p>
+        ${plan.shortfalls.map(person => row(userText(member(person.id).name), money(person.units))).join('')}`;
+      if (plan.invalid) message += '<p class="notice warn">The current transfers cannot be represented in USDC. Reopen the split and check the rate before settling.</p>';
+    }
+    const me = stats(trip).find(person => person.id === state.actor);
+    return `<section class="panel stack split-payment" aria-labelledby="split-payment-title">
+      <h2 id="split-payment-title">Group payments</h2>
+      ${quote ? `<div class="split-amount"><span>Your amount</span><strong>${vnd(me.net)}</strong></div>` : ''}
+      ${message}
+      ${actions ? '<div class="inline split-actions">' + actions + '</div>' : ''}
+      ${quote ? finalSplitDetails('approvals', 'Member approvals', trip.members.map(person => row(userText(person.name),
+        trip.splitApprovals.includes(person.id) ? 'Approved' : 'Waiting for approval')).join('')) : ''}
+      ${utilities ? '<div class="inline split-utilities">' + utilities + '</div>' : ''}
+      <p class="subtitle">These are simulated member balances, not real connected wallets.</p>
+    </section>`;
   }
 
   const SITE_LANGUAGE_KEY = 'tripvault-site-language';
   let siteLanguage = readStorage(SITE_LANGUAGE_KEY) === 'vi' ? 'vi' : 'en';
   const vietnameseUI = new Map([
+    ['Simulated trip fund balance', 'Số dư mô phỏng của quỹ chuyến đi'],
+    ['Bill recorded. Waiting for approval.', 'Đã lưu hóa đơn, đang chờ duyệt.'],
+    ['Shared trip fund: everyone deposits first, you log bills as you go, and the app settles once at the end.', 'Quỹ chung chuyến đi: mọi người nạp quỹ trước, ghi hóa đơn trong chuyến đi và quyết toán một lần khi kết thúc.'],
     ['Language', 'Ngôn ngữ'],
-    ['Rooms', 'Phòng chuyến đi'],
+    ['Shared Trip Fund', 'Quỹ chung chuyến đi'],
+    ['Sign in', 'Đăng nhập'],
+    ['Explore demo trip', 'Khám phá chuyến đi mẫu'],
+    ['Open demo trip', 'Mở chuyến đi mẫu'],
+    ['Paid outside', 'Đã ứng tiền bên ngoài'],
+
+    ['Reference rate', 'Tỷ giá tham chiếu'],
+    ['Reference rate unavailable', 'Chưa có tỷ giá tham chiếu'],
+    ['Fixed demo rate', 'Tỷ giá cố định của bản thử'],
+
+    ['Rooms', 'Chuyến đi'],
     ['Skip to content', 'Chuyển đến nội dung'],
     ['Choose a wallet', 'Chọn ví'],
     ['Connect the wallet you will use for this trip', 'Kết nối ví bạn sẽ dùng cho chuyến đi'],
@@ -5418,9 +5613,29 @@ function roomFundingShortfalls(trip, funding, draft) {
     ['Your trips', 'Chuyến đi của bạn'],
     ['All trips', 'Tất cả chuyến đi'],
     ['Create a room or join one with your wallet.', 'Tạo phòng hoặc dùng ví để tham gia phòng có sẵn.'],
-    ['Create a room', 'Tạo phòng'],
-    ['New room', 'Phòng mới'],
-    ['Join a room', 'Tham gia phòng'],
+    ['Create a trip or join one with your wallet.', 'Tạo chuyến đi hoặc dùng ví để tham gia chuyến đi có sẵn.'],
+    ['UI Preview', 'Xem trước giao diện'],
+    ['Đà Lạt weekend · Demo Room', 'Cuối tuần Đà Lạt · Phòng mẫu'],
+    ['Experience the full group expense workflow: funding progress, bills, approvals, and settlements.', 'Trải nghiệm quản lý chi phí nhóm qua các bước nạp quỹ, ghi hóa đơn, duyệt và quyết toán.'],
+    ['Start a fresh sample', 'Tạo lại chuyến đi mẫu'],
+    ['Using a real wallet?', 'Bạn đang dùng ví thật?'],
+    ['Open shared-trip mode', 'Mở chế độ chuyến đi dùng ví'],
+    ['Reset demo', 'Đặt lại bản thử'],
+    ['Fuji testnet and local demo', 'Mạng thử nghiệm Fuji và bản mô phỏng trên máy'],
+    ['Demo member', 'Thành viên mô phỏng'],
+    ['Previewing as', 'Đang xem với vai trò'],
+    ['Switch demo member', 'Đổi thành viên mô phỏng'],
+    ['Minimum reached', 'Đã đủ mức nạp tối thiểu'],
+    ['Refresh market reference', 'Cập nhật tỷ giá tham chiếu'],
+    ['These are simulated member balances, not real connected wallets.', 'Số dư thành viên được mô phỏng trong bản thử.'],
+    ['USDC recipients are calculated automatically in Final split.', 'Người nhận USDC được tính tự động trong mục Quyết toán.'],
+    ['Deposit USDC into the fund', 'Nạp USDC vào quỹ'],
+    ['Log bills and approve them', 'Ghi hóa đơn và duyệt'],
+    ['Settle everyone in one step', 'Quyết toán cho cả nhóm trong một lần'],
+
+    ['Create a room', 'Tạo chuyến đi'],
+    ['New room', 'Chuyến đi mới'],
+    ['Join a room', 'Tham gia chuyến đi'],
     ['Sign in to rooms', 'Đăng nhập vào phòng'],
     ['Sign in again', 'Đăng nhập lại'],
     ['Your room sign-in expired.', 'Phiên đăng nhập vào phòng đã hết hạn.'],
@@ -5492,7 +5707,7 @@ function roomFundingShortfalls(trip, funding, draft) {
     ['Copy invite link', 'Sao chép liên kết mời'],
     ['Invite link copied.', 'Đã sao chép liên kết mời.'],
     ['Copy the selected invite link.', 'Hãy sao chép liên kết mời đang được chọn.'],
-    ['Room code', 'Mã phòng'],
+    ['Room code', 'Mã mời'],
     ['Six-digit room code', 'Mã phòng 6 số'],
     ['This invitation is invalid.', 'Lời mời này không hợp lệ.'],
     ['Trip settings', 'Cài đặt chuyến đi'],
@@ -5595,6 +5810,8 @@ function roomFundingShortfalls(trip, funding, draft) {
     ['Paid outside', 'Đã trả bên ngoài ứng dụng'],
     ['Bills are records of real-world payments, not payments from a shared crypto vault.', 'Hóa đơn ghi lại các khoản thành viên đã ứng tiền bên ngoài TripVault.'],
     ['Waiting for approval', 'Đang chờ duyệt'],
+    ['Starts', 'Bắt đầu'],
+    ['Ends', 'Kết thúc'],
     ['Approved', 'Đã duyệt'],
     ['Awaiting approval', 'Chờ duyệt'],
     ['Automatically approved', 'Đã tự động duyệt'],
@@ -5660,6 +5877,18 @@ function roomFundingShortfalls(trip, funding, draft) {
     ['The current transfers cannot be represented in USDC. Reopen the split and check the rate before settling.', 'Chưa thể quy đổi các khoản chuyển sang USDC. Mở lại quyết toán và kiểm tra tỷ giá.'],
     ['In review', 'Đang duyệt'],
     ['Draft', 'Bản nháp'],
+    ['Draft · Pending approvals', 'Bản nháp · Chờ duyệt'],
+    ['Nothing to split yet', 'Chưa có chi phí để chia'],
+    ['Review open bills before splitting expenses.', 'Hãy xem các hóa đơn còn chờ duyệt trước khi chia chi phí.'],
+    ['Expenses will appear here after a bill is approved.', 'Chi phí sẽ hiện ở đây sau khi có hóa đơn được duyệt.'],
+    ['Go to Bills', 'Mở Hóa đơn'],
+    ['New member joined', 'Có thành viên mới vào phòng'],
+    ['Demo vault', 'Quỹ mô phỏng'],
+    ['Total deposited', 'Tổng đã nạp'],
+    ['Your deposited balance', 'Số dư bạn đã nạp'],
+    ['Early withdrawal', 'Rút trước hạn'],
+    ['Deposits lock after the start time. You can still top up. Early withdrawal is only possible before the start.', 'Quỹ khóa rút khi chuyến đi bắt đầu. Bạn vẫn có thể nạp thêm và chỉ có thể rút trước giờ bắt đầu.'],
+    ['Trip ended · Ready to settle', 'Chuyến đi đã kết thúc · Có thể quyết toán'],
     ['Settled', 'Đã quyết toán'],
     ['Historical rate', 'Tỷ giá tại thời điểm chốt'],
     ['Locked for approval', 'Đã khóa tỷ giá để duyệt'],
@@ -5873,6 +6102,7 @@ function roomFundingShortfalls(trip, funding, draft) {
   ]);
 
   const vietnamesePatterns = [
+    [/^(\d+) people$/, (_, count) => count + ' người'],
     [/^(\d+) members?( · (Shared room|Local demo))?$/, (_, count, suffix, kind) => count + ' thành viên' + (suffix ? ' · ' + ui(kind) : '')],
     [/^(\d+) of (\d+)$/, (_, count, total) => count + '/' + total],
     [/^(\d+) recorded · Paid outside the app$/, (_, count) => count + ' hóa đơn · Đã trả bên ngoài ứng dụng'],
@@ -5894,7 +6124,7 @@ function roomFundingShortfalls(trip, funding, draft) {
     [/^(\d+) of (\d+) agreed to remove this bill\.$/, (_, count, total) => count + '/' + total + ' người đã đồng ý bỏ hóa đơn này.'],
     [/^Automatically approves at (.+) if nobody requests changes or asks to remove it\.$/, (_, date) => 'Hóa đơn tự duyệt lúc ' + date + ' nếu không ai yêu cầu sửa hoặc bỏ.'],
     [/^Remind (.+) to top up$/, (_, name) => 'Nhắc ' + name + ' nạp thêm'],
-    [/^Room code (.+)$/, (_, code) => 'Mã phòng ' + code],
+    [/^Room code (.+)$/, (_, code) => 'Mã mời ' + code],
     [/^Delete trip (.+)$/, (_, name) => 'Xóa chuyến đi ' + name],
     [/^Top up ([\d.,]+ USDC)$/, (_, amount) => 'Nạp thêm ' + amount],
     [/^Send ([\d.,]+ USDC) to my wallet$/, (_, amount) => 'Chuyển ' + amount + ' về ví của tôi'],
@@ -6307,7 +6537,7 @@ function roomFundingShortfalls(trip, funding, draft) {
   const GUIDE_CONTENT = {
     vi: {
       title: 'Cách dùng TripVault',
-      subtitle: 'Hướng dẫn tạo phòng, nạp quỹ, chia chi phí và quyết toán an toàn.',
+      subtitle: 'Tạo chuyến đi, nạp quỹ, ghi hóa đơn và quyết toán.',
       language: 'Ngôn ngữ hướng dẫn', close: 'Bắt đầu dùng ngay', skip: 'Bỏ qua', back: 'Quay lại', next: 'Tiếp theo',
       progress: (step, total) => `Bước ${step} / ${total}`,
       steps: [
@@ -6325,50 +6555,25 @@ function roomFundingShortfalls(trip, funding, draft) {
           alt: 'Màn hình Your trips và giao diện tạo phòng với các trường tên chuyến, mức nạp và 3 mốc thời gian.',
         },
         {
-          title: 'Bước 2 · Mời thành viên (Invite members)',
-          copy: `<p>Sau khi tạo phòng, chia sẻ phòng cho các thành viên trong nhóm:</p>
-                 <div class="guide-step-card">
-                   <ul style="margin: 0 0 0 18px; padding: 0; line-height: 1.6;">
-                     <li><b>Mã phòng 6 số</b>: Chia sẻ mã 6 số (ví dụ: <code class="room-code-badge">624183</code>), bạn bè chỉ cần bấm <b>Tham gia phòng (Join a room)</b> và nhập mã.</li>
-                     <li><b>Liên kết mời (Invite link)</b>: Bấm <b>Sao chép liên kết mời</b> để gửi qua Zalo, Telegram hoặc tin nhắn.</li>
-                     <li>Thành viên kết nối ví hỗ trợ mạng <b>Avalanche Fuji</b> và ký xác nhận SIWE không mật khẩu.</li>
-                   </ul>
-                 </div>`,
+          title: 'Bước 2 · Mời thành viên',
+          copy: `<p>Gửi mã mời 6 số hoặc sao chép liên kết mời cho bạn bè.</p><p>Mỗi người chọn <b>Tham gia chuyến đi</b>, kết nối ví rồi ký yêu cầu đăng nhập. Trước hạn nạp quỹ, mọi người cần nạp đủ mức tối thiểu.</p>`,
           alt: 'Màn hình hiển thị mã phòng 6 chữ số và nút sao chép liên kết mời thành viên.',
         },
         {
-          title: 'Bước 3 · Làm quen thanh menu chức năng (Sidebar navigation)',
-          copy: `<p>Thanh điều hướng bên trái (hoặc thanh đáy trên Mobile) cung cấp 5 công cụ chính:</p>
-                 <div class="guide-step-card">
-                   <ul style="margin: 0 0 0 18px; padding: 0; line-height: 1.7;">
-                     <li>🏠 <b>Tổng quan (Overview)</b>: Xem mã phòng, tiến độ chuyến đi, số dư quỹ và cài đặt.</li>
-                     <li>👥 <b>Thành viên (People)</b>: Danh sách bạn đồng hành, chi tiết ai đã ứng tiền và ai nợ.</li>
-                     <li>🧾 <b>Hóa đơn (Bills)</b>: Ghi nhận chi tiêu thực tế (VND) với 2 phương thức <b>Chia đều</b> hoặc <b>Chia tùy chỉnh</b>.</li>
-                     <li>⚖️ <b>Quyết toán (Final split)</b>: Tính toán bù trừ công nợ Zero-Sum bảo toàn và quy đổi sang USDC.</li>
-                     <li>💳 <b>Ví & Quỹ (Wallet)</b>: Nạp USDC vào quỹ Avalanche Fuji, rút tiền trước hạn hoặc nhận tiền về ví.</li>
-                   </ul>
-                 </div>`,
+          title: 'Bước 3 · Các mục chính',
+          copy: `<ul><li><b>Tổng quan</b> xem lời mời, tiến độ và số dư quỹ.</li><li><b>Thành viên</b> xem những người cùng đi.</li><li><b>Hóa đơn</b> ghi tiền đã ứng và duyệt phần được chia.</li><li><b>Quyết toán</b> xem ai trả hoặc nhận bao nhiêu.</li><li><b>Ví</b> nạp quỹ, rút trước hạn nạp hoặc nhận số dư sau quyết toán.</li></ul>`,
           alt: 'Thanh điều hướng bên trái hiển thị 5 mục: Overview, People, Bills, Final split, Wallet.',
         },
         {
-          title: 'Bước 4 · Quyết toán & Bắt buộc duyệt (Approve)',
-          copy: `<p>Khi chuyến đi kết thúc, quy trình quyết toán diễn ra minh bạch và an toàn:</p>
-                 <div class="guide-step-card">
-                   <div class="guide-card-tag danger">⚠️ Lưu ý chốt sổ</div>
-                   <ul style="margin: 6px 0 0 18px; padding: 0; line-height: 1.6;">
-                     <li><b>Khóa & duyệt hóa đơn</b>: Hoàn tất phê duyệt các hóa đơn đang chờ.</li>
-                     <li><b>Trưởng nhóm tính tiền</b>: Mở <b>Quyết toán (Final split)</b> để khóa tỷ giá USD/VND và công bố bảng phân bổ.</li>
-                     <li><b>Bắt buộc Approve</b>: <b>Tất cả thành viên phải bấm "Approve" (Xác nhận)</b> số tiền của mình thì hệ thống mới cho phép giải ngân.</li>
-                     <li><b>Thanh toán on-chain</b>: Trưởng nhóm thực hiện lệnh quyết toán; các thành viên vào <b>Ví (Wallet)</b> để rút số dư USDC về ví riêng.</li>
-                   </ul>
-                 </div>`,
+          title: 'Bước 4 · Duyệt và quyết toán',
+          copy: `<p>Hãy xử lý các hóa đơn đang chờ duyệt, yêu cầu sửa hoặc hủy.</p><p>Trưởng nhóm mở <b>Quyết toán</b> để chốt tỷ giá và công bố số tiền. Tất cả thành viên duyệt phần của mình, rồi trưởng nhóm thực hiện quyết toán. Sau đó mỗi người mở <b>Ví</b> để nhận số dư.</p>`,
           alt: 'Màn hình Final split hiển thị bảng quyết toán và các nút Approve xác nhận của thành viên.',
         },
       ],
     },
     en: {
       title: 'How to use TripVault',
-      subtitle: 'Create a room, fund the vault, split expenses, and settle securely.',
+      subtitle: 'Create a trip, add to the shared fund, record bills, and settle.',
       language: 'Guide language', close: 'Get started', skip: 'Skip for now', back: 'Back', next: 'Next',
       progress: (step, total) => `Step ${step} of ${total}`,
       steps: [
@@ -6386,43 +6591,18 @@ function roomFundingShortfalls(trip, funding, draft) {
           alt: 'Your trips view with Create a room button and the form showing name, deposit and times.',
         },
         {
-          title: 'Step 2 · Invite group members (Invite members)',
-          copy: `<p>Share the newly created room with your travel companions:</p>
-                 <div class="guide-step-card">
-                   <ul style="margin: 0 0 0 18px; padding: 0; line-height: 1.6;">
-                     <li><b>6-digit room code</b>: Share the code (e.g. <code class="room-code-badge">624183</code>). Members click <b>Join a room</b> and enter it.</li>
-                     <li><b>Copy invite link</b>: One click to copy the link and send via chat or social apps.</li>
-                     <li>Members connect a wallet on <b>Avalanche Fuji</b> and sign a passwordless SIWE challenge to join.</li>
-                   </ul>
-                 </div>`,
+          title: 'Step 2 · Invite members',
+          copy: `<p>Share the six-digit invite code or copy the invite link.</p><p>Each member selects <b>Join a trip</b>, connects a wallet, and signs in. Everyone must add the minimum deposit before the deposit deadline.</p>`,
           alt: 'Room invite card showing 6-digit room code and copy invite link button.',
         },
         {
-          title: 'Step 3 · Navigation menu & Key tools (Sidebar)',
-          copy: `<p>The sidebar navigation (or bottom bar on mobile) provides 5 essential tools:</p>
-                 <div class="guide-step-card">
-                   <ul style="margin: 0 0 0 18px; padding: 0; line-height: 1.7;">
-                     <li>🏠 <b>Overview</b>: Room code, trip progress stepper, vault balance, and settings.</li>
-                     <li>👥 <b>People</b>: Travelers roster, who paid what, who owes, and net positions.</li>
-                     <li>🧾 <b>Bills</b>: Record real-world VND expenses with <b>Equal split</b> or <b>Custom split</b>.</li>
-                     <li>⚖️ <b>Final split</b>: Calculate Zero-Sum balanced debt offsets converted to USDC.</li>
-                     <li>💳 <b>Wallet</b>: Manage Fuji smart contract deposits, early withdrawals, and payouts.</li>
-                   </ul>
-                 </div>`,
+          title: 'Step 3 · Main tools',
+          copy: `<ul><li><b>Overview</b> shows invitations, progress, and the shared fund balance.</li><li><b>People</b> lists your travel companions.</li><li><b>Bills</b> records payments and collects approvals.</li><li><b>Final split</b> shows who pays or receives money.</li><li><b>Wallet</b> adds funds, withdraws before the deposit deadline, and claims the balance after settlement.</li></ul>`,
           alt: 'Sidebar showing 5 navigation tabs: Overview, People, Bills, Final split, Wallet.',
         },
         {
-          title: 'Step 4 · Settlement & Mandatory approvals (Approve)',
-          copy: `<p>Once the journey ends, the settlement process is democratic and transparent:</p>
-                 <div class="guide-step-card">
-                   <div class="guide-card-tag danger">⚠️ Settlement rule</div>
-                   <ul style="margin: 6px 0 0 18px; padding: 0; line-height: 1.6;">
-                     <li><b>Finalize open bills</b>: Ensure all recorded bills are reviewed and approved.</li>
-                     <li><b>Organizer prepares split</b>: Open <b>Final split</b> to lock the USD/VND reference rate and share amounts.</li>
-                     <li><b>Mandatory Approvals</b>: <b>All members must review and click "Approve"</b> on their balance before settlement unlocks.</li>
-                     <li><b>On-chain settlement</b>: Organizer triggers group payments; travelers claim their final USDC balances in <b>Wallet</b>.</li>
-                   </ul>
-                 </div>`,
+          title: 'Step 4 · Review and settle',
+          copy: `<p>Resolve pending bills, suggested changes, and cancellation requests first.</p><p>The organizer opens <b>Final split</b> to lock the rate and share the amounts. Every member approves their amount, then the organizer settles the group. Each member can claim their remaining balance in <b>Wallet</b>.</p>`,
           alt: 'Final split screen showing member balance reviews and approval buttons.',
         },
       ],
@@ -6540,9 +6720,9 @@ function roomFundingShortfalls(trip, funding, draft) {
 
   function header() {
     const trip = state.trip;
-    const newTrip = btn(rooms.online ? 'New room' : 'New trip', 'new-trip', { tone: 'secondary new-trip', symbol: 'plus' });
-    const tripsButton = trip?.shared || (!trip && rooms.online) ? '' : trip ? btn('Trips', 'trip-list', { tone: 'ghost' }) : newTrip;
-    const avatarButton = trip && !trip.shared
+    const newTrip = btn('New trip', 'new-trip', { tone: 'secondary new-trip', symbol: 'plus' });
+    const tripsButton = trip?.shared || (demoMode && trip) || (!trip && rooms.online) ? '' : trip ? btn('Trips', 'trip-list', { tone: 'ghost' }) : newTrip;
+    const avatarButton = trip && !trip.shared && !demoMode
       ? `<button type="button" class="avatar-button" data-act="switch-member" aria-label="Switch demo member">${avatar(member(state.actor) || trip.members[0])}</button>`
       : '';
     const content = trip ? screen() : demoMode
@@ -6567,7 +6747,7 @@ function roomFundingShortfalls(trip, funding, draft) {
           <main class="main" id="main">
             ${storageUnavailable ? '<p class="notice warn">Local storage is unavailable. Changes will be lost when you close or reload this tab.</p>' : ''}
             ${!demoMode && !rooms.online && window.location?.protocol === 'file:' ? '<p class="notice warn">Open the TripVault Rooms launcher for invite links and room codes.</p>' : ''}
-            ${trip?.shared ? roomTripToolbar(trip) : ''}
+            ${trip && (trip.shared || demoMode) ? roomTripToolbar(trip) : ''}
             ${trip?.shared && !rooms.token ? '<p class="notice warn">Your room sign-in expired. ' + btn('Sign in again', 'room-reauthenticate', { tone: 'secondary' }) + '</p>' : ''}
             ${content}
           </main>
@@ -6669,28 +6849,43 @@ function roomFundingShortfalls(trip, funding, draft) {
         </section>
       </div>`;
   }
-  function billItem(b){const payer=member(b.payer);return `<button type="button" class="bill-row is-${safe(b.status)}" data-act="bill-detail" data-id="${b.id}"><span class="row-label"><span class="bill-badge status-${safe(b.status)}">${icon(b.status === 'approved' ? 'check' : b.status === 'rejected' ? 'close' : 'bill')}</span><span><span class="bill-name">${userText(b.label)}</span><span class="bill-sub">${siteLanguage === 'vi' ? 'Paid by: ' : 'Paid by '}${userText(payer?.name || 'Unknown')} outside · ${b.participants.length} people · ${state.trip.shared ? roomBillStatus(b) : b.status==='approved'?'Approved':'Pending approval'}</span></span></span><span class="row-value">${vnd(b.amount)}</span></button>`}
+  function billItem(bill) {
+    const payer = member(bill.payer);
+    const status = state.trip.shared || demoMode ? roomBillStatus(bill) : ui(bill.status === 'approved' ? 'Approved' : 'Pending approval');
+    const iconName = bill.status === 'approved' ? 'check' : bill.status === 'rejected' ? 'close' : 'bill';
+    return `<button type="button" class="bill-row is-${safe(bill.status)}" data-act="bill-detail" data-id="${bill.id}">
+      <span class="row-label">
+        <span class="bill-badge status-${safe(bill.status)}">${icon(iconName)}</span>
+        <span>
+          <span class="bill-name">${userText(bill.label)}</span>
+          <span class="bill-sub">${ui('Paid by')} ${userText(payer?.name || ui('Unknown'))} · ${ui(bill.participants.length + ' people')}</span>
+          <span class="bill-status">${safe(status)}</span>
+        </span>
+      </span>
+      <span class="row-value">${vnd(bill.amount)}</span>
+    </button>`;
+  }
   function overview(){const t=state.trip,ss=stats(),me=ss.find(m=>m.id===state.actor),approved=t.bills.filter(b=>b.status==='approved'),total=approved.reduce((a,b)=>a+b.amount,0);return `<section class="hero"><span class="chip">${phase() === 'Closing' ? 'Trip ended · Ready to settle' : phase()} · Time-locked USDC vault</span><div><h1>${safe(t.name)}</h1><div class="hero-meta"><span class="avatar-stack">${t.members.slice(0,4).map(avatar).join('')}</span><span>${t.members.length} travelers · ${safe(t.location)}</span></div></div></section><section class="metrics"><div class="metric"><span class="metric-name">${icon('wallet')}Vault deposits</span><strong>${fmt(Object.values(t.depositUnits).reduce((a,b)=>a+b,0) / USDC_SCALE)} USDC</strong></div><div class="metric"><span class="metric-name">${icon('bill')}Approved expenses</span><strong>${vnd(total)}</strong></div><div class="metric"><span class="metric-name">${icon('wallet')}You paid</span><strong>${vnd(me.paid)}</strong></div><div class="metric"><span class="metric-name">${icon('split')}Your net</span><strong>${vnd(me.net)}</strong></div></section><div class="overview-grid"><section class="panel"><div class="panel-head"><h2>Recent bills</h2>${btn('View all','navigate',{tone:'ghost',data:'data-view="bills"'})}</div>${t.bills.length?t.bills.slice(-3).reverse().map(billItem).join(''):'<p class="empty">No bills yet.</p>'}</section><section class="panel next-card"><span class="next-mark">${icon('bill')}</span><h2>Record a payment</h2><p>Paid for something in VND? Add it here. No USDC is moved when recording a bill.</p>${btn('Add a bill','new-bill',{symbol:'plus',disabled:t.settled})}</section></div><section class="panel trip-settings-panel"><div class="panel-head"><h2>Trip settings</h2></div>${row('Bill approval',t.approvalMode==='everyone'?'All members':'Organizer only')}${row('Minimum deposit',money(t.minimumUnits))}${row('Starts',formatTripTimeSpacious(t.startTime))}${row('Ends',formatTripTimeSpacious(t.endTime))}${row('Exchange rate',fxRowValue(t.reviewQuote || fx))}${row('Settlement','USDC from vault deposits at trip end')}<p class="notice">Final split locks a USD/VND reference before approval. Deposits and payouts are simulated.</p></section>`}
   function people(){const t=state.trip;return `<div class="section-head"><div><h1>People</h1><p>Who paid, who owes, and each member's net position.</p></div></div><section class="panel"><div class="panel-head"><h2>Travelers</h2><span class="chip">${t.members.length} members</span></div>${stats().map(m=>`<div class="row"><div class="row-label">${avatar(member(m.id))}<span><span class="row-name">${safe(m.name)}${m.id===state.actor?' · You':''}</span><span class="row-sub traveler-details">Paid ${vnd(m.paid)} · Owes ${vnd(m.owed)} · Deposited ${fmt(depositOf(m.id))} USDC</span></span></div><span class="row-value ${m.net>=0?'money-positive':'money-negative'}">${vnd(m.net)}<small>Net balance</small></span></div>`).join('')}</section>`}
   function bills(){const t=state.trip;return `<div class="section-head"><div><h1>Bills</h1><p>${t.bills.length} recorded · Paid outside the app</p></div>${btn('Add bill','new-bill',{symbol:'plus',disabled:t.shared ? !roomBillFunding(t).ready : !!t.settled})}</div>${t.shared ? roomFundingPanel(t) : ''}<section class="panel"><div class="panel-head"><h2>Trip expenses</h2></div>${t.bills.length?t.bills.slice().reverse().map(billItem).join(''):'<p class="empty">No bills yet. Record who paid outside the app.</p>'}</section><p class="notice">Bills are records of real-world payments, not payments from a shared crypto vault.</p>`}
-  function wallet(){const t=state.trip,p=phase(),my=depositOf(state.actor),total=Object.values(t.depositUnits).reduce((a,b)=>a+b,0) / USDC_SCALE;return `<div class="section-head"><div><h1>Wallet & vault</h1><p>Fuji testnet and local demo</p></div><span class="${p === 'Closing' ? 'chip warn' : 'chip violet'}">${p === 'Closing' ? 'Trip ended · Ready to settle' : p}</span></div><div class="stack">${fujiPanel()}<section class="panel"><h2>Demo vault</h2>${row('Total deposited',fmt(total)+' USDC')}${row('Your deposited balance',fmt(my)+' USDC')}${row('Minimum per member',money(t.minimumUnits))}${row('Start',safe(formatShortDateTime(t.startTime)))}${row('End',safe(formatShortDateTime(t.endTime)))}${row('Status',p === 'Closing' ? 'Trip ended · Ready to settle' : p)}<div class="inline" style="margin-top:16px">${btn('Deposit USDC','deposit',{disabled:t.settled})}${btn('Early withdrawal','withdraw',{tone:'secondary',disabled:p!=='Funding'||my<=0})}${t.settled?btn('Claim refund','claim',{tone:'secondary',disabled:my<=0}):''}</div><p class="notice">Deposits lock after the start time. You can still top up. Early withdrawal is only possible before the start.</p></section><section class="panel"><h2>Funding progress</h2>${t.members.map(m=>row(safe(m.name),fmt(depositOf(m.id))+' USDC',depositUnits(t,m.id)>=t.minimumUnits?'Minimum reached':'Below minimum')).join('')}</section><section class="panel"><h2>Demo member</h2>${row('Previewing as',safe(member(state.actor).name))}${btn('Switch demo member','switch-member',{tone:'secondary'})}<p class="notice">These are simulated member balances, not real connected wallets.</p></section><section class="panel"><h2>Exchange rate</h2><p id="fx-status" class="notice">${safe(fxLabel(fx))}</p>${btn('Refresh market reference','refresh-fx',{tone:'secondary'})}</section>${demoMode ? '<div style="margin-top:24px; text-align:center;"><button type="button" class="btn secondary sm" data-act="judge-demo-sample">Reset demo</button></div>' : ''}</div>`}
+  function wallet(){const t=state.trip,p=phase(),my=depositOf(state.actor),total=Object.values(t.depositUnits).reduce((a,b)=>a+b,0) / USDC_SCALE;return `<div class="section-head"><div><h1>Wallet & vault</h1><p>Fuji testnet and local demo</p></div><span class="${p === 'Closing' ? 'chip warn' : 'chip violet'}">${p === 'Closing' ? 'Trip ended · Ready to settle' : p}</span></div><div class="stack">${fujiPanel()}<section class="panel trip-settings-panel"><h2>Demo vault</h2>${row('Total deposited',fmt(total)+' USDC')}${row('Your deposited balance',fmt(my)+' USDC')}${row('Minimum per member',money(t.minimumUnits))}${row('Start',safe(formatShortDateTime(t.startTime)))}${row('End',safe(formatShortDateTime(t.endTime)))}${row('Status',p === 'Closing' ? 'Trip ended · Ready to settle' : p)}<div class="inline" style="margin-top:16px">${btn('Deposit USDC','deposit',{disabled:t.settled})}${btn('Early withdrawal','withdraw',{tone:'secondary',disabled:p!=='Funding'||my<=0})}${t.settled?btn('Claim refund','claim',{tone:'secondary',disabled:my<=0}):''}</div><p class="notice">Deposits lock after the start time. You can still top up. Early withdrawal is only possible before the start.</p></section><section class="panel"><h2>Funding progress</h2>${t.members.map(m=>row(safe(m.name),fmt(depositOf(m.id))+' USDC',depositUnits(t,m.id)>=t.minimumUnits?'Minimum reached':'Below minimum')).join('')}</section><section class="panel"><h2>Demo member</h2>${row('Previewing as',safe(member(state.actor).name))}${btn('Switch demo member','switch-member',{tone:'secondary'})}<p class="notice">These are simulated member balances, not real connected wallets.</p></section><section class="panel"><h2>Exchange rate</h2><p id="fx-status" class="notice">${safe(fxLabel(fx))}</p>${btn('Refresh market reference','refresh-fx',{tone:'secondary'})}</section>${demoMode ? '<div style="margin-top:24px; text-align:center;"><button type="button" class="btn secondary sm" data-act="judge-demo-sample">Reset demo</button></div>' : ''}</div>`}
   function fundsForm(kind){const p=phase(),my=depositOf(state.actor);if(state.trip.settled||(kind==='withdraw'&&p!=='Funding'))return;sheetOpen(kind==='deposit'?'Deposit USDC':'Early withdrawal',kind==='deposit'?'Add USDC to your personal locked balance.':'Withdraw only your own funds before the trip begins.',`<form id="fund-form" class="stack"><label class="field">Amount (USDC)<input name="amount" type="number" min="0.000001" step="0.000001" required placeholder="100"></label><p class="notice">Your deposit: ${fmt(my)} USDC · Minimum: ${money(state.trip.minimumUnits)} · ${p}</p><input type="hidden" name="kind" value="${kind}"><p id="sheet-error" class="form-error"></p></form>`,`<button class="btn full" type="submit" form="fund-form">Confirm demo ${kind}</button>`)}
   function screen() {
-    if (state.trip.shared) {
+    if (state.trip.shared || demoMode) {
       if (state.view === 'overview') return roomOverview();
       if (state.view === 'people') return roomMembers(state.trip);
       if (state.view === 'split') return roomFinalSplit(state.trip);
-      if (state.view === 'wallet') return fujiPanel();
+      if (state.view === 'wallet') return state.trip.shared ? fujiPanel() : demoWallet(state.trip);
     }
     return ({ overview, people, bills, split, wallet }[state.view] || overview)();
   }
   function render() {
     const split = app.querySelector?.('[data-split-trip]');
-    const openDetails = new Set(state.view === 'split' && split?.dataset.splitTrip === state.trip?.id
+    const openDetails = new Set(state.view === 'split' && split && split.dataset.splitTrip === state.trip?.id
       ? [...split.querySelectorAll('details[data-split-detail][open]')].map(item => item.dataset.splitDetail) : []);
     if (document.documentElement) {
       document.documentElement.lang = siteLanguage;
-      document.title = 'TripVault · ' + ui('Rooms');
+      document.title = 'TripVault · ' + ui('Shared Trip Fund');
       const skipLink = document.querySelector('.skip');
       if (skipLink) skipLink.textContent = ui('Skip to content');
     }
@@ -6858,7 +7053,7 @@ function roomFundingShortfalls(trip, funding, draft) {
     if (t.shared) updateBillFundingForm();
   }
 }
-  function detail(id){if(state.trip?.shared)return roomBillDetail(id);const b=state.trip.bills.find(b=>b.id===id);if(!b)return;const t=state.trip,canApprove=t.approvalMode==='everyone'?true:state.actor===t.owner;const approved=b.approvals.includes(state.actor);const required=t.approvalMode==='everyone'?t.members.length:1;sheetOpen(b.label,`Paid outside · ${b.participants.length} travelers`,`<div class="stack"><div class="metric"><strong>${vnd(b.amount)}</strong></div>${row('Paid by',safe(member(b.payer).name))}${row('Payment method','Outside TripVault')}${row('Status',b.status==='approved'?'Approved':`Pending · ${b.approvals.length}/${required}`)}<div class="split-preview"><p><strong>Equal split</strong></p>${shares(b).map(s=>row(safe(member(s.id).name),vnd(s.amount))).join('')}</div><section class="panel"><h2>Bill approvals</h2>${(t.approvalMode==='everyone'?t.members:[member(t.owner)]).map(m=>row(safe(m.name),b.approvals.includes(m.id)?'Approved':'Pending')).join('')}<div class="inline" style="margin-top:14px">${!t.settled&&canApprove?(approved?btn('Cancel my approval','revoke-bill',{tone:'danger cancel-approval',data:`data-id="${b.id}"`}):btn('Approve bill','approve-bill',{data:`data-id="${b.id}"`})) : ''}</div></section><p class="notice">The bill can be approved or revoked until the final settlement is completed.</p></div>`)}
+  function detail(id){if(state.trip?.shared || demoMode)return roomBillDetail(id);const b=state.trip.bills.find(b=>b.id===id);if(!b)return;const t=state.trip,canApprove=t.approvalMode==='everyone'?true:state.actor===t.owner;const approved=b.approvals.includes(state.actor);const required=t.approvalMode==='everyone'?t.members.length:1;sheetOpen(b.label,`Paid outside · ${b.participants.length} travelers`,`<div class="stack"><div class="metric"><strong>${vnd(b.amount)}</strong></div>${row('Paid by',safe(member(b.payer).name))}${row('Payment method','Outside TripVault')}${row('Status',b.status==='approved'?'Approved':`Pending · ${b.approvals.length}/${required}`)}<div class="split-preview"><p><strong>Equal split</strong></p>${shares(b).map(s=>row(safe(member(s.id).name),vnd(s.amount))).join('')}</div><section class="panel"><h2>Bill approvals</h2>${(t.approvalMode==='everyone'?t.members:[member(t.owner)]).map(m=>row(safe(m.name),b.approvals.includes(m.id)?'Approved':'Pending')).join('')}<div class="inline" style="margin-top:14px">${!t.settled&&canApprove?(approved?btn('Cancel my approval','revoke-bill',{tone:'danger cancel-approval',data:`data-id="${b.id}"`}):btn('Approve bill','approve-bill',{data:`data-id="${b.id}"`})) : ''}</div></section><p class="notice">The bill can be approved or revoked until the final settlement is completed.</p></div>`)}
   function commit(trip, message) {
     const persisted = save(trip);
     render();
@@ -6881,30 +7076,14 @@ function roomFundingShortfalls(trip, funding, draft) {
   }
 
   function formatFxReference(quote) {
-    if (!quote || !quote.rate) return 'Reference rate: Unavailable';
-    const rounded = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(Math.round(quote.rate));
-    let src = 'Xe';
-    if (quote.source) {
-      if (quote.source.includes('Fixed demo')) src = 'Demo';
-      else if (quote.source.includes('ExchangeRate-API')) src = 'ExchangeRate-API';
-      else if (quote.source.includes('Xe')) src = 'Xe';
-      else src = quote.source;
-    }
-    let timeStr = '11/11 07:00';
-    if (quote.updated) {
-      const d = new Date(quote.updated);
-      if (!isNaN(d.getTime())) {
-        const day = String(d.getDate()).padStart(2, '0');
-        const month = String(d.getMonth() + 1).padStart(2, '0');
-        const hours = String(d.getHours()).padStart(2, '0');
-        const mins = String(d.getMinutes()).padStart(2, '0');
-        timeStr = `${day}/${month} ${hours}:${mins}`;
-      } else {
-        const cleaned = String(quote.updated).replace(/20\d\d[-/]?\s*/, '').trim();
-        if (cleaned) timeStr = cleaned;
-      }
-    }
-    return `Reference rate: ${rounded} VND per USD (${src}, ${timeStr})`;
+    if (!quote || !quote.rate) return ui('Reference rate unavailable');
+    const rounded = new Intl.NumberFormat(siteLanguage === 'vi' ? 'vi-VN' : 'en-US', {
+      maximumFractionDigits: 0,
+    }).format(quote.rate);
+    const source = quote.source || '';
+    const time = quote.updated ? formatFxShortTime(quote.updated) : '';
+    const details = [source, time].filter(Boolean).join(' · ');
+    return ui('Reference rate') + ' · ' + rounded + ' VND / USD' + (details ? ' · ' + details : '');
   }
 
   function demoLandingScreen() {
@@ -7009,7 +7188,11 @@ function roomFundingShortfalls(trip, funding, draft) {
       deleteSelectionSnapshot = null;
       return sheet.close();
     }
-    if (act === 'judge-demo-sample') return startJudgeSample();
+    if (act === 'judge-demo-sample') {
+      if (demoMode) return startJudgeSample();
+      window.location.assign('/?demo=1');
+      return;
+    }
     if (act === 'room-create') return startRoomFlow('create');
     if (act === 'room-preset-time') return applyRoomTimePreset(element);
     if (act === 'room-replace-expired') return openReplacementTrip(trip);
@@ -7029,6 +7212,9 @@ function roomFundingShortfalls(trip, funding, draft) {
     if (act === 'room-notifications') return openRoomNotifications();
     if (act === 'clear-room-notifications') return clearRoomNotifications();
     if (act === 'open-room-notification') return openRoomNotification(id);
+    if (act === 'mark-room-notification-read') return markRoomNotificationRead(id);
+    const notification = element.closest?.('[data-notification-id]');
+    if (notification) markRoomNotificationRead(notification.dataset.notificationId);
     if (act === 'room-funding-top-up') return topUpRoomFunding(element);
     if (act === 'room-delete-select-mode') return toggleTripSelectionMode();
     if (act === 'room-select-delete') return selectTripForDeletion(id);
@@ -7305,6 +7491,9 @@ function roomFundingShortfalls(trip, funding, draft) {
     if (trip !== state.trip && sheet.open) sheet.close();
     render();
   });
+  if (demoMode) fx = {
+    rate: 25000, source: 'Fixed demo rate', updated: '', live: false, historical: true,
+  };
   restoreWorkspace(loadWorkspace());
   if (!demoMode) discoverWallets();
   commit();
