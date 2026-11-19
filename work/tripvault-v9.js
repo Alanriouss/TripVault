@@ -1453,6 +1453,7 @@
   }
 
   function startRoomFlow(kind, key = '', template = null) {
+    if (demoMode) return window.location.assign(demoExitUrl());
     if (!rooms.online && !demoMode && !isDemoTrip()) {
       sheetOpen('TripVault Rooms', 'Open the room server',
         '<p class="notice">Open the TripVault Rooms launcher to create or join a shared room.</p>');
@@ -1844,9 +1845,8 @@
     if (!intent) return;
     const titles = { create: 'Create a room', join: 'Join a room', signin: 'Sign in to rooms' };
     const title = titles[intent.kind];
-    const local = demoMode || isDemoTrip();
-    const connected = local ? 'Demo' : walletSession.account;
-    const fuji = local || walletSession.chain === FUJI.id;
+    const connected = walletSession.account;
+    const fuji = walletSession.chain === FUJI.id;
     if (!connected || !fuji) {
       sheetOpen(title, 'Connect the wallet you will use for this trip',
         '<p class="notice">Members join with a wallet. TripVault asks for a sign-in signature when you continue.</p>',
@@ -1857,8 +1857,7 @@
     }
     const template = intent.template;
     const name = `<label class="field">Your display name <input name="displayName" maxlength="40" placeholder="Optional" value="${safe(template?.displayName)}"></label>`;
-    const wallet = local ? '<p class="subtitle">These are simulated member balances, not real connected wallets.</p>'
-      : '<p class="notice">Wallet: ' + safe(connected) + '</p>';
+    const wallet = '<p class="notice">Wallet: ' + safe(connected) + '</p>';
     let fields = '';
     if (intent.kind === 'create') {
       const defaultDeadline = template?.depositDeadline ? safe(template.depositDeadline.slice(0, 16)) : (template ? '' : localDatetimeValue(120));
@@ -1966,7 +1965,7 @@
   }
 
   async function submitRoomForm(data, fail) {
-    if (demoMode || isDemoTrip()) return submitDemoRoom(data, fail);
+    if (demoMode) return;
     const intent = rooms.intent;
     if (!intent || rooms.busy) return;
     const name = String(data.get('displayName') || '').trim();
@@ -2347,6 +2346,7 @@
   }
 
   function roomInviteCard(trip) {
+    if (isDemoTrip(trip)) return '';
     if (trip.locked || roomDeadlinePassed(trip) || !trip.invite || !trip.code) return '';
     return `<section class="panel stack">
       <h2>Invite members</h2>
@@ -2459,16 +2459,7 @@
         ${btn('Explore demo trip', 'judge-demo-sample', { tone: 'secondary' })}
       </section>
       ${trips.length ? '<section class="panel">' + tripSelectionControls() + trips.map(tripListRow).join('') + '</section>'
-        : `<section class="panel stack" style="border: 1px dashed var(--tint-border); background: var(--tint);">
-            <div class="panel-head">
-              <h2 style="color: var(--accent-dark);">Đà Lạt weekend · Demo Room</h2>
-              <span class="chip">UI Preview</span>
-            </div>
-            <p class="subtitle">Experience the full group expense workflow: funding progress, bills, approvals, and settlements.</p>
-            <div class="inline">
-              ${btn('Open demo trip', 'judge-demo-sample')}
-            </div>
-          </section>`}
+        : ''}
       ${fujiPanel()}
       </div>`;
   }
@@ -3679,12 +3670,44 @@ function roomFundingShortfalls(trip, funding, draft) {
   // Demo uses the shared trip components, with local balances and actions.
   const standaloneDemo = false;
 
+  function demoExitUrl() {
+    return standaloneDemo ? 'https://test-public-zeta.vercel.app/' : '/';
+  }
+
   function demoModeBanner() {
-    if (!demoMode) return '';
-    return `<section class="demo-mode-banner" aria-label="${ui('Demo mode')}">
-      <div><strong>Demo mode</strong><p>Balances and members are simulated in this mode.</p></div>
-      ${standaloneDemo ? '' : '<a class="btn secondary" href="/" data-exit-demo>Connect a real wallet</a>'}
-    </section>`;
+    return demoMode ? `<section class="demo-mode-banner" aria-label="${ui('Demo trip')}">
+      <div><strong>Demo trip</strong><p>Changes here only affect this sample trip. All trips returns to wallet-connected mode.</p></div>
+    </section>` : '';
+  }
+
+  function openDemoTrip() {
+    const sample = state.trips.find(trip => trip.id === 'judges-sample');
+    if (!sample) return startJudgeSample();
+    state.trip = sample;
+    state.actor = sample.members.some(person => person.id === state.actor) ? state.actor : sample.owner;
+    commit(sample);
+  }
+
+  function addDemoMemberForm() {
+    const trip = state.trip;
+    if (!isDemoTrip(trip) || trip.locked || roomDeadlinePassed(trip) || trip.members.length >= 12) return;
+    sheetOpen('Add demo member', { user: trip.name },
+      `<form class="stack" id="demo-member-form">
+        <label class="field">Your display name<input name="displayName" maxlength="40" required autofocus></label>
+        <p id="sheet-error" class="form-error" role="status"></p>
+      </form>`, '<button class="btn full" type="submit" form="demo-member-form">Add demo member</button>');
+  }
+
+  function submitDemoMember(data, fail) {
+    const trip = state.trip;
+    if (!isDemoTrip(trip) || trip.locked || roomDeadlinePassed(trip) || trip.members.length >= 12) return fail('This action is unavailable.');
+    const name = String(data.get('displayName') || '').trim();
+    if (!name || name.length > 40) return fail('Enter a valid display name.');
+    const id = 'm' + trip.members.length;
+    trip.members.push({ id, name, joinedAt: Date.now() });
+    trip.depositUnits[id] = 0;
+    if (sheet.open) sheet.close();
+    commit(trip, 'Demo member added.');
   }
 
   function isDemoTrip(trip = state.trip) {
@@ -3749,48 +3772,10 @@ function roomFundingShortfalls(trip, funding, draft) {
     return trip;
   }
 
-  function submitDemoRoom(data, fail) {
-    const intent = rooms.intent;
-    const displayName = String(data.get('displayName') || '').trim();
-    if (!displayName || displayName.length > 40) return fail('Enter a valid display name.');
-    let trip;
-    if (intent?.kind === 'create') {
-      const name = String(data.get('name') || '').trim();
-      const deadline = Date.parse(String(data.get('depositDeadline') || ''));
-      const start = Date.parse(String(data.get('startTime') || ''));
-      const end = Date.parse(String(data.get('endTime') || ''));
-      const minimum = parseUnits(data.get('minimum'));
-      if (!name || name.length > 70 || !minimum || !(Date.now() < deadline && deadline < start && start < end)) {
-        return fail('Set a minimum above zero, then choose a future deadline, a later start, and an end after the start.');
-      }
-      trip = { id: 'demo-' + Date.now().toString(36), name, location: String(data.get('location') || '').trim(),
-        owner: 'm0', members: [{ id: 'm0', name: displayName }],
-        code: String(100000 + (Date.now() % 900000)), invite: 'demo-invite-' + Date.now().toString(36),
-        demoVersion: 2, minimumUnits: minimum, depositDeadline: new Date(deadline).toISOString(), startTime: new Date(start).toISOString(),
-        endTime: new Date(end).toISOString(), depositUnits: { m0: 0 }, demoFundReady: false,
-        approvalMode: 'everyone', bills: [], nextBillId: 1, splitApprovals: [], revision: 1, reviewQuote: null, settled: false };
-      state.trip = trip;
-      state.actor = 'm0';
-    } else if (intent?.kind === 'join') {
-      const key = String(data.get('key') || '').trim();
-      trip = state.trips.find(item => !item.shared && (item.code === key || item.invite === key));
-      if (!trip || trip.locked || roomDeadlinePassed(trip)) return fail('This invitation is invalid.');
-      if (trip.members.length >= 12) return fail('This room has reached 12 members.');
-      const id = 'm' + trip.members.length;
-      trip.members.push({ id, name: displayName, joinedAt: Date.now() });
-      trip.depositUnits[id] = 0;
-      state.trip = trip;
-      state.actor = id;
-    } else return;
-    rooms.intent = null;
-    if (sheet.open) sheet.close();
-    state.view = 'overview';
-    commit(trip, intent.kind === 'create' ? 'Room created. Share the link or six-digit code.' : 'You joined the room.');
-  }
-
   function handleDemoAction(action, selection = {}) {
     const trip = state.trip;
     if (!isDemoTrip(trip)) return;
+    if (action === 'demo-add-member') return addDemoMemberForm();
     if (action === 'demo-deploy') {
       if (state.actor !== trip.owner || roomDeadlinePassed(trip)) return;
       return sheetOpen('Lock room roster', { user: trip.name },
@@ -4002,7 +3987,7 @@ function roomFundingShortfalls(trip, funding, draft) {
         ${btn('Reset demo', 'judge-demo-sample', { tone: 'ghost' })}</div>
       ${Date.parse(state.trip.startTime) > Date.now() ? btn('Start funded demo trip', 'demo-start', { tone: 'secondary',
         disabled: state.actor !== state.trip.owner || !demoFundReady(state.trip) || demoFunding(state.trip).balances.some(units => units < state.trip.minimumUnits) }) : ''}
-      ${!state.trip.locked && !roomDeadlinePassed(state.trip) ? btn('Join a room', 'room-join', { tone: 'secondary', data: `data-key="${safe(state.trip.code || '')}"` }) : ''}
+      ${!state.trip.locked && !roomDeadlinePassed(state.trip) ? btn('Add demo member', 'demo-add-member', { tone: 'secondary', disabled: state.trip.members.length >= 12 }) : ''}
     </div></details>`;
   }
 
@@ -4076,6 +4061,10 @@ function roomFundingShortfalls(trip, funding, draft) {
   const SITE_LANGUAGE_KEY = 'tripvault-site-language';
   let siteLanguage = readStorage(SITE_LANGUAGE_KEY) === 'vi' ? 'vi' : 'en';
   const vietnameseUI = new Map([
+    ['Demo trip', 'Chuyến đi mẫu'],
+    ['Changes here only affect this sample trip. All trips returns to wallet-connected mode.', 'Mọi thao tác ở đây chỉ áp dụng cho chuyến đi mẫu. Bấm Tất cả chuyến đi để trở về web kết nối ví thật.'],
+    ['Add demo member', 'Thêm thành viên mô phỏng'],
+    ['Demo member added.', 'Đã thêm thành viên mô phỏng.'],
     ['Demo mode', 'Chế độ Demo'],
     ['Balances and members are simulated in this mode.', 'Tiền và thành viên trong chế độ này được mô phỏng.'],
     ['Connect a real wallet', 'Kết nối ví thật'],
@@ -5245,7 +5234,7 @@ function roomFundingShortfalls(trip, funding, draft) {
       : state.trips.length ? tripsScreen() : empty() + '<div class="stack" style="margin-top:13px">' + fujiPanel() + '</div>';
     return `
       <div class="shell">
-        <aside class="sidebar">${brand()}${trip ? navHtml('desktop-nav') : ''}${newTrip}</aside>
+        <aside class="sidebar">${brand()}${trip ? navHtml('desktop-nav') : ''}${demoMode ? '' : newTrip}</aside>
         <div class="workspace">
           <header class="header"><div class="header-inner">
             ${brand()}<span class="breadcrumb">${trip ? 'Trips / ' + userText(trip.name) : 'Your trips'}</span>
@@ -5603,7 +5592,7 @@ function roomFundingShortfalls(trip, funding, draft) {
     return ui('Reference rate') + ' · ' + rounded + ' VND / USD' + (details ? ' · ' + details : '');
   }
 
-  function demoLandingScreen() { return roomsHome(); }
+  function demoLandingScreen() { return ''; }
 
   function startJudgeSample(stage = 'active') {
     const members = [{ id: 'm0', name: 'An' }, { id: 'm1', name: 'Bình' }];
@@ -5730,7 +5719,7 @@ function roomFundingShortfalls(trip, funding, draft) {
     if (act === 'guide-language') return setGuideLanguage(id);
     if (act.startsWith('fuji-')) return handleFujiAction(act, element.dataset);
     if (act === 'new-trip') return rooms.online || demoMode || isDemoTrip() ? startRoomFlow('create') : setup();
-    if (act === 'trip-list') return selectTrip(null);
+    if (act === 'trip-list') return demoMode ? window.location.assign(demoExitUrl()) : selectTrip(null);
     if (act === 'open-trip') {
       const selected = availableTrips().find(item => item.id === id);
       if (selected) selectTrip(selected);
@@ -5970,12 +5959,13 @@ function roomFundingShortfalls(trip, funding, draft) {
     const form = event.target;
     // A form control named id can shadow the form's id property.
     const formId = form.getAttribute('id');
-    if (!['create-form', 'fund-form', 'bill-form', 'fuji-deploy-form', 'fuji-funds-form', 'fuji-link-form', 'room-form', 'bill-feedback-form', 'bill-cancellation-form', 'room-rename-form'].includes(formId)) return;
+    if (!['create-form', 'fund-form', 'bill-form', 'fuji-deploy-form', 'fuji-funds-form', 'fuji-link-form', 'room-form', 'bill-feedback-form', 'bill-cancellation-form', 'room-rename-form', 'demo-member-form'].includes(formId)) return;
     event.preventDefault();
     syncTrips();
     const data = new FormData(form);
     const fail = message => { form.querySelector('#sheet-error').textContent = ui(message); };
-    if (formId === 'room-form') submitRoomForm(data, fail);
+    if (formId === 'demo-member-form') submitDemoMember(data, fail);
+    else if (formId === 'room-form') submitRoomForm(data, fail);
     else if (formId === 'bill-feedback-form') submitBillFeedback(data, fail);
     else if (formId === 'bill-cancellation-form') submitBillCancellation(data, fail);
     else if (formId === 'room-rename-form') submitRoomRename(data, fail);
@@ -6001,12 +5991,10 @@ function roomFundingShortfalls(trip, funding, draft) {
     rate: 25000, source: 'Fixed demo rate', updated: '', live: false, historical: false,
   };
   restoreWorkspace(loadWorkspace());
+  if (demoMode) openDemoTrip();
   if (!demoMode) discoverWallets();
   commit();
   showFirstVisitGuide();
-  if (demoMode && new URLSearchParams(window.location?.search || '').has('join')) {
-    startRoomFlow('join', new URLSearchParams(window.location.search).get('join'));
-  }
   if (!demoMode) {
     refreshFX();
     enableRooms();

@@ -2384,7 +2384,7 @@ replace('!rooms.online && window.location?.protocol', '!demoMode && !rooms.onlin
 # Shared screens and controls also drive local demo trips.
 landing_start = source.index('  function demoLandingScreen() {')
 landing_end = source.index('  function startJudgeSample(', landing_start)
-source = source[:landing_start] + '  function demoLandingScreen() { return roomsHome(); }\n\n' + source[landing_end:]
+source = source[:landing_start] + '  function demoLandingScreen() { return \'\'; }\n\n' + source[landing_end:]
 replace('if (demoMode) return startJudgeSample();', "if (demoMode) return startJudgeSample(element.dataset.stage || 'active');")
 replace("    if (act === 'room-join') return startRoomFlow('join');", "    if (act === 'room-join') return startRoomFlow('join', element.dataset.key || '');")
 replace("    if (act === 'room-create') return startRoomFlow('create');", """    if (act.startsWith('demo-')) return handleDemoAction(act);
@@ -2433,10 +2433,11 @@ plan_sheet = source.index("    sheetOpen('Review payment amounts',", plan_start)
 plan_end = source.index('\n  }', plan_sheet)
 source = source[:plan_sheet] + "    paymentReviewSheet(trip, draft, 'fuji-publish');" + source[plan_end:]
 source = source.replace("source: 'Fixed demo rate', updated: '', live: false, historical: true", "source: 'Fixed demo rate', updated: '', live: false, historical: false")
-replace('  showFirstVisitGuide();', """  showFirstVisitGuide();
-  if (demoMode && new URLSearchParams(window.location?.search || '').has('join')) {
-    startRoomFlow('join', new URLSearchParams(window.location.search).get('join'));
-  }""")
+replace("    if (act === 'trip-list') return selectTrip(null);", "    if (act === 'trip-list') return demoMode ? window.location.assign(demoExitUrl()) : selectTrip(null);")
+replace('  restoreWorkspace(loadWorkspace());', '  restoreWorkspace(loadWorkspace());\n  if (demoMode) openDemoTrip();')
+replace("'room-rename-form'].includes(formId)", "'room-rename-form', 'demo-member-form'].includes(formId)")
+replace("if (formId === 'room-form')", "if (formId === 'demo-member-form') submitDemoMember(data, fail);\n    else if (formId === 'room-form')")
+replace('${newTrip}</aside>', "${demoMode ? '' : newTrip}</aside>")
 replace('</head>', '''<style>
 .demo-controls { margin-top: 16px; padding: 12px 16px; border: 1px dashed var(--line-strong); border-radius: 12px; background: var(--paper); }
 .demo-mode-banner { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; padding: 14px 16px; border: 1px solid var(--tint-border); border-radius: 14px; background: var(--tint); }

@@ -1,12 +1,44 @@
   // Demo uses the shared trip components, with local balances and actions.
   const standaloneDemo = false;
 
+  function demoExitUrl() {
+    return standaloneDemo ? 'https://test-public-zeta.vercel.app/' : '/';
+  }
+
   function demoModeBanner() {
-    if (!demoMode) return '';
-    return `<section class="demo-mode-banner" aria-label="${ui('Demo mode')}">
-      <div><strong>Demo mode</strong><p>Balances and members are simulated in this mode.</p></div>
-      ${standaloneDemo ? '' : '<a class="btn secondary" href="/" data-exit-demo>Connect a real wallet</a>'}
-    </section>`;
+    return demoMode ? `<section class="demo-mode-banner" aria-label="${ui('Demo trip')}">
+      <div><strong>Demo trip</strong><p>Changes here only affect this sample trip. All trips returns to wallet-connected mode.</p></div>
+    </section>` : '';
+  }
+
+  function openDemoTrip() {
+    const sample = state.trips.find(trip => trip.id === 'judges-sample');
+    if (!sample) return startJudgeSample();
+    state.trip = sample;
+    state.actor = sample.members.some(person => person.id === state.actor) ? state.actor : sample.owner;
+    commit(sample);
+  }
+
+  function addDemoMemberForm() {
+    const trip = state.trip;
+    if (!isDemoTrip(trip) || trip.locked || roomDeadlinePassed(trip) || trip.members.length >= 12) return;
+    sheetOpen('Add demo member', { user: trip.name },
+      `<form class="stack" id="demo-member-form">
+        <label class="field">Your display name<input name="displayName" maxlength="40" required autofocus></label>
+        <p id="sheet-error" class="form-error" role="status"></p>
+      </form>`, '<button class="btn full" type="submit" form="demo-member-form">Add demo member</button>');
+  }
+
+  function submitDemoMember(data, fail) {
+    const trip = state.trip;
+    if (!isDemoTrip(trip) || trip.locked || roomDeadlinePassed(trip) || trip.members.length >= 12) return fail('This action is unavailable.');
+    const name = String(data.get('displayName') || '').trim();
+    if (!name || name.length > 40) return fail('Enter a valid display name.');
+    const id = 'm' + trip.members.length;
+    trip.members.push({ id, name, joinedAt: Date.now() });
+    trip.depositUnits[id] = 0;
+    if (sheet.open) sheet.close();
+    commit(trip, 'Demo member added.');
   }
 
   function isDemoTrip(trip = state.trip) {
@@ -71,48 +103,10 @@
     return trip;
   }
 
-  function submitDemoRoom(data, fail) {
-    const intent = rooms.intent;
-    const displayName = String(data.get('displayName') || '').trim();
-    if (!displayName || displayName.length > 40) return fail('Enter a valid display name.');
-    let trip;
-    if (intent?.kind === 'create') {
-      const name = String(data.get('name') || '').trim();
-      const deadline = Date.parse(String(data.get('depositDeadline') || ''));
-      const start = Date.parse(String(data.get('startTime') || ''));
-      const end = Date.parse(String(data.get('endTime') || ''));
-      const minimum = parseUnits(data.get('minimum'));
-      if (!name || name.length > 70 || !minimum || !(Date.now() < deadline && deadline < start && start < end)) {
-        return fail('Set a minimum above zero, then choose a future deadline, a later start, and an end after the start.');
-      }
-      trip = { id: 'demo-' + Date.now().toString(36), name, location: String(data.get('location') || '').trim(),
-        owner: 'm0', members: [{ id: 'm0', name: displayName }],
-        code: String(100000 + (Date.now() % 900000)), invite: 'demo-invite-' + Date.now().toString(36),
-        demoVersion: 2, minimumUnits: minimum, depositDeadline: new Date(deadline).toISOString(), startTime: new Date(start).toISOString(),
-        endTime: new Date(end).toISOString(), depositUnits: { m0: 0 }, demoFundReady: false,
-        approvalMode: 'everyone', bills: [], nextBillId: 1, splitApprovals: [], revision: 1, reviewQuote: null, settled: false };
-      state.trip = trip;
-      state.actor = 'm0';
-    } else if (intent?.kind === 'join') {
-      const key = String(data.get('key') || '').trim();
-      trip = state.trips.find(item => !item.shared && (item.code === key || item.invite === key));
-      if (!trip || trip.locked || roomDeadlinePassed(trip)) return fail('This invitation is invalid.');
-      if (trip.members.length >= 12) return fail('This room has reached 12 members.');
-      const id = 'm' + trip.members.length;
-      trip.members.push({ id, name: displayName, joinedAt: Date.now() });
-      trip.depositUnits[id] = 0;
-      state.trip = trip;
-      state.actor = id;
-    } else return;
-    rooms.intent = null;
-    if (sheet.open) sheet.close();
-    state.view = 'overview';
-    commit(trip, intent.kind === 'create' ? 'Room created. Share the link or six-digit code.' : 'You joined the room.');
-  }
-
   function handleDemoAction(action, selection = {}) {
     const trip = state.trip;
     if (!isDemoTrip(trip)) return;
+    if (action === 'demo-add-member') return addDemoMemberForm();
     if (action === 'demo-deploy') {
       if (state.actor !== trip.owner || roomDeadlinePassed(trip)) return;
       return sheetOpen('Lock room roster', { user: trip.name },
@@ -324,7 +318,7 @@
         ${btn('Reset demo', 'judge-demo-sample', { tone: 'ghost' })}</div>
       ${Date.parse(state.trip.startTime) > Date.now() ? btn('Start funded demo trip', 'demo-start', { tone: 'secondary',
         disabled: state.actor !== state.trip.owner || !demoFundReady(state.trip) || demoFunding(state.trip).balances.some(units => units < state.trip.minimumUnits) }) : ''}
-      ${!state.trip.locked && !roomDeadlinePassed(state.trip) ? btn('Join a room', 'room-join', { tone: 'secondary', data: `data-key="${safe(state.trip.code || '')}"` }) : ''}
+      ${!state.trip.locked && !roomDeadlinePassed(state.trip) ? btn('Add demo member', 'demo-add-member', { tone: 'secondary', disabled: state.trip.members.length >= 12 }) : ''}
     </div></details>`;
   }
 

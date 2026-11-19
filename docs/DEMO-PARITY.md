@@ -1,10 +1,10 @@
 # Demo and wallet-room UI verification
 
-Demo now renders the same five trip screens and shared wallet/payment card templates as wallet-connected rooms. Demo-specific role switching, reset, and time advancement live in the separate **Demo controls** disclosure below the screen.
+Demo is a single sample trip, reached directly from Explore demo trip. All trips returns to the normal wallet-connected home page. It has no separate Demo home, room creation or room-code join flow. The sample renders the same five trip screens and shared wallet/payment card templates as wallet-connected rooms. Demo-specific role switching, reset, and time advancement live in the separate **Demo controls** disclosure below the screen.
 
 | Area | Shared behavior verified in Demo |
 | --- | --- |
-| Home and trip setup | Common home, create and join forms; minimum and three dates; local invite code; name changes |
+| Entry and exit | Explore opens the sample directly; All trips exits to the normal home page; sample changes persist without changing real rooms |
 | Overview | Common hero, fund summary, progress, members and settings; organizer-only early ending |
 | People | Common member list, organizer badge and selected member |
 | Bills | Same form and detail layout; equal/custom amounts; required funding; 24-hour review; suggestions and replies; unanimous cancellation with a reason |

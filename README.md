@@ -117,13 +117,13 @@ When the terminal prints `TripVault Rooms: http://127.0.0.1:8788`, keep it open 
 
 ## First demo walkthrough
 
-1. In [the local demo](http://127.0.0.1:8788/?demo=1), dismiss the guide if it appears. Select **English** from the language menu in the header so the labels match this guide. Click **Open demo trip**. An and Bình each start with **5 simulated USDC** and the trip is in progress.
+1. In [the local demo](http://127.0.0.1:8788/?demo=1), dismiss the guide if it appears. Select **English** from the language menu in the header so the labels match this guide. The link opens the sample trip directly. An and Bình each start with **5 simulated USDC** and the trip is in progress.
 2. Go to **Bills → Add bill**. Enter **Lunch**, enter **100000** in the VND amount field, select **An** as the payer, keep **An** and **Bình** selected, then click **Save bill**.
 3. Open **Lunch**, click **Approve bill** as An, and close the bill. Expand **Demo controls** below the screen, click **Switch demo member**, and choose **Bình**. Open **Lunch** and click **Approve bill** again. Suggestions, replies, and cancellation requests can also be tried in this dialog before approval.
 4. Switch back to **An** through **Demo controls**. Open **Overview → End trip early → End trip now**. Then open **Final split → Calculate final amounts → Review payment amounts → Share amounts for approval**. Sharing approves An's amount. Switch to **Bình** and click **Approve my amount**.
 5. Switch back to **An** and click **Make group payments**. The demo rate is **25,000 VND per USD**, so Bình owes An **2 USDC**. Open **Wallet** and check **Your balance in the trip fund** before choosing **Send … to my wallet**. An has **7 USDC** and Bình has **3 USDC**.
 
-**Demo controls → Reset demo** resets the sample in the current browser. **Restart with setup** starts before the deposit deadline so you can try the shared create/join forms, member names, roster confirmation, deposits, and withdrawals. Once everyone has funded, **Start funded demo trip** advances the simulation to the start.
+**Demo controls → Reset demo** resets the sample in the current browser. **Restart with setup** starts before the deposit deadline so you can try member names, roster confirmation, deposits, and withdrawals. Use **Add demo member** to simulate an extra participant before confirming the roster. Once everyone has funded, **Start funded demo trip** advances the simulation to the start. **All trips** leaves the sample and returns to the normal home page for real wallet connections. Demo has no separate room list or invite-code flow.
 
 Demo and wallet-connected trips use the same screen, wallet-card, payment-card, and bill-dialog components. Demo actions use local simulated balances and roles; wallet signatures, cross-device shared rooms, and blockchain transactions require shared-trip mode. Run `bun run verify:demo` to check both the served demo and the GitHub Pages demo.
 

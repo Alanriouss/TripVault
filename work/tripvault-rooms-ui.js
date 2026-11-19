@@ -263,6 +263,7 @@
   }
 
   function startRoomFlow(kind, key = '', template = null) {
+    if (demoMode) return window.location.assign(demoExitUrl());
     if (!rooms.online && !demoMode && !isDemoTrip()) {
       sheetOpen('TripVault Rooms', 'Open the room server',
         '<p class="notice">Open the TripVault Rooms launcher to create or join a shared room.</p>');
@@ -654,9 +655,8 @@
     if (!intent) return;
     const titles = { create: 'Create a room', join: 'Join a room', signin: 'Sign in to rooms' };
     const title = titles[intent.kind];
-    const local = demoMode || isDemoTrip();
-    const connected = local ? 'Demo' : walletSession.account;
-    const fuji = local || walletSession.chain === FUJI.id;
+    const connected = walletSession.account;
+    const fuji = walletSession.chain === FUJI.id;
     if (!connected || !fuji) {
       sheetOpen(title, 'Connect the wallet you will use for this trip',
         '<p class="notice">Members join with a wallet. TripVault asks for a sign-in signature when you continue.</p>',
@@ -667,8 +667,7 @@
     }
     const template = intent.template;
     const name = `<label class="field">Your display name <input name="displayName" maxlength="40" placeholder="Optional" value="${safe(template?.displayName)}"></label>`;
-    const wallet = local ? '<p class="subtitle">These are simulated member balances, not real connected wallets.</p>'
-      : '<p class="notice">Wallet: ' + safe(connected) + '</p>';
+    const wallet = '<p class="notice">Wallet: ' + safe(connected) + '</p>';
     let fields = '';
     if (intent.kind === 'create') {
       const defaultDeadline = template?.depositDeadline ? safe(template.depositDeadline.slice(0, 16)) : (template ? '' : localDatetimeValue(120));
@@ -776,7 +775,7 @@
   }
 
   async function submitRoomForm(data, fail) {
-    if (demoMode || isDemoTrip()) return submitDemoRoom(data, fail);
+    if (demoMode) return;
     const intent = rooms.intent;
     if (!intent || rooms.busy) return;
     const name = String(data.get('displayName') || '').trim();
@@ -1157,6 +1156,7 @@
   }
 
   function roomInviteCard(trip) {
+    if (isDemoTrip(trip)) return '';
     if (trip.locked || roomDeadlinePassed(trip) || !trip.invite || !trip.code) return '';
     return `<section class="panel stack">
       <h2>Invite members</h2>
@@ -1269,16 +1269,7 @@
         ${btn('Try a local demo', 'local-demo', { tone: 'ghost' })}
       </section>
       ${trips.length ? '<section class="panel">' + tripSelectionControls() + trips.map(tripListRow).join('') + '</section>'
-        : `<section class="panel stack" style="border: 1px dashed var(--tint-border); background: var(--tint);">
-            <div class="panel-head">
-              <h2 style="color: var(--accent-dark);">Đà Lạt weekend · Demo Room</h2>
-              <span class="chip">UI Preview</span>
-            </div>
-            <p class="subtitle">Experience the full group expense workflow: funding progress, bills, approvals, and settlements.</p>
-            <div class="inline">
-              ${btn('Open demo trip', 'judge-demo-sample')}
-            </div>
-          </section>`}
+        : ''}
       ${fujiPanel()}
       </div>`;
   }

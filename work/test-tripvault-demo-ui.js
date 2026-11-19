@@ -3,16 +3,19 @@ import assert from 'node:assert/strict';
 export async function testDemoUi({ launch, supportsWalletExit }) {
   const demoKey = 'tripvault-judge-demo-v1';
   const demo = await launch({ url: 'http://127.0.0.1:8788/?demo=1', language: 'en' });
-  const checkModeBanner = () => {
-    assert.match(demo.page.innerHTML, /demo-mode-banner/);
-    if (supportsWalletExit === true) assert.match(demo.page.innerHTML, /href="\/" data-exit-demo>Connect a real wallet/);
-    if (supportsWalletExit === false) assert.doesNotMatch(demo.page.innerHTML, /data-exit-demo/);
-  };
-  checkModeBanner();
-  demo.click('judge-demo-sample');
-  checkModeBanner();
+  assert.match(demo.page.innerHTML, /demo-mode-banner/);
+  assert.match(demo.page.innerHTML, /Đà Lạt weekend/);
+  assert.doesNotMatch(demo.page.innerHTML, /data-act="room-create"|data-act="room-join"|<h1>Your trips/);
   demo.click('trip-list');
-  checkModeBanner();
+  assert.equal(demo.navigations.at(-1), supportsWalletExit === false ? 'https://test-public-zeta.vercel.app/' : 'http://127.0.0.1:8788/');
+  demo.click('room-join');
+  assert.equal(demo.navigations.at(-1), supportsWalletExit === false ? 'https://test-public-zeta.vercel.app/' : 'http://127.0.0.1:8788/');
+  assert.doesNotMatch(demo.sheet.innerHTML || '', /id="room-form"/);
+  for (const view of ['overview', 'people', 'bills', 'wallet', 'split']) {
+    demo.view(view);
+    demo.click('trip-list');
+    assert.equal(demo.navigations.at(-1), supportsWalletExit === false ? 'https://test-public-zeta.vercel.app/' : 'http://127.0.0.1:8788/');
+  }
   demo.click('judge-demo-sample');
   assert.match(demo.page.innerHTML, /class="panel fund-summary"/);
   assert.match(demo.page.innerHTML, /class="panel trip-progress"/);
@@ -173,22 +176,16 @@ async function testDemoLifecycle({ launch }) {
   };
   demo.click('judge-demo-sample', { stage: 'setup' });
   const deadline = Date.parse(trip().depositDeadline);
-  demo.click('new-trip');
-  assert.match(demo.sheet.innerHTML, /id="room-form"/);
-  assert.doesNotMatch(demo.sheet.innerHTML, /data-act="fuji-connect"/);
-  demo.submit('room-form', { name: 'Lifecycle trip', displayName: 'An', minimum: '5',
-    depositDeadline: new Date(deadline).toISOString(), startTime: new Date(deadline + 300000).toISOString(),
-    endTime: new Date(deadline + 86400000).toISOString() });
   assert.equal(trip().demoFundReady, false);
   const id = trip().id;
-  const code = trip().code;
-  demo.click('room-join', { key: code });
-  demo.submit('room-form', { key: code, displayName: 'Bình' });
-  assert.equal(trip().members.length, 2);
-  demo.member('m0');
+  demo.click('demo-add-member');
+  assert.match(demo.sheet.innerHTML, /id="demo-member-form"/);
+  assert.ok(demo.submit('demo-member-form', { displayName: ' ' }));
+  demo.submit('demo-member-form', { displayName: 'Khách thử' });
+  assert.equal(trip().members.length, 3);
   demo.click('room-notifications');
   assert.match(demo.sheet.innerHTML, /New member joined/);
-  assert.match(demo.sheet.innerHTML, /Bình/);
+  assert.match(demo.sheet.innerHTML, /Khách thử/);
   demo.click('room-rename');
   demo.submit('room-rename-form', { kind: 'room-rename', name: 'Renamed trip' });
   assert.equal(trip().name, 'Renamed trip');
@@ -209,6 +206,8 @@ async function testDemoLifecycle({ launch }) {
   demo.fund(1, 'withdraw');
   assert.equal(trip().depositUnits.m1, 4000000);
   demo.fund(1);
+  demo.member('m2');
+  demo.fund(5);
   demo.member('m0');
   demo.click('demo-start');
   demo.view('overview');
@@ -255,7 +254,7 @@ async function testDemoLifecycle({ launch }) {
   demo.click('room-notifications');
   assert.match(demo.sheet.innerHTML, /Final amounts are ready to review/);
   demo.member('m0');
-  demo.approvals();
+  demo.approvals(['m0', 'm1', 'm2']);
   demo.click('settle');
   assert.equal(trip().settled, true);
   assert.equal(trip().depositUnits.m0, 11000000);
@@ -292,7 +291,7 @@ async function testDemoLifecycle({ launch }) {
   demo.now(new Date(pausedDeadline + 86400001).toISOString());
   demo.view('bills');
   assert.equal(trip().bills[0].status, 'cancellation', 'a removal request cannot automatically approve');
-  console.log('PASS: Demo matches trip creation, member roles, funding, top-up reminders, early end, 24-hour reviews, settlement and claims');
+  console.log('PASS: the sample trip supports member simulation, funding, top-up reminders, early end, 24-hour reviews, settlement and claims');
 }
 
 async function testDemoAmounts({ launch }) {

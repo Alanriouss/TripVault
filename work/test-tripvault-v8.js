@@ -178,7 +178,8 @@ if (source.includes('function sampleNotifications(')) await testDemoNotification
 async function testJudgeDemo(url, script) {
   const judge = await launch({ url, rate: null, language: 'en' }, script);
   judge.click('close-sheet');
-  assert.match(judge.page.innerHTML, /Your trips/);
+  assert.match(judge.page.innerHTML, /Đà Lạt weekend/);
+  assert.doesNotMatch(judge.page.innerHTML, /<h1>Your trips/);
   assert.equal(judge.requests(), 0);
   assert.equal(judge.button('fuji-connect'), undefined);
   judge.click('judge-demo-sample');

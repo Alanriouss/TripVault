@@ -12,6 +12,9 @@ const flush = () => new Promise(resolve => setImmediate(resolve));
 
 async function launch(options = {}, script = source) {
   const storage = options.storage || new Map();
+  const navigations = [];
+  const location = options.url ? new URL(options.url) : undefined;
+  if (location) location.assign = target => navigations.push(new URL(target, location).href);
   const page = { innerHTML: '' };
   let draftForm;
   const sheet = {
@@ -42,7 +45,7 @@ async function launch(options = {}, script = source) {
     },
     navigator: { language: options.language || 'vi' },
     window: { ethereum: options.provider, avalanche: options.core,
-      location: options.url ? new URL(options.url) : undefined,
+      location,
       scrollTo() {}, addEventListener: (name, listener) => { events[name] = listener; },
     },
     sessionStorage: {
@@ -103,7 +106,7 @@ async function launch(options = {}, script = source) {
   const bill = (amount, payer = 'm0', participant = ['m0', 'm1']) =>
     submit('bill-form', { label: 'Test bill', amount: String(amount), payer, participant });
   return {
-    page, sheet, toast, storage, workspace, active, click, view, member, create, bill, approvals, approveBill, submit,
+    page, sheet, toast, storage, workspace, active, click, view, member, create, bill, approvals, approveBill, submit, navigations,
     selectSiteLanguage: value => events.change({
       target: { value, matches: selector => selector === '[data-site-language]' },
     }),
