@@ -1,6 +1,7 @@
   const TRIP_PROGRESS_STEPS = ['Set up', 'Add funds', 'Record bills', 'Final payments', 'Done'];
 
   function tripProgress(trip) {
+    if (demoMode && !trip.shared) return demoTripProgress(trip);
     const vault = currentVault();
     const funding = getDisplayedFunding(trip);
     const organizer = isRoomOrganizer(trip);

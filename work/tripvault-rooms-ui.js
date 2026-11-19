@@ -1166,6 +1166,7 @@
         ${avatar(profile)}
         <span class="trip-profile-name" translate="no" title="${safe(profile.name)}">${safe(profile.name)}</span>
         ${canEditRoomDisplayName(trip) ? btn('Edit my name', 'room-rename-member', { tone: 'soft rename-member' }) : ''}
+        ${demoMode && !trip.shared ? btn('Switch demo member', 'switch-member', { tone: 'soft rename-member' }) : ''}
       </div>` : ''}
     </div>`;
   }
@@ -1175,7 +1176,7 @@
       <div class="panel-head"><h2>Members</h2><span class="chip">${trip.members.length} of 12</span></div>
       ${trip.members.map(item => `<div class="row">
         <span class="row-label">${avatar(item)}<span><span class="row-name">${userText(item.name)}${item.id === state.actor ? ' · You' : ''}</span>
-        <span class="row-sub room-wallet-address">${safe(item.address)}</span></span></span>
+        ${item.address ? '<span class="row-sub room-wallet-address">' + safe(item.address) + '</span>' : ''}</span></span>
         ${item.id === trip.owner ? '<span class="chip violet">Organizer</span>' : ''}
       </div>`).join('')}
     </section>`;
@@ -1188,8 +1189,8 @@
     const deadline = Math.min(start, end);
     return `<div class="stack">
       <section class="hero">
-        <span class="chip">${roomFundingCancelled(trip) ? 'Trip cancelled' : trip.settled ? 'Settled on Fuji' : end <= Date.now() ? 'Trip ended'
-          : trip.locked ? (Date.now() < start ? 'Getting ready' : 'Trip in progress') : 'Room open'}</span>
+        <span class="chip">${roomFundingCancelled(trip) ? 'Trip cancelled' : trip.settled ? (trip.shared ? 'Settled on Fuji' : 'Settled') : end <= Date.now() ? 'Trip ended'
+          : trip.locked || !trip.shared ? (Date.now() < start ? 'Getting ready' : 'Trip in progress') : 'Room open'}</span>
         <h1>${userText(trip.name)}</h1>${trip.location ? '<div>' + userText(trip.location) + '</div>' : ''}
       </section>
       ${roomFundBalance(trip)}

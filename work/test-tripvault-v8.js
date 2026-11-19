@@ -436,6 +436,10 @@ async function testDemoNotifications() {
 }
 
 if (source.includes('function sampleNotifications(')) await testDemoNotifications();
+if (source.includes('function demoWallet(')) {
+  const { testDemoUi } = await import('./test-tripvault-demo-ui.js');
+  await testDemoUi({ launch });
+}
 
 async function testJudgeDemo(url, script) {
   const judge = await launch({ url, rate: null, language: 'en' }, script);

@@ -1,6 +1,9 @@
   const SITE_LANGUAGE_KEY = 'tripvault-site-language';
   let siteLanguage = readStorage(SITE_LANGUAGE_KEY) === 'vi' ? 'vi' : 'en';
   const vietnameseUI = new Map([
+    ['Simulated trip fund balance', 'Số dư mô phỏng của quỹ chuyến đi'],
+    ['Bill recorded. Waiting for approval.', 'Đã lưu hóa đơn, đang chờ duyệt.'],
+    ['Shared trip fund: everyone deposits first, you log bills as you go, and the app settles once at the end.', 'Quỹ chung chuyến đi: mọi người nạp quỹ trước, ghi hóa đơn trong chuyến đi và quyết toán một lần khi kết thúc.'],
     ['Language', 'Ngôn ngữ'],
     ['Shared Trip Fund', 'Quỹ chung chuyến đi'],
     ['Sign in', 'Đăng nhập'],

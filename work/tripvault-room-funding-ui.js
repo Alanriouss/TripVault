@@ -106,6 +106,7 @@
     const funding = getDisplayedFunding(trip);
     const balances = funding?.failed ? null : funding?.balances ?? currentVault()?.balances;
     let value = 'Fund not set up';
+    if (!trip.shared) value = money(Object.values(trip.depositUnits || {}).reduce((sum, units) => sum + units, 0));
     if (trip.fuji?.address) {
       value = funding?.failed ? 'Could not verify balance' : 'Checking balance…';
       if (balances) {
@@ -118,7 +119,7 @@
       }
     }
     return `<section class="panel fund-summary" aria-labelledby="fund-summary-title">
-      <div><h2 id="fund-summary-title">Trip fund balance</h2><p class="subtitle">Total held on Avalanche Fuji</p></div>
+      <div><h2 id="fund-summary-title">Trip fund balance</h2><p class="subtitle">${trip.shared ? 'Total held on Avalanche Fuji' : 'Simulated trip fund balance'}</p></div>
       <strong>${safe(value)}</strong>
     </section>`;
   }

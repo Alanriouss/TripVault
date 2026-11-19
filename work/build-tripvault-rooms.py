@@ -11,6 +11,7 @@ room_ui += '\n' + funding_math + '\n' + (root / 'work/tripvault-room-funding-ui.
 room_ui += '\n' + (root / 'work/tripvault-room-progress.js').read_text()
 room_ui += '\n' + (root / 'work/tripvault-room-bill-ui.js').read_text()
 room_ui += '\n' + (root / 'work/tripvault-room-notifications.js').read_text()
+room_ui += '\n' + (root / 'work/tripvault-demo-ui.js').read_text()
 
 def replace(old, new):
     global source
@@ -1634,7 +1635,7 @@ replace("const newTrip = btn('New trip', 'new-trip',", "const newTrip = btn('New
 replace("const tripsButton = trip ? btn('Trips', 'trip-list', { tone: 'ghost' }) : newTrip;",
         "const tripsButton = trip?.shared ? '' : trip ? btn('Trips', 'trip-list', { tone: 'ghost' }) : newTrip;")
 replace("""    const avatarButton = trip
-      ? `<button""", """    const avatarButton = trip && !trip.shared
+      ? `<button""", """    const avatarButton = trip && !trip.shared && !demoMode
       ? `<button""")
 replace('<span class="chip violet header-demo">Demo</span>', '''<span class="chip violet header-demo">${trip?.shared ? 'Room' : 'Demo'}</span>''')
 replace("    const saved = storageUnavailable ? null : readStorage(KEY);", "    if (changedTrip?.shared) return true;\n    const saved = storageUnavailable ? null : readStorage(KEY);")
@@ -1815,11 +1816,11 @@ replace("""'fuji-deploy-form', 'fuji-funds-form'].includes(form.id)""", """'fuji
 replace("    if (form.id === 'fuji-deploy-form') deployFuji(data, fail);", "    if (form.id === 'room-form') submitRoomForm(data, fail);\n    else if (form.id === 'fuji-link-form') linkExistingVault(data, fail);\n    else if (form.id === 'fuji-deploy-form') deployFuji(data, fail);")
 replace("      updateFunds(state.trip, data.get('kind'), parseUnits(data.get('amount')), fail);", "      if (!state.trip.shared) updateFunds(state.trip, data.get('kind'), parseUnits(data.get('amount')), fail);")
 replace("  function screen(){return ({overview,people,bills,split,wallet}[state.view]||overview)()}", """  function screen() {
-    if (state.trip.shared) {
+    if (state.trip.shared || demoMode) {
       if (state.view === 'overview') return roomOverview();
       if (state.view === 'people') return roomMembers(state.trip);
       if (state.view === 'split') return roomFinalSplit(state.trip);
-      if (state.view === 'wallet') return fujiPanel();
+      if (state.view === 'wallet') return state.trip.shared ? fujiPanel() : demoWallet(state.trip);
     }
     return ({ overview, people, bills, split, wallet }[state.view] || overview)();
   }""")
@@ -1832,7 +1833,7 @@ replace("btn('Cancel approval', 'revoke-split', { tone: 'secondary' })",
         "btn('Cancel approval', 'revoke-split', { tone: 'danger cancel-approval' })")
 replace("btn('Cancel my approval','revoke-bill',{tone:'secondary',",
         "btn('Cancel my approval','revoke-bill',{tone:'danger cancel-approval',")
-replace("function detail(id){const b=", "function detail(id){if(state.trip?.shared)return roomBillDetail(id);const b=")
+replace("function detail(id){const b=", "function detail(id){if(state.trip?.shared || demoMode)return roomBillDetail(id);const b=")
 replace("b.status==='approved'?'Approved':'Pending approval'",
         "state.trip.shared ? roomBillStatus(b) : b.status==='approved'?'Approved':'Pending approval'")
 replace("return trip.bills.some(bill => bill.status !== 'approved');",
@@ -2061,7 +2062,7 @@ replace('    app.innerHTML = header();', """    const split = app.querySelector?
     }
     updateBillFundingForm();
     updateRoomSignInButton();""")
-replace("            ${content}\n          </main>", """            ${trip?.shared ? roomTripToolbar(trip) : ''}
+replace("            ${content}\n          </main>", """            ${trip && (trip.shared || demoMode) ? roomTripToolbar(trip) : ''}
             ${trip?.shared && !rooms.token ? '<p class="notice warn">Your room sign-in expired. ' + btn('Sign in again', 'room-reauthenticate', { tone: 'secondary' }) + '</p>' : ''}
             ${content}
           </main>""")
@@ -2162,7 +2163,7 @@ replace("              ${btn('Guide', 'guide', { tone: 'ghost' })}",
 replace("""<span class="chip violet header-demo">${trip?.shared ? 'Room' : 'Demo'}</span>""",
         """${trip?.shared ? '' : '<span class="chip violet header-demo">Demo</span>'}""")
 replace("const tripsButton = trip?.shared ? '' : trip ? btn('Trips', 'trip-list', { tone: 'ghost' }) : newTrip;",
-        "const tripsButton = trip?.shared || (!trip && rooms.online) ? '' : trip ? btn('Trips', 'trip-list', { tone: 'ghost' }) : newTrip;")
+        "const tripsButton = trip?.shared || (demoMode && trip) || (!trip && rooms.online) ? '' : trip ? btn('Trips', 'trip-list', { tone: 'ghost' }) : newTrip;")
 replace("""${trip ? 'Trips / ' + safe(trip.name) : 'Your trips'}""",
         """${trip ? 'Trips / ' + userText(trip.name) : 'Your trips'}""")
 replace('    app.innerHTML = header();', """    if (document.documentElement) {
@@ -2202,7 +2203,7 @@ bill_item_start = source.index('  function billItem(b)')
 bill_item_end = source.index('\n', bill_item_start)
 replace(source[bill_item_start:bill_item_end], """  function billItem(bill) {
     const payer = member(bill.payer);
-    const status = state.trip.shared ? roomBillStatus(bill) : ui(bill.status === 'approved' ? 'Approved' : 'Pending approval');
+    const status = state.trip.shared || demoMode ? roomBillStatus(bill) : ui(bill.status === 'approved' ? 'Approved' : 'Pending approval');
     const iconName = bill.status === 'approved' ? 'check' : bill.status === 'rejected' ? 'close' : 'bill';
     return `<button type="button" class="bill-row is-${safe(bill.status)}" data-act="bill-detail" data-id="${bill.id}">
       <span class="row-label">
@@ -2386,6 +2387,14 @@ try:
     public_dir = root / 'public'
     public_dir.mkdir(exist_ok=True)
     (public_dir / 'index.html').write_text(source, encoding='utf-8')
+    # Keep the standalone GitHub Pages demo on the same UI as the server.
+    demo_source = source.replace(
+        "const demoMode = new URLSearchParams(window.location?.search || '').get('demo') === '1';",
+        "const demoMode = true;", 1)
+    demo_source = demo_source.replace('''        <div style="text-align:center; margin-top:12px; font-size:13px; color:var(--subtle);">
+          Using a real wallet? <a href="${exitDemoUrl}" class="subtle-link">Open shared-trip mode</a>
+        </div>''', '')
+    (root / 'docs/index.html').write_text(demo_source, encoding='utf-8')
     (root / 'work/tripvault-v9.js').write_text(source.split('<script>\n', 1)[1].split('</script>', 1)[0], encoding='utf-8')
     (backend.parent / 'entry.js').write_text(generated, encoding='utf-8')
     print("Build output written to workspace.")

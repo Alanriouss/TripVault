@@ -125,7 +125,7 @@
     const rate = quote || fx;
     const plan = settlementPlan(trip, rate);
     const settled = trip.settled || vault?.settled;
-    const published = vault && matchesFujiDraft(trip, vault);
+    const published = trip.shared ? vault && matchesFujiDraft(trip, vault) : Boolean(quote);
     const hasApprovedBills = trip.bills.some(bill => bill.status === 'approved');
     const transfers = plan.transfers.map(transfer => row(
       userText(member(transfer.from).name) + ' → ' + userText(member(transfer.to).name),
@@ -140,7 +140,7 @@
       ${settled || published ? `<span class="chip violet">${settled ? 'Settled' : 'In review'}</span>` : ''}
     </div>
     <div class="stack room-final-split" data-split-trip="${safe(trip.id)}">
-      ${fujiPanel('split', finalSplitReview(trip, plan))}
+      ${trip.shared ? fujiPanel('split', finalSplitReview(trip, plan)) : demoPaymentsPanel(trip, plan)}
       <section class="panel stack split-breakdown">
         ${!settled && !hasApprovedBills ? `<div>
           <h2>Nothing to split yet</h2>
