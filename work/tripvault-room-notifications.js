@@ -23,6 +23,7 @@
       sender: trip.members.find(person => person.id === feedback.author)?.name,
     });
     for (const feedback of bill.feedbackLog || []) {
+      if (isDemoTrip(trip) && (!feedback.recipients?.includes(member.id) || feedback.author === member.id)) continue;
       add(feedback.id, feedback.label, feedback);
     }
     if (involved) {
@@ -44,14 +45,16 @@
   }
 
   function tripNotificationEntries(trip) {
-    const member = trip.members.find(item => item.address === rooms.account);
+    const member = isDemoTrip(trip) ? trip.members.find(item => item.id === state.actor)
+      : trip.members.find(item => item.address === rooms.account);
     if (!member) return [];
 
     const bills = trip.bills.slice().reverse().flatMap(bill => {
       const involved = [bill.createdBy || bill.payer, bill.payer, ...bill.participants].includes(member.id);
       const feedback = billFeedbackNotifications(trip, bill, member, involved);
       const related = { billId: bill.id, title: bill.label };
-      const review = (bill.notificationLog || []).map(event => ({
+      const review = (bill.notificationLog || [])
+        .filter(event => !isDemoTrip(trip) || event.recipients?.includes(member.id)).map(event => ({
         ...related, title: event.label,
         id: (event.kind === 'cancellation-requested' ? 'removal' : 'bill-event') + ':' + bill.id + ':' + event.id,
         heading: BILL_EVENT_HEADINGS[event.kind], receivedAt: event.receivedAt,
@@ -82,7 +85,8 @@
       return [...feedback, ...review];
     });
 
-    const reminders = rooms.reminders.filter(reminder => reminder.roomId === trip.id).map(reminder => ({
+    const reminders = (isDemoTrip(trip) ? (trip.demoReminders || []).filter(reminder => reminder.recipient === member.id) : rooms.reminders)
+      .filter(reminder => reminder.roomId === trip.id).map(reminder => ({
       id: 'top-up:' + reminder.id, reminder, heading: 'Top-up reminder', title: reminder.draft.label,
       sender: reminder.sender, receivedAt: reminder.receivedAt,
     }));
@@ -96,11 +100,11 @@
     if (roomFundingCancelled(trip)) {
       notices.push({ id: 'cancelled', heading: 'Trip cancelled', view: 'wallet',
         receivedAt: Date.parse(trip.depositDeadline),
-        message: trip.fuji?.address ? 'Someone was below the minimum at the deadline. Open Wallet to take back your deposit.'
+        message: trip.fuji?.address || (isDemoTrip(trip) && demoFundReady(trip)) ? 'Someone was below the minimum at the deadline. Open Wallet to take back your deposit.'
           : 'The deposit deadline passed without a linked trip fund.' });
     } else if (trip.settled) {
       notices.push({ id: 'settled', heading: 'Group payments complete', view: 'wallet',
-        receivedAt: trip.fuji?.settledAt,
+        receivedAt: trip.fuji?.settledAt || trip.settledAt,
         message: 'Open Wallet to send any remaining balance to your wallet.' });
     } else if (trip.billsClosedAt) {
       notices.push({ id: 'ended', heading: trip.endedAt ? 'Trip ended early' : 'Trip ended', view: trip.endedAt ? 'split' : 'bills',
@@ -134,7 +138,7 @@
 
   function sampleNotificationTrip() {
     const trip = state.trip;
-    return trip?.id === 'judges-sample' && !trip.shared ? trip : null;
+    return isDemoTrip(trip) ? trip : null;
   }
 
   function notificationAccount() {
@@ -144,12 +148,20 @@
   function sampleNotifications(trip) {
     const sample = { roomId: trip.id, roomName: trip.name };
     const prefix = trip.id + ':' + trip.endTime + ':';
-    return [
-      { ...sample, id: prefix + 'ended', heading: 'Trip ended', view: 'split',
-        receivedAt: Date.parse(trip.endTime), message: 'The trip has ended. Review any bills that are still open.' },
-      { ...sample, id: prefix + 'funded', heading: 'Minimum deposits reached', view: 'wallet',
-        receivedAt: Date.parse(trip.startTime) },
-    ];
+    const entries = tripNotificationEntries(trip);
+    const funding = demoFunding(trip);
+    if (!trip.settled && !funding.cancelled && demoFundReady(trip) && funding.balances.every(units => units >= trip.minimumUnits)) {
+      entries.push({ ...sample, id: prefix + 'funded', heading: 'Minimum deposits reached', view: 'wallet',
+        receivedAt: trip.demoFundedAt || Math.min(Date.now(), Date.parse(trip.startTime)) });
+    }
+    if (funding.ended && !trip.billsClosedAt && !trip.settled && !funding.cancelled) {
+      entries.push({ ...sample, id: prefix + 'ended', heading: 'Trip ended', view: 'split',
+        receivedAt: roomEndTime(trip), message: 'The trip has ended. Review any bills that are still open.' });
+    }
+    if (trip.reviewQuote && trip.demoPublishedRevision === trip.revision && !trip.settled && state.actor !== trip.owner) entries.push({ ...sample,
+      id: prefix + 'split:' + trip.revision, heading: 'Final amounts are ready to review',
+      receivedAt: trip.demoPublishedAt, view: 'split' });
+    return entries;
   }
 
   function readRoomNotifications() {
@@ -234,7 +246,8 @@
     if (units === null) return [`Requested ${money(reminder.units)}. Check the current amount before adding funds.`,
       btn('Check amount', 'room-funding-refresh', { tone: 'secondary' })];
     if (!units) return ['You’ve added enough for this bill.', ''];
-    const action = walletSession.chain !== FUJI.id
+    const action = isDemoTrip(trip) ? btn('Top up ' + money(units), 'pay-top-up-reminder', { data: id + ` data-units="${units}"` })
+      : walletSession.chain !== FUJI.id
       ? btn('Switch to Fuji', 'fuji-switch', { disabled: walletSession.busy })
       : btn('Top up ' + money(units), 'pay-top-up-reminder', {
         data: id + ` data-units="${units}"`,
@@ -374,7 +387,12 @@
     const targetTrip = sample?.id === item.roomId ? sample : rooms.list.get(item.roomId);
     if (!targetTrip) return;
     markRoomNotificationRead(id);
+    const actor = state.actor;
     selectTrip(targetTrip);
+    if (isDemoTrip(targetTrip) && targetTrip.members.some(person => person.id === actor)) {
+      state.actor = actor;
+      save();
+    }
     state.view = item.view || 'bills';
     render();
     window.scrollTo(0, 0);

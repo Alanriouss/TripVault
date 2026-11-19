@@ -78,6 +78,35 @@
     }
   }
 
+  function tripWalletPanel({ subtitle, walletDetails = '', paymentDetails = '', content = '', controls = '', transaction = '', utilities = '' }) {
+    return `<section class="panel stack trip-settings-panel trip-wallet-panel">
+      <div><h2>Wallet and trip fund</h2><p class="subtitle">${subtitle}</p></div>
+      ${walletDetails}${paymentDetails}${content}
+      ${controls ? '<div class="inline wallet-actions">' + controls + '</div>' : ''}
+      ${transaction}
+      ${utilities ? '<div class="inline wallet-utilities">' + utilities + '</div>' : ''}
+    </section>`;
+  }
+
+  function paymentReviewSheet(trip, draft, action) {
+    sheetOpen('Review payment amounts', { user: trip.name },
+      `<div class="stack">${draft.map((units, index) => row(userText(trip.members[index].name), fujiPaymentAmount(units))).join('')}
+        <p class="notice">Sharing these amounts also approves your own amount. Everyone else can then review and approve theirs.</p></div>`,
+      btn('Share amounts for approval', action, { tone: 'full', data: `data-revision="${trip.revision}"` }));
+  }
+
+  function groupPaymentsPanel({ personalAmount = '', message = '', content = '', actions = '', transaction = '', paymentDetails = '', utilities = '', details = '' }) {
+    return `<section class="panel stack split-payment" aria-labelledby="split-payment-title">
+      <h2 id="split-payment-title">Group payments</h2>
+      ${personalAmount}${message}${content}
+      ${actions ? '<div class="inline split-actions">' + actions + '</div>' : ''}
+      ${transaction}
+      ${paymentDetails ? finalSplitDetails('approvals', 'Member approvals', paymentDetails) : ''}
+      ${utilities ? '<div class="inline split-utilities">' + utilities + '</div>' : ''}
+      ${finalSplitDetails('wallet', 'Wallet and transaction details', details)}
+    </section>`;
+  }
+
   function finalSplitDetails(key, title, content) {
     return `<details class="split-details" data-split-detail="${key}">
       <summary>${title}</summary><div class="split-detail-body">${content}</div>
@@ -125,7 +154,7 @@
     const rate = quote || fx;
     const plan = settlementPlan(trip, rate);
     const settled = trip.settled || vault?.settled;
-    const published = trip.shared ? vault && matchesFujiDraft(trip, vault) : Boolean(quote);
+    const published = trip.shared ? vault && matchesFujiDraft(trip, vault) : trip.demoPublishedRevision === trip.revision;
     const hasApprovedBills = trip.bills.some(bill => bill.status === 'approved');
     const transfers = plan.transfers.map(transfer => row(
       userText(member(transfer.from).name) + ' → ' + userText(member(transfer.to).name),
@@ -245,6 +274,9 @@
           if (canDepositFuji(vault)) controls += btn('Deposit test USDC', 'fuji-deposit', { disabled });
           content += fujiDepositTiming(vault);
         }
+        content += finalSplitDetails('funding', 'Funding progress', vault.members.map((address, position) =>
+          row(userText(trip.members[position]?.name || address), money(vault.balances[position]),
+            vault.balances[position] >= trip.minimumUnits ? 'Minimum reached' : 'Below minimum')).join(''));
         if (canWithdrawFuji(vault, index)) {
           controls += btn('Withdraw my deposit', 'fuji-withdraw', { tone: 'secondary', disabled });
         }
@@ -319,24 +351,12 @@
       const details = '<p class="subtitle">This trip uses test USDC on Avalanche Fuji.</p>'
         + walletDetails + (confirmed ? transaction : '') + (disconnect ? '<div class="inline">' + disconnect + '</div>' : '');
       const actions = review.action + controls;
-      return `<section class="panel stack split-payment" aria-labelledby="split-payment-title">
-        <h2 id="split-payment-title">Group payments</h2>
-        ${personalAmount}${review.message}${content}
-        ${actions ? '<div class="inline split-actions">' + actions + '</div>' : ''}
-        ${confirmed ? '' : transaction}
-        ${paymentDetails ? finalSplitDetails('approvals', 'Member approvals', paymentDetails) : ''}
-        ${secondaryActions || utilities || review.secondary ? '<div class="inline split-utilities">' + secondaryActions + utilities + review.secondary + '</div>' : ''}
-        ${finalSplitDetails('wallet', 'Wallet and transaction details', details)}
-      </section>`;
+      return groupPaymentsPanel({ personalAmount, message: review.message, content, actions,
+        transaction: confirmed ? '' : transaction, paymentDetails,
+        utilities: secondaryActions + utilities + review.secondary, details });
     }
     utilities = secondaryActions + utilities + disconnect;
-    return `<section class="panel stack trip-settings-panel">
-      <div><h2>${section === 'split' ? 'Group payments' : 'Wallet and trip fund'}</h2>
-        <p class="subtitle">${trip?.shared ? 'This trip uses test USDC on Avalanche Fuji.' : 'Transactions use test USDC on Avalanche Fuji. Local demo balances are separate.'}</p>
-      </div>
-      ${walletDetails}${paymentDetails}${content}
-      ${controls ? '<div class="inline wallet-actions">' + controls + '</div>' : ''}
-      ${fujiTransactionCard(trip)}
-      ${utilities ? '<div class="inline wallet-utilities">' + utilities + '</div>' : ''}
-    </section>`;
+    return tripWalletPanel({ subtitle: trip?.shared ? 'This trip uses test USDC on Avalanche Fuji.'
+      : 'Transactions use test USDC on Avalanche Fuji. Local demo balances are separate.',
+      walletDetails, paymentDetails, content, controls, transaction: fujiTransactionCard(trip), utilities });
   }

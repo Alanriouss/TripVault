@@ -4,6 +4,7 @@
   let payingReminder = false;
 
   function getDisplayedFunding(trip) {
+    if (isDemoTrip(trip)) return demoFunding(trip);
     if (roomFundingResult?.id === trip.id && roomFundingResult.token === rooms.token
       && roomFundingResult.data.version === trip.version) return roomFundingResult.data;
     return null;
@@ -46,7 +47,7 @@
     if (roomFundingCancelled(trip)) return { message: 'This trip was cancelled at the deposit deadline.', wallet: true };
     if (trip.settled) return { message: 'The trip has settled.' };
     if (roomBillsClosed(trip) && !editing) return { message: 'The trip has ended. Review any bills that are still open.' };
-    if (!trip.fuji?.address) {
+    if (isDemoTrip(trip) ? !demoFundReady(trip) : !trip.fuji?.address) {
       return { message: 'Bills unlock after the organizer links the Fuji vault and everyone reaches the minimum deposit.', wallet: true };
     }
     const funding = getDisplayedFunding(trip);
@@ -78,6 +79,7 @@
   }
 
   function fundingTopUpButton(units) {
+    if (isDemoTrip()) return btn('Top up ' + money(units), 'deposit');
     if (walletSession.chain !== FUJI.id) return btn('Switch to Fuji', 'fuji-switch', { disabled: walletSession.busy });
     const unavailable = walletSession.busy || state.trip.fuji?.lastTx?.phase === 'pending';
     return btn('Top up ' + money(units), 'room-funding-top-up', { disabled: unavailable });
@@ -106,7 +108,7 @@
     const funding = getDisplayedFunding(trip);
     const balances = funding?.failed ? null : funding?.balances ?? currentVault()?.balances;
     let value = 'Fund not set up';
-    if (!trip.shared) value = money(Object.values(trip.depositUnits || {}).reduce((sum, units) => sum + units, 0));
+    if (isDemoTrip(trip) && demoFundReady(trip)) value = money(Object.values(trip.depositUnits || {}).reduce((sum, units) => sum + units, 0));
     if (trip.fuji?.address) {
       value = funding?.failed ? 'Could not verify balance' : 'Checking balance…';
       if (balances) {
@@ -167,7 +169,7 @@
     if (!display) return;
     let markup = roomFundingMessage(trip, status);
     const otherMembers = status.shortfalls?.filter(item => item.id !== state.actor) || [];
-    if (rooms.canSendTopUpReminders && !roomBillsClosed(trip) && !form.dataset.editing && draft?.label && otherMembers.length) {
+    if ((isDemoTrip(trip) || rooms.canSendTopUpReminders) && !roomBillsClosed(trip) && !form.dataset.editing && draft?.label && otherMembers.length) {
       const caption = otherMembers.length === 1 ? 'Remind ' + member(otherMembers[0].id).name + ' to top up'
         : 'Send top-up reminders';
       markup += btn(caption, 'send-top-up-reminder', { tone: 'secondary', disabled: sendingReminders.has(form) });
@@ -188,6 +190,7 @@
   async function sendBillTopUpReminder(element) {
     const trip = state.trip;
     const form = element.closest('#bill-form[data-room]');
+    if (isDemoTrip(trip)) return sendDemoReminder(trip, form);
     if (!trip?.shared || form?.dataset.room !== trip.id || sendingReminders.has(form) || !rooms.token) return;
     const draft = readBillDraft(form);
     if (!draft?.label) return;
@@ -217,6 +220,12 @@
   }
 
   function openTopUpReminder(id) {
+    if (isDemoTrip()) {
+      markRoomNotificationRead(state.trip.id + ':top-up:' + id);
+      state.view = 'wallet';
+      render();
+      return openRoomNotifications();
+    }
     const reminder = rooms.reminders.find(item => item.id === id);
     const trip = reminder && rooms.list.get(reminder.roomId);
     if (!trip) return;
@@ -229,6 +238,13 @@
   }
 
   async function payTopUpReminder(id, units) {
+    if (isDemoTrip()) {
+      const trip = state.trip;
+      const reminder = trip.demoReminders?.find(item => item.id === id && item.recipient === state.actor);
+      const needed = reminder && reminderBalance(trip, reminder);
+      if (!needed || needed !== Number(units)) return notice('The amount changed. Check the latest reminder.');
+      return updateFunds(trip, 'deposit', needed, notice);
+    }
     const tripId = state.trip?.id;
     const token = rooms.token;
     if (!tripId || !token || walletSession.busy || payingReminder) return;

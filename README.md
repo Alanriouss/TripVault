@@ -59,13 +59,13 @@ If you restart the tunnel, Cloudflare gives you a new link. Update `TRIPVAULT_OR
 
 3. On the Mac, open **System Settings → Wi-Fi → Details → TCP/IP** and note the Mac’s IPv4 address. [Apple’s Wi-Fi settings guide](https://support.apple.com/guide/mac-help/mh11935/mac)
 4. On the phone, open Safari or Chrome at `http://<MAC-IP>:8788/?demo=1`. Replace `<MAC-IP>` with the address from step 3. For example, if the Mac’s address is `192.168.1.23`, open `http://192.168.1.23:8788/?demo=1`. Keep the Mac awake and Terminal open.
-5. Dismiss the guide and tap **Start a fresh sample**. Follow the demo walkthrough below using the menu at the bottom of the screen. This Wi-Fi path is for the simulation.
+5. Dismiss the guide and tap **Open demo trip**. Follow the demo walkthrough below using the menu at the bottom of the screen. This Wi-Fi path is for the simulation.
 
 ### Share a mobile demo link with judges
 
 The repository includes a static demo at [`docs/index.html`](docs/index.html). To publish it with **GitHub Pages**, upload the `docs/` directory to the repository. Go to **Settings → Pages**, choose **Deploy from a branch**, select `main` and `/docs`, then click **Save**. When GitHub displays the published HTTPS link, test it on a phone and share it with the judges. This works on GitHub Free for a public repository. [GitHub Pages publishing guide](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site)
 
-Judges can open the published link in Safari or Chrome and tap **Start a fresh sample**. The Pages demo uses simulated balances saved in each browser. For shared rooms, wallet sign-in, and Fuji transactions on mobile, host the bundled Bun server at a public HTTPS address, set `TRIPVAULT_ORIGIN` to that exact address, and open it in a mobile wallet’s built-in browser. [What GitHub Pages hosts](https://docs.github.com/en/pages/getting-started-with-github-pages/what-is-github-pages)
+Judges can open the published link in Safari or Chrome and tap **Open demo trip**. The Pages demo uses simulated balances saved in each browser. For shared rooms, wallet sign-in, and Fuji transactions on mobile, host the bundled Bun server at a public HTTPS address, set `TRIPVAULT_ORIGIN` to that exact address, and open it in a mobile wallet’s built-in browser. [What GitHub Pages hosts](https://docs.github.com/en/pages/getting-started-with-github-pages/what-is-github-pages)
 
 ## Run TripVault on a fresh computer
 
@@ -117,13 +117,15 @@ When the terminal prints `TripVault Rooms: http://127.0.0.1:8788`, keep it open 
 
 ## First demo walkthrough
 
-1. In [the local demo](http://127.0.0.1:8788/?demo=1), dismiss the guide if it appears. Select **English** from the language menu in the header so the labels match this guide. Click **Start a fresh sample**. An and Bình each start with **5 simulated USDC**. The sample trip has already ended so you can try settlement immediately.
+1. In [the local demo](http://127.0.0.1:8788/?demo=1), dismiss the guide if it appears. Select **English** from the language menu in the header so the labels match this guide. The link opens the sample trip directly. An and Bình each start with **5 simulated USDC** and the trip is in progress.
 2. Go to **Bills → Add bill**. Enter **Lunch**, enter **100000** in the VND amount field, select **An** as the payer, keep **An** and **Bình** selected, then click **Save bill**.
-3. Open **Lunch**, click **Approve bill** as An, and close the bill. Click An’s avatar in the top-right corner, choose **Bình**, then open **Lunch** and click **Approve bill** again.
-4. Close the bill and switch back to **An** using the avatar. Go to **Final split → Prepare final split → Approve split**. Switch to **Bình** and click **Approve split** as him as well.
-5. Switch back to **An** and click **Settle group**. The demo rate is **25,000 VND per USD**, so Bình owes An **2 USDC**. To verify, open **Wallet → Demo vault** and check **Your deposited balance** before clicking **Claim refund**. An should have **7 USDC** and Bình should have **3 USDC** after you switch to his profile.
+3. Open **Lunch**, click **Approve bill** as An, and close the bill. Expand **Demo controls** below the screen, click **Switch demo member**, and choose **Bình**. Open **Lunch** and click **Approve bill** again. Suggestions, replies, and cancellation requests can also be tried in this dialog before approval.
+4. Switch back to **An** through **Demo controls**. Open **Overview → End trip early → End trip now**. Then open **Final split → Calculate final amounts → Review payment amounts → Share amounts for approval**. Sharing approves An's amount. Switch to **Bình** and click **Approve my amount**.
+5. Switch back to **An** and click **Make group payments**. The demo rate is **25,000 VND per USD**, so Bình owes An **2 USDC**. Open **Wallet** and check **Your balance in the trip fund** before choosing **Send … to my wallet**. An has **7 USDC** and Bình has **3 USDC**.
 
-**Start a fresh sample** resets the sample in the current browser.
+**Demo controls → Reset demo** resets the sample in the current browser. **Restart with setup** starts before the deposit deadline so you can try member names, roster confirmation, deposits, and withdrawals. Use **Add demo member** to simulate an extra participant before confirming the roster. Once everyone has funded, **Start funded demo trip** advances the simulation to the start. **All trips** leaves the sample and returns to the normal home page for real wallet connections. Demo has no separate room list or invite-code flow.
+
+Demo and wallet-connected trips use the same screen, wallet-card, payment-card, and bill-dialog components. Demo actions use local simulated balances and roles; wallet signatures, cross-device shared rooms, and blockchain transactions require shared-trip mode. Run `bun run verify:demo` to check both the served demo and the GitHub Pages demo.
 
 ## Troubleshooting
 
@@ -133,7 +135,7 @@ When the terminal prints `TripVault Rooms: http://127.0.0.1:8788`, keep it open 
 | Bun cannot find the `start` script | Repeat step 3 and confirm that the folder lists `package.json`. |
 | The browser shows **Unable to connect** or **Connection refused** | Run `bun run start` and keep the terminal open. Use the address displayed there. |
 | Bun says port 8788 is in use | Use port 8789 with the command below for your operating system, then open [the demo on port 8789](http://127.0.0.1:8789/?demo=1). |
-| The page asks you to connect a wallet | Add `?demo=1` at the end of the address and click **Start a fresh sample**. |
+| The page asks you to connect a wallet | Add `?demo=1` at the end of the address and click **Open demo trip**. |
 
 On macOS or Linux:
 

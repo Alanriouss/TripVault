@@ -1,6 +1,20 @@
   const SITE_LANGUAGE_KEY = 'tripvault-site-language';
   let siteLanguage = readStorage(SITE_LANGUAGE_KEY) === 'vi' ? 'vi' : 'en';
   const vietnameseUI = new Map([
+    ['Demo trip', 'Chuyến đi mẫu'],
+    ['Changes here only affect this sample trip. All trips returns to wallet-connected mode.', 'Mọi thao tác ở đây chỉ áp dụng cho chuyến đi mẫu. Bấm Tất cả chuyến đi để trở về web kết nối ví thật.'],
+    ['Add demo member', 'Thêm thành viên mô phỏng'],
+    ['Demo member added.', 'Đã thêm thành viên mô phỏng.'],
+    ['Demo mode', 'Chế độ Demo'],
+    ['Balances and members are simulated in this mode.', 'Tiền và thành viên trong chế độ này được mô phỏng.'],
+    ['Connect a real wallet', 'Kết nối ví thật'],
+    ['Demo controls', 'Điều khiển bản thử'],
+    ['Restart with setup', 'Tạo lại từ bước chuẩn bị'],
+    ['Start funded demo trip', 'Bắt đầu chuyến đi mô phỏng đã đủ quỹ'],
+    ['This action is unavailable.', 'Thao tác này chưa khả dụng.'],
+    ['This trip cannot be ended early.', 'Chưa thể kết thúc sớm chuyến đi này.'],
+    ['Enter a valid display name.', 'Hãy nhập tên hiển thị hợp lệ.'],
+    ['Enter a valid trip name.', 'Hãy nhập tên chuyến đi hợp lệ.'],
     ['Simulated trip fund balance', 'Số dư mô phỏng của quỹ chuyến đi'],
     ['Bill recorded. Waiting for approval.', 'Đã lưu hóa đơn, đang chờ duyệt.'],
     ['Shared trip fund: everyone deposits first, you log bills as you go, and the app settles once at the end.', 'Quỹ chung chuyến đi: mọi người nạp quỹ trước, ghi hóa đơn trong chuyến đi và quyết toán một lần khi kết thúc.'],
@@ -41,6 +55,8 @@
     ['Demo member', 'Thành viên mô phỏng'],
     ['Previewing as', 'Đang xem với vai trò'],
     ['Switch demo member', 'Đổi thành viên mô phỏng'],
+    ['Preview approvals from another member', 'Xem và duyệt hóa đơn với vai trò thành viên khác'],
+    ['Current', 'Đang chọn'],
     ['Minimum reached', 'Đã đủ mức nạp tối thiểu'],
     ['Refresh market reference', 'Cập nhật tỷ giá tham chiếu'],
     ['These are simulated member balances, not real connected wallets.', 'Số dư thành viên được mô phỏng trong bản thử.'],
@@ -443,6 +459,9 @@
     ['Group payments are complete. Each person can move their remaining test USDC to their wallet.', 'Đã quyết toán xong. Mỗi người có thể chuyển số USDC còn lại về ví.'],
     ['What each person gets back', 'Số tiền mỗi người nhận lại'],
     ['Available to claim', 'Có thể nhận về ví'],
+    ['Claimed', 'Đã nhận về ví'],
+    ['Trip ended. Open Final split to review who pays whom.', 'Chuyến đi đã kết thúc. Mở Quyết toán để xem ai trả cho ai.'],
+    ['Demo settlement completed. Claim remaining USDC in Wallet.', 'Đã quyết toán bản thử. Mở Ví để nhận số USDC còn lại.'],
     ['No balance left to claim', 'Đã nhận hết số dư'],
     ['No payment', 'Không cần chuyển tiền'],
     ['No payout', 'Không có số tiền nhận lại'],
@@ -518,6 +537,10 @@
   ]);
 
   const vietnamesePatterns = [
+    [/^Deposited ([\d.,]+ USDC) · (Receives|Pays|Net) ([\d.,]+ USDC) · (.+)$/, (_, deposit, kind, amount, status) => 'Đã nạp ' + deposit + ' · ' + ({ Receives: 'Nhận ', Pays: 'Trả ', Net: 'Chênh lệch ' })[kind] + amount + ' · ' + ui(status)],
+    [/^(Available to claim|Claimed) · ([\d.,]+ USDC)$/, (_, status, amount) => ui(status) + ' · ' + amount],
+    [/^Claimed ([\d.,]+ USDC) \(simulation\)$/, (_, amount) => 'Đã nhận ' + amount + ' (mô phỏng)'],
+    [/^(.+) · Current$/, (_, name) => name + ' · Đang chọn'],
     [/^(\d+) people$/, (_, count) => count + ' người'],
     [/^(\d+) members?( · (Shared room|Local demo))?$/, (_, count, suffix, kind) => count + ' thành viên' + (suffix ? ' · ' + ui(kind) : '')],
     [/^(\d+) of (\d+)$/, (_, count, total) => count + '/' + total],
