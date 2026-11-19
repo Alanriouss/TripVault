@@ -1361,6 +1361,8 @@ dialog.guide-modal .sheet-head .btn {
   flex-shrink: 0 !important;
 }
 dialog.guide-modal .sheet-body {
+  display: block;
+  min-height: 0;
   flex: 1 1 auto !important;
   overflow-y: auto !important;
   overscroll-behavior: contain !important;

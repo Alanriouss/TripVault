@@ -131,6 +131,14 @@ async function launch(options = {}, script = source) {
   };
 }
 
+if (source.includes('const vietnameseUI =')) {
+  const dictionary = source.slice(source.indexOf('  const vietnameseUI ='), source.indexOf('  function localizeUI('));
+  const subtitle = runInNewContext("const siteLanguage = 'vi';" + dictionary
+    + "ui('Create a trip or join one with your wallet.')");
+  assert.equal(subtitle, 'Tạo chuyến đi hoặc dùng ví để tham gia chuyến đi có sẵn.');
+  assert.match(readFileSync(output, 'utf8'), /dialog.guide-modal .sheet-body \{\s*display: block;\s*min-height: 0;/);
+}
+
 const happy = await launch();
 assert.match(happy.page.innerHTML, /No trips yet/);
 if (source.includes('data-split-trip')) {
