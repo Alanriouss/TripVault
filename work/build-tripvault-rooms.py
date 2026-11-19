@@ -1630,7 +1630,7 @@ replace("""    if (!trip || trip.fuji?.address || state.actor !== trip.owner || 
       || (trip.shared && !trip.locked) || members.length !== trip.members.length""")
 replace("""    const content = trip ? screen() : state.trips.length ? tripsScreen() : empty() + '<div class="stack" style="margin-top:13px">' + fujiPanel() + '</div>';""", """    const content = trip ? screen() : rooms.online ? roomsHome()
       : state.trips.length ? tripsScreen() : empty() + '<div class="stack" style="margin-top:13px">' + fujiPanel() + '</div>';""")
-replace("const newTrip = btn('New trip', 'new-trip',", "const newTrip = btn(rooms.online ? 'New room' : 'New trip', 'new-trip',")
+replace("const newTrip = btn('New trip', 'new-trip',", "const newTrip = btn('New trip', 'new-trip',")
 replace("const tripsButton = trip ? btn('Trips', 'trip-list', { tone: 'ghost' }) : newTrip;",
         "const tripsButton = trip?.shared ? '' : trip ? btn('Trips', 'trip-list', { tone: 'ghost' }) : newTrip;")
 replace("""    const avatarButton = trip
@@ -2167,7 +2167,7 @@ replace("""${trip ? 'Trips / ' + safe(trip.name) : 'Your trips'}""",
         """${trip ? 'Trips / ' + userText(trip.name) : 'Your trips'}""")
 replace('    app.innerHTML = header();', """    if (document.documentElement) {
       document.documentElement.lang = siteLanguage;
-      document.title = 'TripVault · ' + ui('Rooms');
+      document.title = 'TripVault · ' + ui('Shared Trip Fund');
       const skipLink = document.querySelector('.skip');
       if (skipLink) skipLink.textContent = ui('Skip to content');
     }
@@ -2251,30 +2251,14 @@ replace("  function selectTrip(trip) {", """  function formatShortDateTime(iso) 
   }
 
   function formatFxReference(quote) {
-    if (!quote || !quote.rate) return 'Reference rate: Unavailable';
-    const rounded = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(Math.round(quote.rate));
-    let src = 'Xe';
-    if (quote.source) {
-      if (quote.source.includes('Fixed demo')) src = 'Demo';
-      else if (quote.source.includes('ExchangeRate-API')) src = 'ExchangeRate-API';
-      else if (quote.source.includes('Xe')) src = 'Xe';
-      else src = quote.source;
-    }
-    let timeStr = '11/11 07:00';
-    if (quote.updated) {
-      const d = new Date(quote.updated);
-      if (!isNaN(d.getTime())) {
-        const day = String(d.getDate()).padStart(2, '0');
-        const month = String(d.getMonth() + 1).padStart(2, '0');
-        const hours = String(d.getHours()).padStart(2, '0');
-        const mins = String(d.getMinutes()).padStart(2, '0');
-        timeStr = `${day}/${month} ${hours}:${mins}`;
-      } else {
-        const cleaned = String(quote.updated).replace(/20\\d\\d[-/]?\\s*/, '').trim();
-        if (cleaned) timeStr = cleaned;
-      }
-    }
-    return `Reference rate: ${rounded} VND per USD (${src}, ${timeStr})`;
+    if (!quote || !quote.rate) return ui('Reference rate unavailable');
+    const rounded = new Intl.NumberFormat(siteLanguage === 'vi' ? 'vi-VN' : 'en-US', {
+      maximumFractionDigits: 0,
+    }).format(quote.rate);
+    const source = quote.source || '';
+    const time = quote.updated ? formatFxShortTime(quote.updated) : '';
+    const details = [source, time].filter(Boolean).join(' · ');
+    return ui('Reference rate') + ' · ' + rounded + ' VND / USD' + (details ? ' · ' + details : '');
   }
 
   function demoLandingScreen() {
@@ -2336,7 +2320,7 @@ replace("  function selectTrip(trip) {", """  function formatShortDateTime(iso) 
 replace("""  const FALLBACK_RATE = {
     rate: 25640.2, source: 'Xe reference', updated: '2026-11-11', live: false,
   };""", """  const FALLBACK_RATE = {
-    rate: 25640.2, source: 'Xe', updated: '11/11 07:00', live: false,
+    rate: 25640.2, source: 'Xe', updated: '2026-11-11T00:00:00Z', live: false,
   };""")
 replace("""      <div class="stack">
         ${trip.shared || isAddress(trip.fuji?.address) ? fujiPanel('split') : ''}""",
@@ -2383,6 +2367,11 @@ replace("        fx = quote;\n        lockQuote(trip, quote);",
 replace("  refreshFX();\n  if (!demoMode) enableRooms();",
         "  if (!demoMode) {\n    refreshFX();\n    enableRooms();\n  }")
 replace("  discoverWallets();", "  if (!demoMode) discoverWallets();")
+replace("  restoreWorkspace(loadWorkspace());", """  if (demoMode) fx = {
+    rate: 25000, source: 'Fixed demo rate', updated: '', live: false, historical: true,
+  };
+  restoreWorkspace(loadWorkspace());""")
+
 replace("  function fujiPanel(section = 'wallet', review = null) {\n    const trip",
         "  function fujiPanel(section = 'wallet', review = null) {\n    if (demoMode) return '';\n    const trip")
 replace('!rooms.online && window.location?.protocol', '!demoMode && !rooms.online && window.location?.protocol')

@@ -968,6 +968,7 @@
 
   function formatFxShortTime(raw) {
     if (!raw) return '';
+    if (!/^\d{4}-\d{2}-\d{2}(?:T|$)/.test(String(raw)) && !/^[A-Za-z]{3},? /.test(String(raw))) return String(raw);
     const d = new Date(raw);
     if (!isNaN(d.getTime())) {
       const pad = n => String(n).padStart(2, '0');

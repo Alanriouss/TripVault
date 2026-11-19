@@ -1,7 +1,9 @@
 [README.md](https://github.com/user-attachments/files/34852275/README.md)
 # TripVault
 
-TripVault records expenses paid in VND outside the app. Members deposit USDC into a time-locked trip fund, review the bills that involve them, and settle the net amounts after the trip. The shared-room prototype runs on Avalanche Fuji.
+TripVault records expenses paid in VND outside the app. Members deposit USDC into a time-locked trip fund, review the bills that involve them, and settle the net amounts after the trip. The shared trip app runs on Avalanche Fuji.
+
+A **trip** is the shared journey and workspace. Its **shared fund** holds member deposits. A **vault** is the smart contract that secures those deposits. Members use an **invite code** or invite link to join the trip.
 
 ## Start here for judging
 

@@ -1871,7 +1871,7 @@ dialog.guide-modal .sheet-footer {
   const LEGACY_KEY = 'tripvault-timelocked-external-v7';
   const USDC_SCALE = 1_000_000;
   const FALLBACK_RATE = {
-    rate: 25640.2, source: 'Xe', updated: '11/11 07:00', live: false,
+    rate: 25640.2, source: 'Xe', updated: '2026-11-11T00:00:00Z', live: false,
   };
   const app = document.getElementById('app');
   const sheet = document.getElementById('sheet');
@@ -4008,6 +4008,7 @@ dialog.guide-modal .sheet-footer {
 
   function formatFxShortTime(raw) {
     if (!raw) return '';
+    if (!/^\d{4}-\d{2}-\d{2}(?:T|$)/.test(String(raw)) && !/^[A-Za-z]{3},? /.test(String(raw))) return String(raw);
     const d = new Date(raw);
     if (!isNaN(d.getTime())) {
       const pad = n => String(n).padStart(2, '0');
@@ -5478,7 +5479,17 @@ function roomFundingShortfalls(trip, funding, draft) {
   let siteLanguage = readStorage(SITE_LANGUAGE_KEY) === 'vi' ? 'vi' : 'en';
   const vietnameseUI = new Map([
     ['Language', 'Ngôn ngữ'],
-    ['Rooms', 'Phòng chuyến đi'],
+    ['Shared Trip Fund', 'Quỹ chung chuyến đi'],
+    ['Sign in', 'Đăng nhập'],
+    ['Explore demo trip', 'Khám phá chuyến đi mẫu'],
+    ['Open demo trip', 'Mở chuyến đi mẫu'],
+    ['Paid outside', 'Đã ứng tiền bên ngoài'],
+
+    ['Reference rate', 'Tỷ giá tham chiếu'],
+    ['Reference rate unavailable', 'Chưa có tỷ giá tham chiếu'],
+    ['Fixed demo rate', 'Tỷ giá cố định của bản thử'],
+
+    ['Rooms', 'Chuyến đi'],
     ['Skip to content', 'Chuyển đến nội dung'],
     ['Choose a wallet', 'Chọn ví'],
     ['Connect the wallet you will use for this trip', 'Kết nối ví bạn sẽ dùng cho chuyến đi'],
@@ -5512,9 +5523,9 @@ function roomFundingShortfalls(trip, funding, draft) {
     ['Log bills and approve them', 'Ghi hóa đơn và duyệt'],
     ['Settle everyone in one step', 'Quyết toán cho cả nhóm trong một lần'],
 
-    ['Create a room', 'Tạo phòng'],
-    ['New room', 'Phòng mới'],
-    ['Join a room', 'Tham gia phòng'],
+    ['Create a room', 'Tạo chuyến đi'],
+    ['New room', 'Chuyến đi mới'],
+    ['Join a room', 'Tham gia chuyến đi'],
     ['Sign in to rooms', 'Đăng nhập vào phòng'],
     ['Sign in again', 'Đăng nhập lại'],
     ['Your room sign-in expired.', 'Phiên đăng nhập vào phòng đã hết hạn.'],
@@ -5586,7 +5597,7 @@ function roomFundingShortfalls(trip, funding, draft) {
     ['Copy invite link', 'Sao chép liên kết mời'],
     ['Invite link copied.', 'Đã sao chép liên kết mời.'],
     ['Copy the selected invite link.', 'Hãy sao chép liên kết mời đang được chọn.'],
-    ['Room code', 'Mã phòng'],
+    ['Room code', 'Mã mời'],
     ['Six-digit room code', 'Mã phòng 6 số'],
     ['This invitation is invalid.', 'Lời mời này không hợp lệ.'],
     ['Trip settings', 'Cài đặt chuyến đi'],
@@ -6003,7 +6014,7 @@ function roomFundingShortfalls(trip, funding, draft) {
     [/^(\d+) of (\d+) agreed to remove this bill\.$/, (_, count, total) => count + '/' + total + ' người đã đồng ý bỏ hóa đơn này.'],
     [/^Automatically approves at (.+) if nobody requests changes or asks to remove it\.$/, (_, date) => 'Hóa đơn tự duyệt lúc ' + date + ' nếu không ai yêu cầu sửa hoặc bỏ.'],
     [/^Remind (.+) to top up$/, (_, name) => 'Nhắc ' + name + ' nạp thêm'],
-    [/^Room code (.+)$/, (_, code) => 'Mã phòng ' + code],
+    [/^Room code (.+)$/, (_, code) => 'Mã mời ' + code],
     [/^Delete trip (.+)$/, (_, name) => 'Xóa chuyến đi ' + name],
     [/^Top up ([\d.,]+ USDC)$/, (_, amount) => 'Nạp thêm ' + amount],
     [/^Send ([\d.,]+ USDC) to my wallet$/, (_, amount) => 'Chuyển ' + amount + ' về ví của tôi'],
@@ -6416,7 +6427,7 @@ function roomFundingShortfalls(trip, funding, draft) {
   const GUIDE_CONTENT = {
     vi: {
       title: 'Cách dùng TripVault',
-      subtitle: 'Hướng dẫn tạo phòng, nạp quỹ, chia chi phí và quyết toán an toàn.',
+      subtitle: 'Tạo chuyến đi, nạp quỹ, ghi hóa đơn và quyết toán.',
       language: 'Ngôn ngữ hướng dẫn', close: 'Bắt đầu dùng ngay', skip: 'Bỏ qua', back: 'Quay lại', next: 'Tiếp theo',
       progress: (step, total) => `Bước ${step} / ${total}`,
       steps: [
@@ -6434,50 +6445,25 @@ function roomFundingShortfalls(trip, funding, draft) {
           alt: 'Màn hình Your trips và giao diện tạo phòng với các trường tên chuyến, mức nạp và 3 mốc thời gian.',
         },
         {
-          title: 'Bước 2 · Mời thành viên (Invite members)',
-          copy: `<p>Sau khi tạo phòng, chia sẻ phòng cho các thành viên trong nhóm:</p>
-                 <div class="guide-step-card">
-                   <ul style="margin: 0 0 0 18px; padding: 0; line-height: 1.6;">
-                     <li><b>Mã phòng 6 số</b>: Chia sẻ mã 6 số (ví dụ: <code class="room-code-badge">624183</code>), bạn bè chỉ cần bấm <b>Tham gia phòng (Join a room)</b> và nhập mã.</li>
-                     <li><b>Liên kết mời (Invite link)</b>: Bấm <b>Sao chép liên kết mời</b> để gửi qua Zalo, Telegram hoặc tin nhắn.</li>
-                     <li>Thành viên kết nối ví hỗ trợ mạng <b>Avalanche Fuji</b> và ký xác nhận SIWE không mật khẩu.</li>
-                   </ul>
-                 </div>`,
+          title: 'Bước 2 · Mời thành viên',
+          copy: `<p>Gửi mã mời 6 số hoặc sao chép liên kết mời cho bạn bè.</p><p>Mỗi người chọn <b>Tham gia chuyến đi</b>, kết nối ví rồi ký yêu cầu đăng nhập. Trước hạn nạp quỹ, mọi người cần nạp đủ mức tối thiểu.</p>`,
           alt: 'Màn hình hiển thị mã phòng 6 chữ số và nút sao chép liên kết mời thành viên.',
         },
         {
-          title: 'Bước 3 · Làm quen thanh menu chức năng (Sidebar navigation)',
-          copy: `<p>Thanh điều hướng bên trái (hoặc thanh đáy trên Mobile) cung cấp 5 công cụ chính:</p>
-                 <div class="guide-step-card">
-                   <ul style="margin: 0 0 0 18px; padding: 0; line-height: 1.7;">
-                     <li>🏠 <b>Tổng quan (Overview)</b>: Xem mã phòng, tiến độ chuyến đi, số dư quỹ và cài đặt.</li>
-                     <li>👥 <b>Thành viên (People)</b>: Danh sách bạn đồng hành, chi tiết ai đã ứng tiền và ai nợ.</li>
-                     <li>🧾 <b>Hóa đơn (Bills)</b>: Ghi nhận chi tiêu thực tế (VND) với 2 phương thức <b>Chia đều</b> hoặc <b>Chia tùy chỉnh</b>.</li>
-                     <li>⚖️ <b>Quyết toán (Final split)</b>: Tính toán bù trừ công nợ Zero-Sum bảo toàn và quy đổi sang USDC.</li>
-                     <li>💳 <b>Ví & Quỹ (Wallet)</b>: Nạp USDC vào quỹ Avalanche Fuji, rút tiền trước hạn hoặc nhận tiền về ví.</li>
-                   </ul>
-                 </div>`,
+          title: 'Bước 3 · Các mục chính',
+          copy: `<ul><li><b>Tổng quan</b> xem lời mời, tiến độ và số dư quỹ.</li><li><b>Thành viên</b> xem những người cùng đi.</li><li><b>Hóa đơn</b> ghi tiền đã ứng và duyệt phần được chia.</li><li><b>Quyết toán</b> xem ai trả hoặc nhận bao nhiêu.</li><li><b>Ví</b> nạp quỹ, rút trước hạn nạp hoặc nhận số dư sau quyết toán.</li></ul>`,
           alt: 'Thanh điều hướng bên trái hiển thị 5 mục: Overview, People, Bills, Final split, Wallet.',
         },
         {
-          title: 'Bước 4 · Quyết toán & Bắt buộc duyệt (Approve)',
-          copy: `<p>Khi chuyến đi kết thúc, quy trình quyết toán diễn ra minh bạch và an toàn:</p>
-                 <div class="guide-step-card">
-                   <div class="guide-card-tag danger">⚠️ Lưu ý chốt sổ</div>
-                   <ul style="margin: 6px 0 0 18px; padding: 0; line-height: 1.6;">
-                     <li><b>Khóa & duyệt hóa đơn</b>: Hoàn tất phê duyệt các hóa đơn đang chờ.</li>
-                     <li><b>Trưởng nhóm tính tiền</b>: Mở <b>Quyết toán (Final split)</b> để khóa tỷ giá USD/VND và công bố bảng phân bổ.</li>
-                     <li><b>Bắt buộc Approve</b>: <b>Tất cả thành viên phải bấm "Approve" (Xác nhận)</b> số tiền của mình thì hệ thống mới cho phép giải ngân.</li>
-                     <li><b>Thanh toán on-chain</b>: Trưởng nhóm thực hiện lệnh quyết toán; các thành viên vào <b>Ví (Wallet)</b> để rút số dư USDC về ví riêng.</li>
-                   </ul>
-                 </div>`,
+          title: 'Bước 4 · Duyệt và quyết toán',
+          copy: `<p>Hãy xử lý các hóa đơn đang chờ duyệt, yêu cầu sửa hoặc hủy.</p><p>Trưởng nhóm mở <b>Quyết toán</b> để chốt tỷ giá và công bố số tiền. Tất cả thành viên duyệt phần của mình, rồi trưởng nhóm thực hiện quyết toán. Sau đó mỗi người mở <b>Ví</b> để nhận số dư.</p>`,
           alt: 'Màn hình Final split hiển thị bảng quyết toán và các nút Approve xác nhận của thành viên.',
         },
       ],
     },
     en: {
       title: 'How to use TripVault',
-      subtitle: 'Create a room, fund the vault, split expenses, and settle securely.',
+      subtitle: 'Create a trip, add to the shared fund, record bills, and settle.',
       language: 'Guide language', close: 'Get started', skip: 'Skip for now', back: 'Back', next: 'Next',
       progress: (step, total) => `Step ${step} of ${total}`,
       steps: [
@@ -6495,43 +6481,18 @@ function roomFundingShortfalls(trip, funding, draft) {
           alt: 'Your trips view with Create a room button and the form showing name, deposit and times.',
         },
         {
-          title: 'Step 2 · Invite group members (Invite members)',
-          copy: `<p>Share the newly created room with your travel companions:</p>
-                 <div class="guide-step-card">
-                   <ul style="margin: 0 0 0 18px; padding: 0; line-height: 1.6;">
-                     <li><b>6-digit room code</b>: Share the code (e.g. <code class="room-code-badge">624183</code>). Members click <b>Join a room</b> and enter it.</li>
-                     <li><b>Copy invite link</b>: One click to copy the link and send via chat or social apps.</li>
-                     <li>Members connect a wallet on <b>Avalanche Fuji</b> and sign a passwordless SIWE challenge to join.</li>
-                   </ul>
-                 </div>`,
+          title: 'Step 2 · Invite members',
+          copy: `<p>Share the six-digit invite code or copy the invite link.</p><p>Each member selects <b>Join a trip</b>, connects a wallet, and signs in. Everyone must add the minimum deposit before the deposit deadline.</p>`,
           alt: 'Room invite card showing 6-digit room code and copy invite link button.',
         },
         {
-          title: 'Step 3 · Navigation menu & Key tools (Sidebar)',
-          copy: `<p>The sidebar navigation (or bottom bar on mobile) provides 5 essential tools:</p>
-                 <div class="guide-step-card">
-                   <ul style="margin: 0 0 0 18px; padding: 0; line-height: 1.7;">
-                     <li>🏠 <b>Overview</b>: Room code, trip progress stepper, vault balance, and settings.</li>
-                     <li>👥 <b>People</b>: Travelers roster, who paid what, who owes, and net positions.</li>
-                     <li>🧾 <b>Bills</b>: Record real-world VND expenses with <b>Equal split</b> or <b>Custom split</b>.</li>
-                     <li>⚖️ <b>Final split</b>: Calculate Zero-Sum balanced debt offsets converted to USDC.</li>
-                     <li>💳 <b>Wallet</b>: Manage Fuji smart contract deposits, early withdrawals, and payouts.</li>
-                   </ul>
-                 </div>`,
+          title: 'Step 3 · Main tools',
+          copy: `<ul><li><b>Overview</b> shows invitations, progress, and the shared fund balance.</li><li><b>People</b> lists your travel companions.</li><li><b>Bills</b> records payments and collects approvals.</li><li><b>Final split</b> shows who pays or receives money.</li><li><b>Wallet</b> adds funds, withdraws before the deposit deadline, and claims the balance after settlement.</li></ul>`,
           alt: 'Sidebar showing 5 navigation tabs: Overview, People, Bills, Final split, Wallet.',
         },
         {
-          title: 'Step 4 · Settlement & Mandatory approvals (Approve)',
-          copy: `<p>Once the journey ends, the settlement process is democratic and transparent:</p>
-                 <div class="guide-step-card">
-                   <div class="guide-card-tag danger">⚠️ Settlement rule</div>
-                   <ul style="margin: 6px 0 0 18px; padding: 0; line-height: 1.6;">
-                     <li><b>Finalize open bills</b>: Ensure all recorded bills are reviewed and approved.</li>
-                     <li><b>Organizer prepares split</b>: Open <b>Final split</b> to lock the USD/VND reference rate and share amounts.</li>
-                     <li><b>Mandatory Approvals</b>: <b>All members must review and click "Approve"</b> on their balance before settlement unlocks.</li>
-                     <li><b>On-chain settlement</b>: Organizer triggers group payments; travelers claim their final USDC balances in <b>Wallet</b>.</li>
-                   </ul>
-                 </div>`,
+          title: 'Step 4 · Review and settle',
+          copy: `<p>Resolve pending bills, suggested changes, and cancellation requests first.</p><p>The organizer opens <b>Final split</b> to lock the rate and share the amounts. Every member approves their amount, then the organizer settles the group. Each member can claim their remaining balance in <b>Wallet</b>.</p>`,
           alt: 'Final split screen showing member balance reviews and approval buttons.',
         },
       ],
@@ -6649,7 +6610,7 @@ function roomFundingShortfalls(trip, funding, draft) {
 
   function header() {
     const trip = state.trip;
-    const newTrip = btn(rooms.online ? 'New room' : 'New trip', 'new-trip', { tone: 'secondary new-trip', symbol: 'plus' });
+    const newTrip = btn('New trip', 'new-trip', { tone: 'secondary new-trip', symbol: 'plus' });
     const tripsButton = trip?.shared || (!trip && rooms.online) ? '' : trip ? btn('Trips', 'trip-list', { tone: 'ghost' }) : newTrip;
     const avatarButton = trip && !trip.shared
       ? `<button type="button" class="avatar-button" data-act="switch-member" aria-label="Switch demo member">${avatar(member(state.actor) || trip.members[0])}</button>`
@@ -6814,7 +6775,7 @@ function roomFundingShortfalls(trip, funding, draft) {
       ? [...split.querySelectorAll('details[data-split-detail][open]')].map(item => item.dataset.splitDetail) : []);
     if (document.documentElement) {
       document.documentElement.lang = siteLanguage;
-      document.title = 'TripVault · ' + ui('Rooms');
+      document.title = 'TripVault · ' + ui('Shared Trip Fund');
       const skipLink = document.querySelector('.skip');
       if (skipLink) skipLink.textContent = ui('Skip to content');
     }
@@ -7005,30 +6966,14 @@ function roomFundingShortfalls(trip, funding, draft) {
   }
 
   function formatFxReference(quote) {
-    if (!quote || !quote.rate) return 'Reference rate: Unavailable';
-    const rounded = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(Math.round(quote.rate));
-    let src = 'Xe';
-    if (quote.source) {
-      if (quote.source.includes('Fixed demo')) src = 'Demo';
-      else if (quote.source.includes('ExchangeRate-API')) src = 'ExchangeRate-API';
-      else if (quote.source.includes('Xe')) src = 'Xe';
-      else src = quote.source;
-    }
-    let timeStr = '11/11 07:00';
-    if (quote.updated) {
-      const d = new Date(quote.updated);
-      if (!isNaN(d.getTime())) {
-        const day = String(d.getDate()).padStart(2, '0');
-        const month = String(d.getMonth() + 1).padStart(2, '0');
-        const hours = String(d.getHours()).padStart(2, '0');
-        const mins = String(d.getMinutes()).padStart(2, '0');
-        timeStr = `${day}/${month} ${hours}:${mins}`;
-      } else {
-        const cleaned = String(quote.updated).replace(/20\d\d[-/]?\s*/, '').trim();
-        if (cleaned) timeStr = cleaned;
-      }
-    }
-    return `Reference rate: ${rounded} VND per USD (${src}, ${timeStr})`;
+    if (!quote || !quote.rate) return ui('Reference rate unavailable');
+    const rounded = new Intl.NumberFormat(siteLanguage === 'vi' ? 'vi-VN' : 'en-US', {
+      maximumFractionDigits: 0,
+    }).format(quote.rate);
+    const source = quote.source || '';
+    const time = quote.updated ? formatFxShortTime(quote.updated) : '';
+    const details = [source, time].filter(Boolean).join(' · ');
+    return ui('Reference rate') + ' · ' + rounded + ' VND / USD' + (details ? ' · ' + details : '');
   }
 
   function demoLandingScreen() {
@@ -7436,6 +7381,9 @@ function roomFundingShortfalls(trip, funding, draft) {
     if (trip !== state.trip && sheet.open) sheet.close();
     render();
   });
+  if (demoMode) fx = {
+    rate: 25000, source: 'Fixed demo rate', updated: '', live: false, historical: true,
+  };
   restoreWorkspace(loadWorkspace());
   if (!demoMode) discoverWallets();
   commit();

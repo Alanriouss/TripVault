@@ -419,6 +419,9 @@ if (source.includes('function enableRooms()')) {
 async function testDemoNotifications() {
   const judge = await launch({ url: 'http://127.0.0.1:8788/?demo=1', language: 'en' });
   judge.click('judge-demo-sample');
+  assert.match(judge.page.innerHTML, /25,000 VND \/ USD/);
+  assert.match(judge.page.innerHTML, /Fixed demo rate/);
+  assert.doesNotMatch(judge.page.innerHTML, /2001/);
   assert.match(judge.page.innerHTML, /class="trip-bell-dot" aria-hidden="true">2/);
   judge.click('room-notifications');
   assert.match(judge.sheet.innerHTML, /Trip ended/);
