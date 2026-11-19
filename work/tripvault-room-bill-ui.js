@@ -36,7 +36,7 @@
     const trip = state.trip;
     const bill = trip.bills.find(item => item.id === id);
     if (!bill) return;
-    const demo = demoMode && !trip.shared;
+    const demo = isDemoTrip(trip);
     const reviewable = !trip.settled && !trip.reviewQuote && bill.status !== 'rejected';
     const editable = reviewable && ['pending', 'disputed'].includes(bill.status);
     const canReview = editable && bill.participants.includes(state.actor);
@@ -49,7 +49,7 @@
     const suggestions = (bill.feedback || []).map(item => {
       const responses = item.responses || [];
       const myResponse = responses.find(response => response.member === state.actor);
-      const canRespond = rooms.canRespondToSuggestions && editable && bill.status === 'disputed'
+      const canRespond = (demo || rooms.canRespondToSuggestions) && editable && bill.status === 'disputed'
         && item.author !== state.actor && voters.includes(state.actor);
       const responseActions = canRespond ? [true, false].map(agree => btn(agree ? 'Agree' : 'Disagree', 'bill-feedback-vote', {
         tone: agree ? '' : 'danger',
@@ -78,15 +78,16 @@
         bill.autoApprovals?.includes(id) ? 'Automatically approved' : bill.approvals.includes(id) ? 'Approved' : 'Waiting for approval');
     }).join('');
     const reviewButtons = demo
-      ? (!trip.settled && (trip.approvalMode === 'everyone' || state.actor === trip.owner)
+      ? (reviewable && bill.participants.includes(state.actor) && ['pending', 'disputed', 'approved'].includes(bill.status)
         ? btn(hasApproved ? 'Cancel my approval' : 'Approve bill', hasApproved ? 'revoke-bill' : 'approve-bill',
           { tone: hasApproved ? 'danger cancel-approval' : '', data: idData }) : '')
+        + (canReview ? btn('Suggest changes', 'bill-feedback', { tone: 'secondary', data: idData }) : '')
       : canReview
       ? (hasApproved ? '' : btn('Approve bill', 'approve-bill', { data: idData }))
         + btn('Suggest changes', 'bill-feedback', { tone: 'secondary', data: idData })
       : '';
-    const editButton = !demo && editable && creator === state.actor ? btn('Edit bill', 'bill-edit', { tone: 'secondary', data: idData }) : '';
-    const cancelButtons = !demo && reviewable && voters.includes(state.actor)
+    const editButton = editable && creator === state.actor ? btn('Edit bill', 'bill-edit', { tone: 'secondary', data: idData }) : '';
+    const cancelButtons = reviewable && voters.includes(state.actor)
       ? (!votes.includes(state.actor) ? btn(bill.cancellation ? 'Agree to cancel' : 'Disagree and request cancellation', 'bill-cancel-yes',
         { tone: 'danger', data: idData }) : '') +
         (bill.cancellation ? btn('Keep bill', 'bill-cancel-no', { tone: 'secondary', data: idData }) : '')
@@ -118,7 +119,7 @@
 
   function roomBillAction(action, id) {
     const trip = state.trip;
-    const bill = trip?.shared && trip.bills.find(item => item.id === id);
+    const bill = (trip?.shared || isDemoTrip(trip)) && trip?.bills.find(item => item.id === id);
     if (!bill) return;
     if (action === 'bill-edit') return addBill(bill);
     if (action === 'bill-feedback') {
@@ -126,7 +127,7 @@
         <input type="hidden" name="id" value="${id}">
         <label class="field">Reason or suggested change<textarea name="comment" rows="4" required maxlength="500" autofocus></textarea></label>
         <p id="sheet-error" class="form-error" role="status"></p>
-        ${billSignInButton()}
+        ${trip.shared ? billSignInButton() : ''}
         <button class="btn full" type="submit">Send suggestion</button>
       </form>`);
     }
@@ -136,7 +137,7 @@
         <label class="field">Reason for cancellation<textarea name="reason" rows="4" required maxlength="500" autofocus></textarea></label>
         <p class="subtitle">Everyone in this trip can read your reason. The bill creator, payer and everyone sharing the bill must agree to cancel it.</p>
         <p id="sheet-error" class="form-error" role="status"></p>
-        ${billSignInButton()}</form>`,
+        ${trip.shared ? billSignInButton() : ''}</form>`,
       '<button class="btn full danger" type="submit" form="bill-cancellation-form">Send cancellation request</button>');
     }
     changeRoom(trip, 'bill.cancel', { id, agree: action === 'bill-cancel-yes' }, updated => {
@@ -146,8 +147,8 @@
 
   function submitBillCancellation(data, fail) {
     const trip = state.trip;
-    if (!trip?.shared) return;
-    if (!rooms.canSaveCancellationReason) return fail('The server needs an update to save the cancellation reason.');
+    if (!trip?.shared && !isDemoTrip(trip)) return;
+    if (trip.shared && !rooms.canSaveCancellationReason) return fail('The server needs an update to save the cancellation reason.');
     const id = Number(data.get('id'));
     const reason = String(data.get('reason') || '').trim();
     if (!reason) return fail('Enter a reason for cancellation.');
@@ -158,7 +159,7 @@
 
   function respondToBillFeedback(id, { author, suggestion, agree }) {
     const trip = state.trip;
-    if (!trip?.shared || !rooms.canRespondToSuggestions) return;
+    if ((!trip?.shared || !rooms.canRespondToSuggestions) && !isDemoTrip(trip)) return;
     changeRoom(trip, 'bill.feedback-vote', { id, author, suggestion, agree: agree === 'true' }, updated => {
       if (updated && sheet.open) roomBillDetail(id, 'Your response was saved.');
     }, showBillReviewError);
@@ -166,7 +167,7 @@
 
   async function submitBillFeedback(data, fail) {
     const id = Number(data.get('id'));
-    if (!state.trip?.shared) return;
+    if (!state.trip?.shared && !isDemoTrip()) return;
     if (rooms.busy) return fail('Another room action is in progress. Try again.');
     const comment = String(data.get('comment') || '').trim();
     if (!comment) return fail('Enter a reason or suggested change.');

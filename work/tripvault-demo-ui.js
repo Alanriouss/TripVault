@@ -1,4 +1,99 @@
   // Demo uses the shared trip components, with local balances and actions.
+  function isDemoTrip(trip = state.trip) {
+    return Boolean(trip && !trip.shared && (demoMode || trip.id === 'judges-sample'));
+  }
+
+  function changeDemoBill(trip, type, fields, completed, fail) {
+    const actor = state.actor;
+    const bill = trip.bills.find(item => item.id === fields.id);
+    const creator = bill && (bill.createdBy || bill.payer);
+    const voters = bill ? [...new Set([creator, bill.payer, ...bill.participants])] : [];
+    const editable = bill && ['pending', 'disputed'].includes(bill.status);
+    const reject = message => { fail(message); return null; };
+    if (!trip.members.some(person => person.id === actor) || trip.settled || trip.reviewQuote) {
+      return reject('This bill is closed for review.');
+    }
+    if (type !== 'bill.add' && (!bill || bill.status === 'rejected')) return reject('This bill is closed for review.');
+    const stamp = Date.now();
+    const eventId = () => 'demo-' + stamp + '-' + (trip.nextReviewEvent = (trip.nextReviewEvent || 0) + 1);
+    const log = (kind, recipients, comment, id = eventId()) => {
+      bill.notificationLog = [...(bill.notificationLog || []), {
+        id, kind, actor, recipients: [...new Set(recipients)].filter(id => id !== actor),
+        receivedAt: stamp, label: bill.label, comment,
+      }].slice(-50);
+    };
+    const status = () => bill.cancellation ? 'cancellation' : bill.feedback?.length ? 'disputed'
+      : bill.participants.every(id => bill.approvals.includes(id)) ? 'approved' : 'pending';
+    if (type === 'bill.add' || type === 'bill.edit') {
+      if (type === 'bill.edit' && (!editable || creator !== actor)) return reject('Only the bill creator can edit it.');
+      const next = {
+        id: bill?.id ?? trip.nextBillId++, label: fields.label, amount: fields.amount, payer: fields.payer,
+        participants: fields.participants, splitType: fields.splitType, customShares: fields.customShares,
+        createdBy: actor, approvals: [], status: 'pending', reviewStartedAt: stamp,
+        feedbackLog: bill?.feedbackLog || [], notificationLog: bill?.notificationLog || [],
+        history: bill ? [...(bill.history || []), {
+          label: bill.label, amount: bill.amount, payer: bill.payer, feedback: bill.feedback || [],
+        }].slice(-25) : [],
+      };
+      if (bill) trip.bills[trip.bills.indexOf(bill)] = next;
+      else trip.bills.push(next);
+    } else if (type === 'bill.feedback-vote') {
+      const suggestion = bill.feedback?.find(item => item.id === fields.suggestion && item.author === fields.author);
+      if (!editable || bill.status !== 'disputed' || !voters.includes(actor)
+        || !suggestion || suggestion.author === actor || typeof fields.agree !== 'boolean') {
+        return reject('This suggestion is closed for review.');
+      }
+      const responses = suggestion.responses || [];
+      if (responses.find(item => item.member === actor)?.agree === fields.agree) return trip;
+      suggestion.responses = [...responses.filter(item => item.member !== actor), { member: actor, agree: fields.agree }];
+      log(fields.agree ? 'suggestion-agreed' : 'suggestion-disagreed', [suggestion.author, creator], suggestion.comment);
+    } else if (type === 'bill.cancel') {
+      if (!voters.includes(actor) || typeof fields.agree !== 'boolean') return reject('This bill is closed for review.');
+      const existing = bill.cancellation;
+      if (!fields.agree) {
+        if (!existing) return reject('There is no request to remove this bill.');
+        log('cancellation-declined', voters, existing.reason);
+        delete bill.cancellation;
+        bill.status = status();
+      } else {
+        if (!existing && (!String(fields.reason || '').trim() || String(fields.reason).length > 500)) {
+          return reject('Enter a reason for cancellation.');
+        }
+        const cancellation = existing || { id: eventId(), previous: bill.status, votes: [],
+          requestedBy: actor, reason: String(fields.reason).trim(), requestedAt: stamp };
+        if (cancellation.votes.includes(actor)) return trip;
+        cancellation.votes.push(actor);
+        bill.cancellation = cancellation;
+        bill.status = voters.every(id => cancellation.votes.includes(id)) ? 'rejected' : 'cancellation';
+        if (!existing) log('cancellation-requested', trip.members.map(person => person.id), cancellation.reason, cancellation.id);
+        if (bill.status === 'rejected') cancellation.resolvedAt = stamp;
+      }
+    } else if (type === 'bill.feedback' || type === 'bill.approve') {
+      if (!bill.participants.includes(actor) || (!editable && !(type === 'bill.approve' && fields.approve === false && bill.status === 'approved'))) {
+        return reject('This bill is closed for review.');
+      }
+      if (type === 'bill.feedback') {
+        const comment = String(fields.comment || '').trim();
+        if (!comment || comment.length > 500) return reject('Enter a reason or suggested change.');
+        const active = bill.feedback || [];
+        if (active.some(item => item.author === actor && item.comment === comment)) return trip;
+        const feedback = { id: eventId(), author: actor, comment, receivedAt: stamp };
+        bill.feedback = [...active.filter(item => item.author !== actor), feedback];
+        bill.feedbackLog = [...(bill.feedbackLog || []), { ...feedback, label: bill.label,
+          recipients: voters.filter(id => id !== actor) }].slice(-25);
+        bill.approvals = bill.approvals.filter(id => id !== actor);
+      } else {
+        bill.feedback = (bill.feedback || []).filter(item => item.author !== actor);
+        bill.approvals = fields.approve ? [...new Set([...bill.approvals, actor])] : bill.approvals.filter(id => id !== actor);
+      }
+      bill.status = status();
+    } else return reject('This bill is closed for review.');
+    invalidateSplit(trip);
+    commit(trip);
+    completed?.(trip);
+    return trip;
+  }
+
   function demoTripProgress(trip) {
     if (trip.settled) return { step: 4, title: 'Group payments complete',
       message: 'Open Wallet to send any remaining balance to your wallet.', view: 'wallet' };

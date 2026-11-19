@@ -833,6 +833,7 @@
   }
 
   async function changeRoom(trip, type, fields = {}, completed, fail = notice) {
+    if (isDemoTrip(trip) && type.startsWith('bill.')) return changeDemoBill(trip, type, fields, completed, fail);
     if (rooms.busy || !trip.shared) return null;
     if (!rooms.token || rooms.account !== walletSession.account) {
       return fail('Sign in again with the same wallet, then retry.');
@@ -1166,7 +1167,7 @@
         ${avatar(profile)}
         <span class="trip-profile-name" translate="no" title="${safe(profile.name)}">${safe(profile.name)}</span>
         ${canEditRoomDisplayName(trip) ? btn('Edit my name', 'room-rename-member', { tone: 'soft rename-member' }) : ''}
-        ${demoMode && !trip.shared ? btn('Switch demo member', 'switch-member', { tone: 'soft rename-member' }) : ''}
+        ${isDemoTrip(trip) ? btn('Switch demo member', 'switch-member', { tone: 'soft rename-member' }) : ''}
       </div>` : ''}
     </div>`;
   }

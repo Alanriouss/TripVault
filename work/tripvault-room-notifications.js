@@ -23,6 +23,7 @@
       sender: trip.members.find(person => person.id === feedback.author)?.name,
     });
     for (const feedback of bill.feedbackLog || []) {
+      if (isDemoTrip(trip) && (!feedback.recipients?.includes(member.id) || feedback.author === member.id)) continue;
       add(feedback.id, feedback.label, feedback);
     }
     if (involved) {
@@ -44,14 +45,16 @@
   }
 
   function tripNotificationEntries(trip) {
-    const member = trip.members.find(item => item.address === rooms.account);
+    const member = isDemoTrip(trip) ? trip.members.find(item => item.id === state.actor)
+      : trip.members.find(item => item.address === rooms.account);
     if (!member) return [];
 
     const bills = trip.bills.slice().reverse().flatMap(bill => {
       const involved = [bill.createdBy || bill.payer, bill.payer, ...bill.participants].includes(member.id);
       const feedback = billFeedbackNotifications(trip, bill, member, involved);
       const related = { billId: bill.id, title: bill.label };
-      const review = (bill.notificationLog || []).map(event => ({
+      const review = (bill.notificationLog || [])
+        .filter(event => !isDemoTrip(trip) || event.recipients?.includes(member.id)).map(event => ({
         ...related, title: event.label,
         id: (event.kind === 'cancellation-requested' ? 'removal' : 'bill-event') + ':' + bill.id + ':' + event.id,
         heading: BILL_EVENT_HEADINGS[event.kind], receivedAt: event.receivedAt,
@@ -144,7 +147,7 @@
   function sampleNotifications(trip) {
     const sample = { roomId: trip.id, roomName: trip.name };
     const prefix = trip.id + ':' + trip.endTime + ':';
-    return [
+    return [...tripNotificationEntries(trip),
       { ...sample, id: prefix + 'ended', heading: 'Trip ended', view: 'split',
         receivedAt: Date.parse(trip.endTime), message: 'The trip has ended. Review any bills that are still open.' },
       { ...sample, id: prefix + 'funded', heading: 'Minimum deposits reached', view: 'wallet',
@@ -374,7 +377,12 @@
     const targetTrip = sample?.id === item.roomId ? sample : rooms.list.get(item.roomId);
     if (!targetTrip) return;
     markRoomNotificationRead(id);
+    const actor = state.actor;
     selectTrip(targetTrip);
+    if (isDemoTrip(targetTrip) && targetTrip.members.some(person => person.id === actor)) {
+      state.actor = actor;
+      save();
+    }
     state.view = item.view || 'bills';
     render();
     window.scrollTo(0, 0);

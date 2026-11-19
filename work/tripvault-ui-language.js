@@ -41,6 +41,8 @@
     ['Demo member', 'Thành viên mô phỏng'],
     ['Previewing as', 'Đang xem với vai trò'],
     ['Switch demo member', 'Đổi thành viên mô phỏng'],
+    ['Preview approvals from another member', 'Xem và duyệt hóa đơn với vai trò thành viên khác'],
+    ['Current', 'Đang chọn'],
     ['Minimum reached', 'Đã đủ mức nạp tối thiểu'],
     ['Refresh market reference', 'Cập nhật tỷ giá tham chiếu'],
     ['These are simulated member balances, not real connected wallets.', 'Số dư thành viên được mô phỏng trong bản thử.'],

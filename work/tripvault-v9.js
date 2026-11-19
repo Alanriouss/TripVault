@@ -2010,6 +2010,7 @@
   }
 
   async function changeRoom(trip, type, fields = {}, completed, fail = notice) {
+    if (isDemoTrip(trip) && type.startsWith('bill.')) return changeDemoBill(trip, type, fields, completed, fail);
     if (rooms.busy || !trip.shared) return null;
     if (!rooms.token || rooms.account !== walletSession.account) {
       return fail('Sign in again with the same wallet, then retry.');
@@ -2343,7 +2344,7 @@
         ${avatar(profile)}
         <span class="trip-profile-name" translate="no" title="${safe(profile.name)}">${safe(profile.name)}</span>
         ${canEditRoomDisplayName(trip) ? btn('Edit my name', 'room-rename-member', { tone: 'soft rename-member' }) : ''}
-        ${demoMode && !trip.shared ? btn('Switch demo member', 'switch-member', { tone: 'soft rename-member' }) : ''}
+        ${isDemoTrip(trip) ? btn('Switch demo member', 'switch-member', { tone: 'soft rename-member' }) : ''}
       </div>` : ''}
     </div>`;
   }
@@ -2909,7 +2910,7 @@ function roomFundingShortfalls(trip, funding, draft) {
   const TRIP_PROGRESS_STEPS = ['Set up', 'Add funds', 'Record bills', 'Final payments', 'Done'];
 
   function tripProgress(trip) {
-    if (demoMode && !trip.shared) return demoTripProgress(trip);
+    if (isDemoTrip(trip)) return demoTripProgress(trip);
     const vault = currentVault();
     const funding = getDisplayedFunding(trip);
     const organizer = isRoomOrganizer(trip);
@@ -3071,7 +3072,7 @@ function roomFundingShortfalls(trip, funding, draft) {
     const trip = state.trip;
     const bill = trip.bills.find(item => item.id === id);
     if (!bill) return;
-    const demo = demoMode && !trip.shared;
+    const demo = isDemoTrip(trip);
     const reviewable = !trip.settled && !trip.reviewQuote && bill.status !== 'rejected';
     const editable = reviewable && ['pending', 'disputed'].includes(bill.status);
     const canReview = editable && bill.participants.includes(state.actor);
@@ -3084,7 +3085,7 @@ function roomFundingShortfalls(trip, funding, draft) {
     const suggestions = (bill.feedback || []).map(item => {
       const responses = item.responses || [];
       const myResponse = responses.find(response => response.member === state.actor);
-      const canRespond = rooms.canRespondToSuggestions && editable && bill.status === 'disputed'
+      const canRespond = (demo || rooms.canRespondToSuggestions) && editable && bill.status === 'disputed'
         && item.author !== state.actor && voters.includes(state.actor);
       const responseActions = canRespond ? [true, false].map(agree => btn(agree ? 'Agree' : 'Disagree', 'bill-feedback-vote', {
         tone: agree ? '' : 'danger',
@@ -3113,15 +3114,16 @@ function roomFundingShortfalls(trip, funding, draft) {
         bill.autoApprovals?.includes(id) ? 'Automatically approved' : bill.approvals.includes(id) ? 'Approved' : 'Waiting for approval');
     }).join('');
     const reviewButtons = demo
-      ? (!trip.settled && (trip.approvalMode === 'everyone' || state.actor === trip.owner)
+      ? (reviewable && bill.participants.includes(state.actor) && ['pending', 'disputed', 'approved'].includes(bill.status)
         ? btn(hasApproved ? 'Cancel my approval' : 'Approve bill', hasApproved ? 'revoke-bill' : 'approve-bill',
           { tone: hasApproved ? 'danger cancel-approval' : '', data: idData }) : '')
+        + (canReview ? btn('Suggest changes', 'bill-feedback', { tone: 'secondary', data: idData }) : '')
       : canReview
       ? (hasApproved ? '' : btn('Approve bill', 'approve-bill', { data: idData }))
         + btn('Suggest changes', 'bill-feedback', { tone: 'secondary', data: idData })
       : '';
-    const editButton = !demo && editable && creator === state.actor ? btn('Edit bill', 'bill-edit', { tone: 'secondary', data: idData }) : '';
-    const cancelButtons = !demo && reviewable && voters.includes(state.actor)
+    const editButton = editable && creator === state.actor ? btn('Edit bill', 'bill-edit', { tone: 'secondary', data: idData }) : '';
+    const cancelButtons = reviewable && voters.includes(state.actor)
       ? (!votes.includes(state.actor) ? btn(bill.cancellation ? 'Agree to cancel' : 'Disagree and request cancellation', 'bill-cancel-yes',
         { tone: 'danger', data: idData }) : '') +
         (bill.cancellation ? btn('Keep bill', 'bill-cancel-no', { tone: 'secondary', data: idData }) : '')
@@ -3153,7 +3155,7 @@ function roomFundingShortfalls(trip, funding, draft) {
 
   function roomBillAction(action, id) {
     const trip = state.trip;
-    const bill = trip?.shared && trip.bills.find(item => item.id === id);
+    const bill = (trip?.shared || isDemoTrip(trip)) && trip?.bills.find(item => item.id === id);
     if (!bill) return;
     if (action === 'bill-edit') return addBill(bill);
     if (action === 'bill-feedback') {
@@ -3161,7 +3163,7 @@ function roomFundingShortfalls(trip, funding, draft) {
         <input type="hidden" name="id" value="${id}">
         <label class="field">Reason or suggested change<textarea name="comment" rows="4" required maxlength="500" autofocus></textarea></label>
         <p id="sheet-error" class="form-error" role="status"></p>
-        ${billSignInButton()}
+        ${trip.shared ? billSignInButton() : ''}
         <button class="btn full" type="submit">Send suggestion</button>
       </form>`);
     }
@@ -3171,7 +3173,7 @@ function roomFundingShortfalls(trip, funding, draft) {
         <label class="field">Reason for cancellation<textarea name="reason" rows="4" required maxlength="500" autofocus></textarea></label>
         <p class="subtitle">Everyone in this trip can read your reason. The bill creator, payer and everyone sharing the bill must agree to cancel it.</p>
         <p id="sheet-error" class="form-error" role="status"></p>
-        ${billSignInButton()}</form>`,
+        ${trip.shared ? billSignInButton() : ''}</form>`,
       '<button class="btn full danger" type="submit" form="bill-cancellation-form">Send cancellation request</button>');
     }
     changeRoom(trip, 'bill.cancel', { id, agree: action === 'bill-cancel-yes' }, updated => {
@@ -3181,8 +3183,8 @@ function roomFundingShortfalls(trip, funding, draft) {
 
   function submitBillCancellation(data, fail) {
     const trip = state.trip;
-    if (!trip?.shared) return;
-    if (!rooms.canSaveCancellationReason) return fail('The server needs an update to save the cancellation reason.');
+    if (!trip?.shared && !isDemoTrip(trip)) return;
+    if (trip.shared && !rooms.canSaveCancellationReason) return fail('The server needs an update to save the cancellation reason.');
     const id = Number(data.get('id'));
     const reason = String(data.get('reason') || '').trim();
     if (!reason) return fail('Enter a reason for cancellation.');
@@ -3193,7 +3195,7 @@ function roomFundingShortfalls(trip, funding, draft) {
 
   function respondToBillFeedback(id, { author, suggestion, agree }) {
     const trip = state.trip;
-    if (!trip?.shared || !rooms.canRespondToSuggestions) return;
+    if ((!trip?.shared || !rooms.canRespondToSuggestions) && !isDemoTrip(trip)) return;
     changeRoom(trip, 'bill.feedback-vote', { id, author, suggestion, agree: agree === 'true' }, updated => {
       if (updated && sheet.open) roomBillDetail(id, 'Your response was saved.');
     }, showBillReviewError);
@@ -3201,7 +3203,7 @@ function roomFundingShortfalls(trip, funding, draft) {
 
   async function submitBillFeedback(data, fail) {
     const id = Number(data.get('id'));
-    if (!state.trip?.shared) return;
+    if (!state.trip?.shared && !isDemoTrip()) return;
     if (rooms.busy) return fail('Another room action is in progress. Try again.');
     const comment = String(data.get('comment') || '').trim();
     if (!comment) return fail('Enter a reason or suggested change.');
@@ -3260,6 +3262,7 @@ function roomFundingShortfalls(trip, funding, draft) {
       sender: trip.members.find(person => person.id === feedback.author)?.name,
     });
     for (const feedback of bill.feedbackLog || []) {
+      if (isDemoTrip(trip) && (!feedback.recipients?.includes(member.id) || feedback.author === member.id)) continue;
       add(feedback.id, feedback.label, feedback);
     }
     if (involved) {
@@ -3281,14 +3284,16 @@ function roomFundingShortfalls(trip, funding, draft) {
   }
 
   function tripNotificationEntries(trip) {
-    const member = trip.members.find(item => item.address === rooms.account);
+    const member = isDemoTrip(trip) ? trip.members.find(item => item.id === state.actor)
+      : trip.members.find(item => item.address === rooms.account);
     if (!member) return [];
 
     const bills = trip.bills.slice().reverse().flatMap(bill => {
       const involved = [bill.createdBy || bill.payer, bill.payer, ...bill.participants].includes(member.id);
       const feedback = billFeedbackNotifications(trip, bill, member, involved);
       const related = { billId: bill.id, title: bill.label };
-      const review = (bill.notificationLog || []).map(event => ({
+      const review = (bill.notificationLog || [])
+        .filter(event => !isDemoTrip(trip) || event.recipients?.includes(member.id)).map(event => ({
         ...related, title: event.label,
         id: (event.kind === 'cancellation-requested' ? 'removal' : 'bill-event') + ':' + bill.id + ':' + event.id,
         heading: BILL_EVENT_HEADINGS[event.kind], receivedAt: event.receivedAt,
@@ -3381,7 +3386,7 @@ function roomFundingShortfalls(trip, funding, draft) {
   function sampleNotifications(trip) {
     const sample = { roomId: trip.id, roomName: trip.name };
     const prefix = trip.id + ':' + trip.endTime + ':';
-    return [
+    return [...tripNotificationEntries(trip),
       { ...sample, id: prefix + 'ended', heading: 'Trip ended', view: 'split',
         receivedAt: Date.parse(trip.endTime), message: 'The trip has ended. Review any bills that are still open.' },
       { ...sample, id: prefix + 'funded', heading: 'Minimum deposits reached', view: 'wallet',
@@ -3611,7 +3616,12 @@ function roomFundingShortfalls(trip, funding, draft) {
     const targetTrip = sample?.id === item.roomId ? sample : rooms.list.get(item.roomId);
     if (!targetTrip) return;
     markRoomNotificationRead(id);
+    const actor = state.actor;
     selectTrip(targetTrip);
+    if (isDemoTrip(targetTrip) && targetTrip.members.some(person => person.id === actor)) {
+      state.actor = actor;
+      save();
+    }
     state.view = item.view || 'bills';
     render();
     window.scrollTo(0, 0);
@@ -3621,6 +3631,101 @@ function roomFundingShortfalls(trip, funding, draft) {
   }
 
   // Demo uses the shared trip components, with local balances and actions.
+  function isDemoTrip(trip = state.trip) {
+    return Boolean(trip && !trip.shared && (demoMode || trip.id === 'judges-sample'));
+  }
+
+  function changeDemoBill(trip, type, fields, completed, fail) {
+    const actor = state.actor;
+    const bill = trip.bills.find(item => item.id === fields.id);
+    const creator = bill && (bill.createdBy || bill.payer);
+    const voters = bill ? [...new Set([creator, bill.payer, ...bill.participants])] : [];
+    const editable = bill && ['pending', 'disputed'].includes(bill.status);
+    const reject = message => { fail(message); return null; };
+    if (!trip.members.some(person => person.id === actor) || trip.settled || trip.reviewQuote) {
+      return reject('This bill is closed for review.');
+    }
+    if (type !== 'bill.add' && (!bill || bill.status === 'rejected')) return reject('This bill is closed for review.');
+    const stamp = Date.now();
+    const eventId = () => 'demo-' + stamp + '-' + (trip.nextReviewEvent = (trip.nextReviewEvent || 0) + 1);
+    const log = (kind, recipients, comment, id = eventId()) => {
+      bill.notificationLog = [...(bill.notificationLog || []), {
+        id, kind, actor, recipients: [...new Set(recipients)].filter(id => id !== actor),
+        receivedAt: stamp, label: bill.label, comment,
+      }].slice(-50);
+    };
+    const status = () => bill.cancellation ? 'cancellation' : bill.feedback?.length ? 'disputed'
+      : bill.participants.every(id => bill.approvals.includes(id)) ? 'approved' : 'pending';
+    if (type === 'bill.add' || type === 'bill.edit') {
+      if (type === 'bill.edit' && (!editable || creator !== actor)) return reject('Only the bill creator can edit it.');
+      const next = {
+        id: bill?.id ?? trip.nextBillId++, label: fields.label, amount: fields.amount, payer: fields.payer,
+        participants: fields.participants, splitType: fields.splitType, customShares: fields.customShares,
+        createdBy: actor, approvals: [], status: 'pending', reviewStartedAt: stamp,
+        feedbackLog: bill?.feedbackLog || [], notificationLog: bill?.notificationLog || [],
+        history: bill ? [...(bill.history || []), {
+          label: bill.label, amount: bill.amount, payer: bill.payer, feedback: bill.feedback || [],
+        }].slice(-25) : [],
+      };
+      if (bill) trip.bills[trip.bills.indexOf(bill)] = next;
+      else trip.bills.push(next);
+    } else if (type === 'bill.feedback-vote') {
+      const suggestion = bill.feedback?.find(item => item.id === fields.suggestion && item.author === fields.author);
+      if (!editable || bill.status !== 'disputed' || !voters.includes(actor)
+        || !suggestion || suggestion.author === actor || typeof fields.agree !== 'boolean') {
+        return reject('This suggestion is closed for review.');
+      }
+      const responses = suggestion.responses || [];
+      if (responses.find(item => item.member === actor)?.agree === fields.agree) return trip;
+      suggestion.responses = [...responses.filter(item => item.member !== actor), { member: actor, agree: fields.agree }];
+      log(fields.agree ? 'suggestion-agreed' : 'suggestion-disagreed', [suggestion.author, creator], suggestion.comment);
+    } else if (type === 'bill.cancel') {
+      if (!voters.includes(actor) || typeof fields.agree !== 'boolean') return reject('This bill is closed for review.');
+      const existing = bill.cancellation;
+      if (!fields.agree) {
+        if (!existing) return reject('There is no request to remove this bill.');
+        log('cancellation-declined', voters, existing.reason);
+        delete bill.cancellation;
+        bill.status = status();
+      } else {
+        if (!existing && (!String(fields.reason || '').trim() || String(fields.reason).length > 500)) {
+          return reject('Enter a reason for cancellation.');
+        }
+        const cancellation = existing || { id: eventId(), previous: bill.status, votes: [],
+          requestedBy: actor, reason: String(fields.reason).trim(), requestedAt: stamp };
+        if (cancellation.votes.includes(actor)) return trip;
+        cancellation.votes.push(actor);
+        bill.cancellation = cancellation;
+        bill.status = voters.every(id => cancellation.votes.includes(id)) ? 'rejected' : 'cancellation';
+        if (!existing) log('cancellation-requested', trip.members.map(person => person.id), cancellation.reason, cancellation.id);
+        if (bill.status === 'rejected') cancellation.resolvedAt = stamp;
+      }
+    } else if (type === 'bill.feedback' || type === 'bill.approve') {
+      if (!bill.participants.includes(actor) || (!editable && !(type === 'bill.approve' && fields.approve === false && bill.status === 'approved'))) {
+        return reject('This bill is closed for review.');
+      }
+      if (type === 'bill.feedback') {
+        const comment = String(fields.comment || '').trim();
+        if (!comment || comment.length > 500) return reject('Enter a reason or suggested change.');
+        const active = bill.feedback || [];
+        if (active.some(item => item.author === actor && item.comment === comment)) return trip;
+        const feedback = { id: eventId(), author: actor, comment, receivedAt: stamp };
+        bill.feedback = [...active.filter(item => item.author !== actor), feedback];
+        bill.feedbackLog = [...(bill.feedbackLog || []), { ...feedback, label: bill.label,
+          recipients: voters.filter(id => id !== actor) }].slice(-25);
+        bill.approvals = bill.approvals.filter(id => id !== actor);
+      } else {
+        bill.feedback = (bill.feedback || []).filter(item => item.author !== actor);
+        bill.approvals = fields.approve ? [...new Set([...bill.approvals, actor])] : bill.approvals.filter(id => id !== actor);
+      }
+      bill.status = status();
+    } else return reject('This bill is closed for review.');
+    invalidateSplit(trip);
+    commit(trip);
+    completed?.(trip);
+    return trip;
+  }
+
   function demoTripProgress(trip) {
     if (trip.settled) return { step: 4, title: 'Group payments complete',
       message: 'Open Wallet to send any remaining balance to your wallet.', view: 'wallet' };
@@ -3762,6 +3867,8 @@ function roomFundingShortfalls(trip, funding, draft) {
     ['Demo member', 'Thành viên mô phỏng'],
     ['Previewing as', 'Đang xem với vai trò'],
     ['Switch demo member', 'Đổi thành viên mô phỏng'],
+    ['Preview approvals from another member', 'Xem và duyệt hóa đơn với vai trò thành viên khác'],
+    ['Current', 'Đang chọn'],
     ['Minimum reached', 'Đã đủ mức nạp tối thiểu'],
     ['Refresh market reference', 'Cập nhật tỷ giá tham chiếu'],
     ['These are simulated member balances, not real connected wallets.', 'Số dư thành viên được mô phỏng trong bản thử.'],
@@ -4570,7 +4677,7 @@ function roomFundingShortfalls(trip, funding, draft) {
   }
 
   function hasPendingBills(trip) {
-    return trip.bills.some(bill => bill.status !== 'approved' && (!trip.shared || bill.status !== 'rejected'));
+    return trip.bills.some(bill => bill.status !== 'approved' && (!(trip.shared || isDemoTrip(trip)) || bill.status !== 'rejected'));
   }
 
   function invalidateSplit(trip) {
@@ -4858,7 +4965,7 @@ function roomFundingShortfalls(trip, funding, draft) {
   function header() {
     const trip = state.trip;
     const newTrip = btn('New trip', 'new-trip', { tone: 'secondary new-trip', symbol: 'plus' });
-    const tripsButton = trip?.shared || (demoMode && trip) || (!trip && rooms.online) ? '' : trip ? btn('Trips', 'trip-list', { tone: 'ghost' }) : newTrip;
+    const tripsButton = trip?.shared || isDemoTrip(trip) || (!trip && rooms.online) ? '' : trip ? btn('Trips', 'trip-list', { tone: 'ghost' }) : newTrip;
     const avatarButton = trip && !trip.shared && !demoMode
       ? `<button type="button" class="avatar-button" data-act="switch-member" aria-label="Switch demo member">${avatar(member(state.actor) || trip.members[0])}</button>`
       : '';
@@ -4884,7 +4991,7 @@ function roomFundingShortfalls(trip, funding, draft) {
           <main class="main" id="main">
             ${storageUnavailable ? '<p class="notice warn">Local storage is unavailable. Changes will be lost when you close or reload this tab.</p>' : ''}
             ${!demoMode && !rooms.online && window.location?.protocol === 'file:' ? '<p class="notice warn">Open the TripVault Rooms launcher for invite links and room codes.</p>' : ''}
-            ${trip && (trip.shared || demoMode) ? roomTripToolbar(trip) : ''}
+            ${trip && (trip.shared || isDemoTrip(trip)) ? roomTripToolbar(trip) : ''}
             ${trip?.shared && !rooms.token ? '<p class="notice warn">Your room sign-in expired. ' + btn('Sign in again', 'room-reauthenticate', { tone: 'secondary' }) + '</p>' : ''}
             ${content}
           </main>
@@ -4988,7 +5095,7 @@ function roomFundingShortfalls(trip, funding, draft) {
   }
   function billItem(bill) {
     const payer = member(bill.payer);
-    const status = state.trip.shared || demoMode ? roomBillStatus(bill) : ui(bill.status === 'approved' ? 'Approved' : 'Pending approval');
+    const status = state.trip.shared || isDemoTrip() ? roomBillStatus(bill) : ui(bill.status === 'approved' ? 'Approved' : 'Pending approval');
     const iconName = bill.status === 'approved' ? 'check' : bill.status === 'rejected' ? 'close' : 'bill';
     return `<button type="button" class="bill-row is-${safe(bill.status)}" data-act="bill-detail" data-id="${bill.id}">
       <span class="row-label">
@@ -5008,7 +5115,7 @@ function roomFundingShortfalls(trip, funding, draft) {
   function wallet(){const t=state.trip,p=phase(),my=depositOf(state.actor),total=Object.values(t.depositUnits).reduce((a,b)=>a+b,0) / USDC_SCALE;return `<div class="section-head"><div><h1>Wallet & vault</h1><p>Fuji testnet and local demo</p></div><span class="${p === 'Closing' ? 'chip warn' : 'chip violet'}">${p === 'Closing' ? 'Trip ended · Ready to settle' : p}</span></div><div class="stack">${fujiPanel()}<section class="panel trip-settings-panel"><h2>Demo vault</h2>${row('Total deposited',fmt(total)+' USDC')}${row('Your deposited balance',fmt(my)+' USDC')}${row('Minimum per member',money(t.minimumUnits))}${row('Start',safe(formatShortDateTime(t.startTime)))}${row('End',safe(formatShortDateTime(t.endTime)))}${row('Status',p === 'Closing' ? 'Trip ended · Ready to settle' : p)}<div class="inline" style="margin-top:16px">${btn('Deposit USDC','deposit',{disabled:t.settled})}${btn('Early withdrawal','withdraw',{tone:'secondary',disabled:p!=='Funding'||my<=0})}${t.settled?btn('Claim refund','claim',{tone:'secondary',disabled:my<=0}):''}</div><p class="notice">Deposits lock after the start time. You can still top up. Early withdrawal is only possible before the start.</p></section><section class="panel"><h2>Funding progress</h2>${t.members.map(m=>row(safe(m.name),fmt(depositOf(m.id))+' USDC',depositUnits(t,m.id)>=t.minimumUnits?'Minimum reached':'Below minimum')).join('')}</section><section class="panel"><h2>Demo member</h2>${row('Previewing as',safe(member(state.actor).name))}${btn('Switch demo member','switch-member',{tone:'secondary'})}<p class="notice">These are simulated member balances, not real connected wallets.</p></section><section class="panel"><h2>Exchange rate</h2><p id="fx-status" class="notice">${safe(fxLabel(fx))}</p>${btn('Refresh market reference','refresh-fx',{tone:'secondary'})}</section>${demoMode ? '<div style="margin-top:24px; text-align:center;"><button type="button" class="btn secondary sm" data-act="judge-demo-sample">Reset demo</button></div>' : ''}</div>`}
   function fundsForm(kind){const p=phase(),my=depositOf(state.actor);if(state.trip.settled||(kind==='withdraw'&&p!=='Funding'))return;sheetOpen(kind==='deposit'?'Deposit USDC':'Early withdrawal',kind==='deposit'?'Add USDC to your personal locked balance.':'Withdraw only your own funds before the trip begins.',`<form id="fund-form" class="stack"><label class="field">Amount (USDC)<input name="amount" type="number" min="0.000001" step="0.000001" required placeholder="100"></label><p class="notice">Your deposit: ${fmt(my)} USDC · Minimum: ${money(state.trip.minimumUnits)} · ${p}</p><input type="hidden" name="kind" value="${kind}"><p id="sheet-error" class="form-error"></p></form>`,`<button class="btn full" type="submit" form="fund-form">Confirm demo ${kind}</button>`)}
   function screen() {
-    if (state.trip.shared || demoMode) {
+    if (state.trip.shared || isDemoTrip()) {
       if (state.view === 'overview') return roomOverview();
       if (state.view === 'people') return roomMembers(state.trip);
       if (state.view === 'split') return roomFinalSplit(state.trip);
@@ -5190,7 +5297,7 @@ function roomFundingShortfalls(trip, funding, draft) {
     if (t.shared) updateBillFundingForm();
   }
 }
-  function detail(id){if(state.trip?.shared || demoMode)return roomBillDetail(id);const b=state.trip.bills.find(b=>b.id===id);if(!b)return;const t=state.trip,canApprove=t.approvalMode==='everyone'?true:state.actor===t.owner;const approved=b.approvals.includes(state.actor);const required=t.approvalMode==='everyone'?t.members.length:1;sheetOpen(b.label,`Paid outside · ${b.participants.length} travelers`,`<div class="stack"><div class="metric"><strong>${vnd(b.amount)}</strong></div>${row('Paid by',safe(member(b.payer).name))}${row('Payment method','Outside TripVault')}${row('Status',b.status==='approved'?'Approved':`Pending · ${b.approvals.length}/${required}`)}<div class="split-preview"><p><strong>Equal split</strong></p>${shares(b).map(s=>row(safe(member(s.id).name),vnd(s.amount))).join('')}</div><section class="panel"><h2>Bill approvals</h2>${(t.approvalMode==='everyone'?t.members:[member(t.owner)]).map(m=>row(safe(m.name),b.approvals.includes(m.id)?'Approved':'Pending')).join('')}<div class="inline" style="margin-top:14px">${!t.settled&&canApprove?(approved?btn('Cancel my approval','revoke-bill',{tone:'danger cancel-approval',data:`data-id="${b.id}"`}):btn('Approve bill','approve-bill',{data:`data-id="${b.id}"`})) : ''}</div></section><p class="notice">The bill can be approved or revoked until the final settlement is completed.</p></div>`)}
+  function detail(id){if(state.trip?.shared || isDemoTrip())return roomBillDetail(id);const b=state.trip.bills.find(b=>b.id===id);if(!b)return;const t=state.trip,canApprove=t.approvalMode==='everyone'?true:state.actor===t.owner;const approved=b.approvals.includes(state.actor);const required=t.approvalMode==='everyone'?t.members.length:1;sheetOpen(b.label,`Paid outside · ${b.participants.length} travelers`,`<div class="stack"><div class="metric"><strong>${vnd(b.amount)}</strong></div>${row('Paid by',safe(member(b.payer).name))}${row('Payment method','Outside TripVault')}${row('Status',b.status==='approved'?'Approved':`Pending · ${b.approvals.length}/${required}`)}<div class="split-preview"><p><strong>Equal split</strong></p>${shares(b).map(s=>row(safe(member(s.id).name),vnd(s.amount))).join('')}</div><section class="panel"><h2>Bill approvals</h2>${(t.approvalMode==='everyone'?t.members:[member(t.owner)]).map(m=>row(safe(m.name),b.approvals.includes(m.id)?'Approved':'Pending')).join('')}<div class="inline" style="margin-top:14px">${!t.settled&&canApprove?(approved?btn('Cancel my approval','revoke-bill',{tone:'danger cancel-approval',data:`data-id="${b.id}"`}):btn('Approve bill','approve-bill',{data:`data-id="${b.id}"`})) : ''}</div></section><p class="notice">The bill can be approved or revoked until the final settlement is completed.</p></div>`)}
   function commit(trip, message) {
     const persisted = save(trip);
     render();
@@ -5293,7 +5400,7 @@ function roomFundingShortfalls(trip, funding, draft) {
     const trip = state.trip;
     if (trip.settled || (!trip.shared && trip.approvalMode === 'organizer' && state.actor !== trip.owner)) return;
     if (!trip.shared && bill.approvals.includes(state.actor) === approve) return;
-    if (trip.shared) {
+    if (trip.shared || isDemoTrip(trip)) {
       changeRoom(trip, 'bill.approve', { id: bill.id, approve }, updated => {
         if (updated) {
           detail(bill.id);
@@ -5578,14 +5685,14 @@ function roomFundingShortfalls(trip, funding, draft) {
       return;
     }
 
-    if (trip.shared) {
+    if (trip.shared || isDemoTrip(trip)) {
       const id = Number(data.get('editing'));
       changeRoom(trip, id ? 'bill.edit' : 'bill.add', { id, label, amount, payer, participants, splitType, customShares }, updated => {
         if (!updated) return;
         if (sheet.open) sheet.close();
         state.view = 'bills';
         render();
-        notice(id ? 'Bill updated. A new 24-hour review has started.' : 'Bill posted for review.');
+        notice(id ? (trip.shared ? 'Bill updated. A new 24-hour review has started.' : 'Your response was saved.') : 'Bill posted for review.');
       }, fail);
       return;
     }
