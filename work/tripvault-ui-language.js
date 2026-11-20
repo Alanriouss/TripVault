@@ -1,6 +1,10 @@
   const SITE_LANGUAGE_KEY = 'tripvault-site-language';
   let siteLanguage = readStorage(SITE_LANGUAGE_KEY) === 'vi' ? 'vi' : 'en';
   const vietnameseUI = new Map([
+    ['Connecting to trip rooms', 'Đang kết nối máy chủ phòng'],
+    ['Checking the room server. This can take a moment.', 'Đang kiểm tra máy chủ phòng. Bạn vui lòng đợi một chút.'],
+    ['Room server unavailable', 'Chưa kết nối được máy chủ phòng'],
+    ['Could not reach trip rooms. Try again to create or join a wallet-connected trip.', 'Chưa liên lạc được máy chủ phòng. Hãy thử lại để tạo hoặc tham gia chuyến đi có kết nối ví.'],
     ['Demo trip', 'Chuyến đi mẫu'],
     ['Changes here only affect this sample trip. All trips returns to wallet-connected mode.', 'Mọi thao tác ở đây chỉ áp dụng cho chuyến đi mẫu. Bấm Tất cả chuyến đi để trở về web kết nối ví thật.'],
     ['Add demo member', 'Thêm thành viên mô phỏng'],

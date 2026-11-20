@@ -184,11 +184,20 @@
     if (rooms.intent) showRoomIntent();
   }
 
-  async function enableRooms() {
-    if (!['http:', 'https:'].includes(window.location?.protocol)) return;
+  let roomStartup = null;
+
+  function enableRooms() {
+    if (!['http:', 'https:'].includes(window.location?.protocol)) return Promise.resolve(false);
+    if (rooms.online) return Promise.resolve(true);
+    if (roomStartup) return roomStartup;
+    roomStartup = checkRoomServer().finally(() => { roomStartup = null; });
+    return roomStartup;
+  }
+
+  async function checkRoomServer() {
     try {
-      const status = await roomApi('/health');
-      if (status.rooms !== true) return;
+      const status = await roomApi('/health', undefined, '', 8000);
+      if (status.rooms !== true) return false;
       rooms.online = true;
       rooms.canDelete = status.deleteTrip === true;
       rooms.canBulkDelete = status.bulkDelete === true;
@@ -199,7 +208,7 @@
       rooms.transactions = roomStorage(ROOM_TX_KEY) || {};
       roomWalletChanged();
       const invite = new URLSearchParams(window.location.search).get('join');
-      if (invite) {
+      if (invite && !rooms.intent) {
         if (!/^(?:\d{6}|[A-Za-z0-9_-]{32})$/.test(invite)) {
           notice('This invitation is invalid.');
         } else {
@@ -213,8 +222,9 @@
         if (document.visibilityState === 'visible') syncRooms();
       });
       render();
+      return true;
     } catch {
-      // The standalone HTML still supports the local demo.
+      return false;
     }
   }
 
@@ -264,13 +274,27 @@
 
   function startRoomFlow(kind, key = '', template = null) {
     if (demoMode) return window.location.assign(demoExitUrl());
-    if (!rooms.online && !demoMode && !isDemoTrip()) {
+    if (!rooms.online && !['http:', 'https:'].includes(window.location?.protocol)) {
       sheetOpen('TripVault Rooms', 'Open the room server',
         '<p class="notice">Open the TripVault Rooms launcher to create or join a shared room.</p>');
       return;
     }
     rooms.intent = { kind, key, template };
+    if (!rooms.online) return retryRoomConnection();
     showRoomIntent();
+  }
+
+  function retryRoomConnection() {
+    const intent = rooms.intent;
+    if (!intent) return;
+    sheetOpen('Connecting to trip rooms', '', '<p class="notice">Checking the room server. This can take a moment.</p>');
+    enableRooms().then(ready => {
+      if (rooms.intent !== intent || !sheet.open) return;
+      if (ready) return showRoomIntent();
+      sheetOpen('Room server unavailable', '',
+        '<p class="notice warn">Could not reach trip rooms. Try again to create or join a wallet-connected trip.</p>',
+        btn('Try again', 'room-retry-connection', { tone: 'full' }));
+    });
   }
 
   function openReplacementTrip(trip) {
