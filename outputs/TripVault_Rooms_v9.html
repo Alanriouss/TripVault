@@ -3266,11 +3266,20 @@ dialog.guide-modal .sheet-footer {
     if (rooms.intent) showRoomIntent();
   }
 
-  async function enableRooms() {
-    if (!['http:', 'https:'].includes(window.location?.protocol)) return;
+  let roomStartup = null;
+
+  function enableRooms() {
+    if (!['http:', 'https:'].includes(window.location?.protocol)) return Promise.resolve(false);
+    if (rooms.online) return Promise.resolve(true);
+    if (roomStartup) return roomStartup;
+    roomStartup = checkRoomServer().finally(() => { roomStartup = null; });
+    return roomStartup;
+  }
+
+  async function checkRoomServer() {
     try {
-      const status = await roomApi('/health');
-      if (status.rooms !== true) return;
+      const status = await roomApi('/health', undefined, '', 8000);
+      if (status.rooms !== true) return false;
       rooms.online = true;
       rooms.canDelete = status.deleteTrip === true;
       rooms.canBulkDelete = status.bulkDelete === true;
@@ -3281,7 +3290,7 @@ dialog.guide-modal .sheet-footer {
       rooms.transactions = roomStorage(ROOM_TX_KEY) || {};
       roomWalletChanged();
       const invite = new URLSearchParams(window.location.search).get('join');
-      if (invite) {
+      if (invite && !rooms.intent) {
         if (!/^(?:\d{6}|[A-Za-z0-9_-]{32})$/.test(invite)) {
           notice('This invitation is invalid.');
         } else {
@@ -3295,8 +3304,9 @@ dialog.guide-modal .sheet-footer {
         if (document.visibilityState === 'visible') syncRooms();
       });
       render();
+      return true;
     } catch {
-      // The standalone HTML still supports the local demo.
+      return false;
     }
   }
 
@@ -3346,13 +3356,27 @@ dialog.guide-modal .sheet-footer {
 
   function startRoomFlow(kind, key = '', template = null) {
     if (demoMode) return window.location.assign(demoExitUrl());
-    if (!rooms.online && !demoMode && !isDemoTrip()) {
+    if (!rooms.online && !['http:', 'https:'].includes(window.location?.protocol)) {
       sheetOpen('TripVault Rooms', 'Open the room server',
         '<p class="notice">Open the TripVault Rooms launcher to create or join a shared room.</p>');
       return;
     }
     rooms.intent = { kind, key, template };
+    if (!rooms.online) return retryRoomConnection();
     showRoomIntent();
+  }
+
+  function retryRoomConnection() {
+    const intent = rooms.intent;
+    if (!intent) return;
+    sheetOpen('Connecting to trip rooms', '', '<p class="notice">Checking the room server. This can take a moment.</p>');
+    enableRooms().then(ready => {
+      if (rooms.intent !== intent || !sheet.open) return;
+      if (ready) return showRoomIntent();
+      sheetOpen('Room server unavailable', '',
+        '<p class="notice warn">Could not reach trip rooms. Try again to create or join a wallet-connected trip.</p>',
+        btn('Try again', 'room-retry-connection', { tone: 'full' }));
+    });
   }
 
   function openReplacementTrip(trip) {
@@ -5953,6 +5977,10 @@ function roomFundingShortfalls(trip, funding, draft) {
   const SITE_LANGUAGE_KEY = 'tripvault-site-language';
   let siteLanguage = readStorage(SITE_LANGUAGE_KEY) === 'vi' ? 'vi' : 'en';
   const vietnameseUI = new Map([
+    ['Connecting to trip rooms', 'Đang kết nối máy chủ phòng'],
+    ['Checking the room server. This can take a moment.', 'Đang kiểm tra máy chủ phòng. Bạn vui lòng đợi một chút.'],
+    ['Room server unavailable', 'Chưa kết nối được máy chủ phòng'],
+    ['Could not reach trip rooms. Try again to create or join a wallet-connected trip.', 'Chưa liên lạc được máy chủ phòng. Hãy thử lại để tạo hoặc tham gia chuyến đi có kết nối ví.'],
     ['Demo trip', 'Chuyến đi mẫu'],
     ['Changes here only affect this sample trip. All trips returns to wallet-connected mode.', 'Mọi thao tác ở đây chỉ áp dụng cho chuyến đi mẫu. Bấm Tất cả chuyến đi để trở về web kết nối ví thật.'],
     ['Add demo member', 'Thêm thành viên mô phỏng'],
@@ -7122,7 +7150,7 @@ function roomFundingShortfalls(trip, funding, draft) {
       : '';
     const content = trip ? screen() : demoMode
       ? demoLandingScreen()
-      : rooms.online ? roomsHome()
+      : rooms.online || ['http:', 'https:'].includes(window.location?.protocol) ? roomsHome()
       : state.trips.length ? tripsScreen() : empty() + '<div class="stack" style="margin-top:13px">' + fujiPanel() + '</div>';
     return `
       <div class="shell">
@@ -7562,6 +7590,7 @@ function roomFundingShortfalls(trip, funding, draft) {
       window.location.assign('/?demo=1');
       return;
     }
+    if (act === 'room-retry-connection') return retryRoomConnection();
     if (act.startsWith('demo-')) return handleDemoAction(act, element.dataset);
     if (act === 'approve-split' && isDemoTrip(trip) && trip.demoPublishedRevision !== trip.revision) return;
     if (act === 'claim' && isDemoTrip(trip) && demoFunding(trip).cancelled) {
@@ -7610,7 +7639,7 @@ function roomFundingShortfalls(trip, funding, draft) {
     if (act === 'guide-step') return moveGuide(id);
     if (act === 'guide-language') return setGuideLanguage(id);
     if (act.startsWith('fuji-')) return handleFujiAction(act, element.dataset);
-    if (act === 'new-trip') return rooms.online || demoMode || isDemoTrip() ? startRoomFlow('create') : setup();
+    if (act === 'new-trip') return rooms.online || ['http:', 'https:'].includes(window.location?.protocol) || demoMode || isDemoTrip() ? startRoomFlow('create') : setup();
     if (act === 'trip-list') return demoMode ? window.location.assign(demoExitUrl()) : selectTrip(null);
     if (act === 'open-trip') {
       const selected = availableTrips().find(item => item.id === id);
@@ -7619,7 +7648,7 @@ function roomFundingShortfalls(trip, funding, draft) {
     }
     if (act === 'refresh-fx') return refreshFX();
     if (act === 'join-trip') {
-      if (rooms.online || demoMode || isDemoTrip()) return startRoomFlow('join');
+      if (rooms.online || ['http:', 'https:'].includes(window.location?.protocol) || demoMode || isDemoTrip()) return startRoomFlow('join');
       sheetOpen('Join a trip', 'Demo limitation',
         '<p class="notice">Joining by invite link requires a backend and wallet/member authentication. This standalone prototype supports creating and testing a trip locally.</p>');
       return;

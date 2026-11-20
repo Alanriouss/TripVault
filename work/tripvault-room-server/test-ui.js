@@ -67,6 +67,7 @@ function switchingProvider() {
 }
 
 export async function testRoomsUi({ launch, flush, start, end }) {
+  await testRoomStartup({ launch, flush });
   const legacyDatabase = new Database(':memory:');
   const roomsApi = createRoomApi({ database: legacyDatabase, origin });
   const depositDeadline = new Date(Date.parse(start) - 30_000).toISOString();
@@ -315,6 +316,57 @@ export async function testRoomsUi({ launch, flush, start, end }) {
 
   await testMemberDeposit({ launch, flush, start, end });
   await testMemberDeposit({ launch, flush, start, end, cancelAtDeadline: true });
+}
+
+async function testRoomStartup({ launch, flush }) {
+  let finishHealth;
+  let healthCalls = 0;
+  const health = new Promise(resolve => { finishHealth = resolve; });
+  const delayed = await launch({ url: origin, language: 'en', api: async request => {
+    assert.equal(new URL(request.url).pathname, '/api/health');
+    healthCalls++;
+    return health;
+  } });
+  delayed.click('close-sheet');
+  assert.match(delayed.page.innerHTML, /data-act="room-create"/);
+  for (const action of ['new-trip', 'room-create', 'join-trip', 'room-join']) {
+    delayed.click(action);
+    assert.match(delayed.sheet.innerHTML, /Checking the room server/);
+    assert.doesNotMatch(delayed.sheet.innerHTML, /id="create-form"|name="others"|Every member must approve/);
+  }
+  assert.equal(healthCalls, 1, 'startup and repeated clicks share one health check');
+  finishHealth(Response.json({ rooms: true }));
+  await flush();
+  assert.match(delayed.sheet.innerHTML, /Join a room/);
+  assert.match(delayed.sheet.innerHTML, /Connect Wallet/);
+
+  let available = false;
+  const failed = await launch({ url: origin, language: 'en', api: async () => {
+    if (!available) throw new Error('Server sleeping');
+    return Response.json({ rooms: true });
+  } });
+  failed.click('close-sheet');
+  failed.click('new-trip');
+  await flush();
+  assert.match(failed.sheet.innerHTML, /Room server unavailable/);
+  assert.match(failed.sheet.innerHTML, /data-act="room-retry-connection"/);
+  assert.doesNotMatch(failed.sheet.innerHTML, /id="create-form"/);
+  available = true;
+  failed.click('room-retry-connection');
+  await flush();
+  assert.match(failed.sheet.innerHTML, /Create a room/);
+  assert.match(failed.sheet.innerHTML, /Connect Wallet/);
+
+  let finishClosed;
+  const closedHealth = new Promise(resolve => { finishClosed = resolve; });
+  const closed = await launch({ url: origin, language: 'en', api: async () => closedHealth });
+  closed.click('close-sheet');
+  closed.click('new-trip');
+  closed.click('close-sheet');
+  finishClosed(Response.json({ rooms: true }));
+  await flush();
+  assert.equal(closed.sheet.open, false, 'a late health response does not reopen a dismissed dialog');
+  console.log('PASS: delayed or unavailable room startup never opens the legacy local creator; retry and dismissal preserve intent');
 }
 
 async function testMemberDeposit({ launch, flush, start, end, cancelAtDeadline = false }) {

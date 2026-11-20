@@ -1689,11 +1689,11 @@ replace("""    if (act === 'close-sheet') return sheet.close();""", """    if (a
         if (updated) openFujiDeploy();
       });
     }""")
-replace("    if (act === 'new-trip') return setup();", "    if (act === 'new-trip') return rooms.online || demoMode || isDemoTrip() ? startRoomFlow('create') : setup();")
+replace("    if (act === 'new-trip') return setup();", "    if (act === 'new-trip') return rooms.online || ['http:', 'https:'].includes(window.location?.protocol) || demoMode || isDemoTrip() ? startRoomFlow('create') : setup();")
 replace("${btn('Create a trip','new-trip',{symbol:'plus'})}${btn('Join a trip','join-trip',{tone:'secondary'})}",
         "${btn('Create a trip','new-trip',{symbol:'plus'})}${btn('Join a trip','join-trip',{tone:'secondary'})}${btn('Explore demo trip','judge-demo-sample',{tone:'secondary'})}")
 replace("      const selected = state.trips.find(item => item.id === id);", "      const selected = availableTrips().find(item => item.id === id);")
-replace("    if (act === 'join-trip') {\n      sheetOpen", "    if (act === 'join-trip') {\n      if (rooms.online || demoMode || isDemoTrip()) return startRoomFlow('join');\n      sheetOpen")
+replace("    if (act === 'join-trip') {\n      sheetOpen", "    if (act === 'join-trip') {\n      if (rooms.online || ['http:', 'https:'].includes(window.location?.protocol) || demoMode || isDemoTrip()) return startRoomFlow('join');\n      sheetOpen")
 replace("""    if (!trip) return;
 
     switch (act) {""", """    if (!trip) return;
@@ -2385,6 +2385,8 @@ replace('!rooms.online && window.location?.protocol', '!demoMode && !rooms.onlin
 landing_start = source.index('  function demoLandingScreen() {')
 landing_end = source.index('  function startJudgeSample(', landing_start)
 source = source[:landing_start] + '  function demoLandingScreen() { return \'\'; }\n\n' + source[landing_end:]
+replace(': rooms.online ? roomsHome()', ": rooms.online || ['http:', 'https:'].includes(window.location?.protocol) ? roomsHome()")
+replace("    if (act === 'room-create') return startRoomFlow('create');", "    if (act === 'room-retry-connection') return retryRoomConnection();\n    if (act === 'room-create') return startRoomFlow('create');")
 replace('if (demoMode) return startJudgeSample();', "if (demoMode) return startJudgeSample(element.dataset.stage || 'active');")
 replace("    if (act === 'room-join') return startRoomFlow('join');", "    if (act === 'room-join') return startRoomFlow('join', element.dataset.key || '');")
 replace("    if (act === 'room-create') return startRoomFlow('create');", """    if (act.startsWith('demo-')) return handleDemoAction(act);
